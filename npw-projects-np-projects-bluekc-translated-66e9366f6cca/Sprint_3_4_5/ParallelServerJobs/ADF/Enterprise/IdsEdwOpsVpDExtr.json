@@ -1,0 +1,92 @@
+{
+  "name": "IdsEdwOpsVpDExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsEdwOpsVpDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_source AS (SELECT OPS_VP.OPS_VP_SK, COALESCE(CD.TRGT_CD, 'UNK') AS SRC_SYS_CD, OPS_VP.OPS_VP_ID, OPS_VP.OPS_VP_NM, OPS_VP.USER_ID, OPS_VP.LAST_UPDT_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.OPS_VP OPS_VP LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON OPS_VP.SRC_SYS_CD_SK = CD.CD_MPPNG_SK), cte_main AS (SELECT cte_source.OPS_VP_SK AS OPS_VP_SK, CASE WHEN dbo.trim_default(cte_source.SRC_SYS_CD) = '' THEN 'UNK' ELSE cte_source.SRC_SYS_CD END AS SRC_SYS_CD, cte_source.OPS_VP_ID AS OPS_VP_ID, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, cte_source.OPS_VP_NM AS OPS_VP_NM, cte_source.USER_ID AS USER_ID, cte_source.LAST_UPDT_DT_SK AS LAST_UPDT_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_source WHERE cte_source.OPS_VP_SK <> 0 AND cte_source.OPS_VP_SK <> 1), cte_unk AS (SELECT 0 AS OPS_VP_SK, 'UNK' AS SRC_SYS_CD, 'UNK' AS OPS_VP_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 'UNK' AS OPS_VP_NM, 'UNK' AS USER_ID, '1753-01-01' AS LAST_UPDT_DT_SK, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK), cte_na AS (SELECT 1 AS OPS_VP_SK, 'NA' AS SRC_SYS_CD, 'NA' AS OPS_VP_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 'NA' AS OPS_VP_NM, 'NA' AS USER_ID, '1753-01-01' AS LAST_UPDT_DT_SK, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK) SELECT * FROM cte_main UNION ALL SELECT * FROM cte_unk UNION ALL SELECT * FROM cte_na",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "OPS_VP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "OPS_VP_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "Int"
+      },
+      "EDWRunCycleDate": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Employee/EdwLoads/OpsVpD"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2007 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    EdwOpsExtrSeq\n\nProcessing:\n                    *\n\nControl Job Rerun Information: \n             Previous Run Successful:    Restart, no other steps necessary\n             Previous Run Aborted:         Restart, no other steps necessary\n\nModifications:                        \n                                              Project/                                                                                                                                                    Code                    Date\nDeveloper        Date              Altiris #           Change Description                                                               Environment                         Reviewer               Reviewed\n----------------------  -------------------   -------------------   ------------------------------------------------------------------------------------       -------------------------------           ----------------------           -------------------   \nHugh Sisson    12/10/2007   3531              Original program                                                                                                             Steph Goddard       12/19/2007\n\n\nArchana Palivela     03/01/14        5114        Originally Programmed (In Parallel)                                  EnterpriseWhseDevl            Jag Yelavarthi         2014-03-28\n\nAnnotations:\nJob name: IdsEdwOpsVpDExtr\n\n\nExtract from IDS OPS_VP table\nRead data from source table \nOPS_VP\nWrite OPS_VP_D Data into a Sequential file for Load Ready Job."
+}

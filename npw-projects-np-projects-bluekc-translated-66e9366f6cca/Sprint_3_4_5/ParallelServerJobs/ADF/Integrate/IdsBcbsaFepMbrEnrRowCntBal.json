@@ -1,0 +1,278 @@
+{
+  "name": "IdsBcbsaFepMbrEnrRowCntBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyToTempBCBSAFepMbrEnr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH CTE AS ( SELECT SRC.MBR_UNIQ_KEY AS SRC_MBR_UNIQ_KEY, SRC.PROD_SH_NM AS SRC_PROD_SH_NM, SRC.FEP_MBR_ENR_EFF_DT_SK AS SRC_FEP_MBR_ENR_EFF_DT_SK, SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK, TRGT.MBR_UNIQ_KEY AS TRGT_MBR_UNIQ_KEY, TRGT.PROD_SH_NM AS TRGT_PROD_SH_NM, TRGT.FEP_MBR_ENR_EFF_DT_SK AS TRGT_FEP_MBR_ENR_EFF_DT_SK, TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_BCBSA_FEP_MBR_ENR AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.BCBSA_FEP_MBR_ENR AS TRGT ON SRC.MBR_UNIQ_KEY = TRGT.MBR_UNIQ_KEY AND SRC.PROD_SH_NM = TRGT.PROD_SH_NM AND SRC.FEP_MBR_ENR_EFF_DT_SK = TRGT.FEP_MBR_ENR_EFF_DT_SK AND TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle} ) SELECT * FROM CTE",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "B_BCBSA_FEP_MBR_ENR"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptTransform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTempBCBSAFepMbrEnr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal_Research; SELECT SRC_MBR_UNIQ_KEY, SRC_PROD_SH_NM, SRC_FEP_MBR_ENR_EFF_DT_SK, SRC_SRC_SYS_CD_SK, TRGT_MBR_UNIQ_KEY, TRGT_PROD_SH_NM, TRGT_FEP_MBR_ENR_EFF_DT_SK, TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal_Research FROM @{pipeline().globalParameters.gbl_param_ids_staging}.Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal WHERE SRC_MBR_UNIQ_KEY IS NULL OR SRC_PROD_SH_NM IS NULL OR SRC_FEP_MBR_ENR_EFF_DT_SK IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_MBR_UNIQ_KEY IS NULL OR TRGT_PROD_SH_NM IS NULL OR TRGT_FEP_MBR_ENR_EFF_DT_SK IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal_Error; SELECT CASE WHEN @{pipeline().parameters.ToleranceCd} = 'OUT' THEN 'ROW COUNT BALANCING FACETS - IDS BCBSA_FEP_MBR_ENR IS OUT OF TOLERANCE' END as NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal_Error FROM (SELECT 1 as dummy) t WHERE @{pipeline().parameters.ToleranceCd} = 'OUT'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/research')",
+              "param_filename": "@concat('IdsBcbsaFepMbrEnrResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyErrorFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z01_TMP_IdsBcbsaFepMbrEnrRowCntBal_Error"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/notify')",
+              "param_filename": "BcbsaFepMbrEnrBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ToleranceCd": {
+        "type": "string"
+      },
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Member/IDSLoads/BcbsaFepMbrEnr/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on BCBSA_FEP_MBR_ENR and B_BCBSA_FEP_MBR_ENR tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                  DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                       DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam           2015-11-23        5403                               Initial Programming                                                                                IntegrateDev1           Bhoomi Dasari             11/27/2015\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - BCBSA_FEP_MBR_ENR"
+}

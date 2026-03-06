@@ -1,0 +1,242 @@
+{
+  "name": "IdsAcaPgmPaymtRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyACAPaymt_ToTmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte AS (SELECT SRC.ACTVTY_YR_MO as SRC_ACTVTY_YR_MO, SRC.PAYMT_COV_YR_MO as SRC_PAYMT_COV_YR_MO, SRC.PAYMT_TYP_CD AS SRC_PAYMT_TYP_CD, SRC.ST_CD AS SRC_ST_CD, SRC.QHP_ID AS SRC_QHP_ID, SRC.ACA_PGM_PAYMT_SEQ_NO AS SRC_ACA_PGM_PAYMT_SEQ_NO, SRC.SRC_SYS_CD_SK as SRC_SRC_SYS_CD_SK, TRGT.ACTVTY_YR_MO as TRGT_ACTVTY_YR_MO, TRGT.PAYMT_COV_YR_MO as TRGT_PAYMT_COV_YR_MO, TRGT.PAYMT_TYP_CD AS TRGT_PAYMT_TYP_CD, TRGT.ST_CD AS TRGT_ST_CD, TRGT.QHP_ID AS TRGT_QHP_ID, TRGT.ACA_PGM_PAYMT_SEQ_NO AS TRGT_ACA_PGM_PAYMT_SEQ_NO, TRGT.SRC_SYS_CD_SK as TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_ACA_PGM_PAYMT AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.ACA_PGM_PAYMT AS TRGT ON SRC.ACTVTY_YR_MO = TRGT.ACTVTY_YR_MO AND SRC.PAYMT_COV_YR_MO = TRGT.PAYMT_COV_YR_MO AND SRC.PAYMT_TYP_CD = TRGT.PAYMT_TYP_CD AND SRC.ST_CD = TRGT.ST_CD AND SRC.QHP_ID = TRGT.QHP_ID AND SRC.ACA_PGM_PAYMT_SEQ_NO = TRGT.ACA_PGM_PAYMT_SEQ_NO AND TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle}) SELECT * FROM cte",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A938_TMP_IdsAcaPgmPaymtRowCntBal",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "ACA_PGM_PAYMT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A938_TMP_IdsAcaPgmPaymtRowCntBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CreateResearchNotifyTemp",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyACAPaymt_ToTmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A938_TMP_RESEARCH_IdsAcaPgmPaymtRowCntBal; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A938_TMP_RESEARCH_IdsAcaPgmPaymtRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A938_TMP_IdsAcaPgmPaymtRowCntBal WHERE (SRC_ACTVTY_YR_MO IS NULL OR SRC_PAYMT_COV_YR_MO IS NULL OR SRC_PAYMT_TYP_CD IS NULL OR SRC_ST_CD IS NULL OR SRC_QHP_ID IS NULL OR SRC_ACA_PGM_PAYMT_SEQ_NO IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_ACTVTY_YR_MO IS NULL OR TRGT_PAYMT_COV_YR_MO IS NULL OR TRGT_PAYMT_TYP_CD IS NULL OR TRGT_ST_CD IS NULL OR TRGT_QHP_ID IS NULL OR TRGT_ACA_PGM_PAYMT_SEQ_NO IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL); DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A938_TMP_NOTIFY_IdsAcaPgmPaymtRowCntBal; SELECT TOP 1 'ROW COUNT BALANCING FACETS - IDS ACA_PGM_PAYMT IS OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A938_TMP_NOTIFY_IdsAcaPgmPaymtRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A938_TMP_IdsAcaPgmPaymtRowCntBal WHERE '@{pipeline().parameters.ToleranceCd}'='OUT';",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "CreateResearchNotifyTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A938_TMP_RESEARCH_IdsAcaPgmPaymtRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','balancing/research')",
+              "param_filename": "@concat('IdsAcaPgmPaymtResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyNotifyFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "CreateResearchNotifyTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A938_TMP_NOTIFY_IdsAcaPgmPaymtRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','balancing/notify')",
+              "param_filename": "AcaPgmPaymtBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Finance/AcaPgmPaymt/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on ACA_PGM_PAYMT and B_ACA_PGM_PAYMT tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                  DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                       DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam           2015-10-22        5128                               Initial Programming                                                                                  IntegrateDev1            Bhoomi Dasari              10/23/2015\nAbhiram Dasarathy\t   2016-01-22        5128\t\t   Modified extract SQL statement\t\t\t\t   IntegrateDev1           Kalyan Neelam             2016-01-22\nAbhiram Dasarathy\t   2016-02-13        5128\t\t   Changed the Nullability on DB2 extract and Transformer output stages  IntegrateDev1           Kalyan Neelam             2016-02-17\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - ACA_PGM_PAYMT"
+}

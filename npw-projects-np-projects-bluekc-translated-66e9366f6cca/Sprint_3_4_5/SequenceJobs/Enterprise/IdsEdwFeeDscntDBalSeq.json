@@ -1,0 +1,715 @@
+{
+  "name": "IdsEdwFeeDscntDBalSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Income/EdwLoads/Seq/Balancing"
+    },
+    "parameters": {
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExtrRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrentDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": "\"\""
+      },
+      "Target": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Subject": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Frequency": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Source": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Table": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ColumnNm": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "Total_Count": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Dscrpncy_Count": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Tolerance_Multiplier": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Tolerance_Amount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Balance_Status": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "IdsEdwFeeDscntDBal",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/DataWarehouse/Income/EdwLoads/FeeDscntD/Balancing/IdsEdwFeeDscntDBal')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EDWOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+              "type": "Expression"
+            },
+            "edw_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+              "type": "Expression"
+            },
+            "ExtrRunCycle": {
+              "value": "@pipeline().parameters.ExtrRunCycle",
+              "type": "Expression"
+            },
+            "RunID": {
+              "value": "@pipeline().parameters.RunID",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "UnixFileRecCnt_Total_Count",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "IdsEdwFeeDscntDBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/UnixFileRecCnt')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "UnixFileRecCnt_a1": "/balancing/sync",
+            "UnixFileRecCnt_a2": "FeeDscntDBalancingTotalMatch.dat",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FileName": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Set_Total_Count",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "UnixFileRecCnt_Total_Count",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "Total_Count",
+          "value": {
+            "value": "@string(activity('UnixFileRecCnt_Total_Count').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "UnixFileRecCnt_Dscrpncy_Count",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Set_Total_Count",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/UnixFileRecCnt')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "UnixFileRecCnt_a1": "/balancing/research",
+            "UnixFileRecCnt_a2": {
+              "value": "@concat('IdsEdwFeeDscntDRowToRowResearch.dat.',pipeline().parameters.RunID)",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FileName": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Set_Dscrpncy_Count",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "UnixFileRecCnt_Dscrpncy_Count",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "Dscrpncy_Count",
+          "value": {
+            "value": "@string(activity('UnixFileRecCnt_Dscrpncy_Count').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "GetRowToRowTlrnc",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Set_Dscrpncy_Count",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetRowToRowTlrnc')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "GetRowToRowTlrnc_a1": {
+              "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+              "type": "Expression"
+            },
+            "GetRowToRowTlrnc_a2": {
+              "value": "@pipeline().parameters.Table",
+              "type": "Expression"
+            },
+            "GetRowToRowTlrnc_a3": {
+              "value": "@pipeline().parameters.ColumnNm",
+              "type": "Expression"
+            },
+            "GetRowToRowTlrnc_a4": {
+              "value": "@pipeline().parameters.Subject",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "owner_schema": {
+              "value": "",
+              "type": "Expression"
+            },
+            "TargetTable": {
+              "value": "",
+              "type": "Expression"
+            },
+            "ClmnNm": {
+              "value": "",
+              "type": "Expression"
+            },
+            "SubjectArea": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Set_Tolerance_Multiplier",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "GetRowToRowTlrnc",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "Tolerance_Multiplier",
+          "value": {
+            "value": "@string(activity('GetRowToRowTlrnc').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "PreCalc_Tolerance_Amount",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Set_Tolerance_Multiplier",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/ExpressionEvaluator')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "Total_Count": {
+              "value": "@variables('Total_Count')",
+              "type": "Expression"
+            },
+            "Tolerance_Multiplier": {
+              "value": "@variables('Tolerance_Multiplier')",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Set_Tolerance_Amount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "PreCalc_Tolerance_Amount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "Tolerance_Amount",
+          "value": {
+            "value": "@string(activity('PreCalc_Tolerance_Amount').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "GetBalStatus",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Set_Tolerance_Amount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetBalStatus')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "Difference_Count": {
+              "value": "@variables('Dscrpncy_Count')",
+              "type": "Expression"
+            },
+            "Tolerance_Amount": {
+              "value": "@variables('Tolerance_Amount')",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Set_Balance_Status",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "GetBalStatus",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "Balance_Status",
+          "value": {
+            "value": "@string(activity('GetBalStatus').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Set_Balance_Status",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(1,1)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "WriteTableSummary",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/TblBalSumLoad')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "owner_schema": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "TrgtSystem": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "SubjArea": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "TrgtTbl": {
+                    "value": "@pipeline().parameters.Table",
+                    "type": "Expression"
+                  },
+                  "BalDtm": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "RowCtTlrncCode": "NA",
+                  "ClmnSumTlrncCode": "NA",
+                  "RowTorRowTlrncCode": {
+                    "value": "@variables('Balance_Status')",
+                    "type": "Expression"
+                  },
+                  "RiTlrncCode": "NA",
+                  "RelshpClmnSumTlrncCode": "NA",
+                  "CrsFootTlrncCode": "NA",
+                  "HistRsnblTlrncCode": "NA",
+                  "RunCycle": {
+                    "value": "@pipeline().parameters.ExtrRunCycle",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "WriteRowToRowDtl",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/RowToRowDtlLoad')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "owner_schema": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "SrcSystem": {
+                    "value": "@pipeline().parameters.Source",
+                    "type": "Expression"
+                  },
+                  "TrgtSystem": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "SubjArea": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "TrgtTbl": {
+                    "value": "@pipeline().parameters.Table",
+                    "type": "Expression"
+                  },
+                  "ClmnNm": {
+                    "value": "@pipeline().parameters.ColumnNm",
+                    "type": "Expression"
+                  },
+                  "TotalCt": {
+                    "value": "@variables('Total_Count')",
+                    "type": "Expression"
+                  },
+                  "Dscrpncy": {
+                    "value": "@variables('Dscrpncy_Count')",
+                    "type": "Expression"
+                  },
+                  "TlrncCode": {
+                    "value": "@variables('Balance_Status')",
+                    "type": "Expression"
+                  },
+                  "TlrncAmt": {
+                    "value": "@variables('Tolerance_Amount')",
+                    "type": "Expression"
+                  },
+                  "TlrncMul": {
+                    "value": "@variables('Tolerance_Multiplier')",
+                    "type": "Expression"
+                  },
+                  "FreqCode": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "RunCycle": {
+                    "value": "@pipeline().parameters.ExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "CrctnNote": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "UserID": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "RmSyncFile",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/balancing/sync/FeeDscntDBalancingTotalMatch.dat",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "enterprise"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

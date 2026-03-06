@@ -1,0 +1,120 @@
+{
+  "name": "IdsEdwMktngTerrDExtr",
+  "properties": {
+    "parameters": {
+      "CurrRunCycleDate": {
+        "type": "String"
+      },
+      "CurrRunCycle": {
+        "type": "Int"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_CreateTmpMktngTerr",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABC_TMP_IdsEdwMktngTerrDExtr; WITH MKTNG_TERR_Joined AS (SELECT TERR.MKTNG_TERR_SK, COALESCE(SYSCD.TRGT_CD,'UNK') AS SRC_SYS_CD, TERR.MKTNG_TERR_ID, CATCD.TRGT_CD AS MKTING_TERR_CAT_CD, TERR.ACCT_CRDNTR_NM AS MKTING_TERR_ACCT_CRDNTR_NM, TERR.ACCT_EXEC_NM AS MKTING_TERR_ACCT_EXEC_NM, CATCD.TRGT_CD_NM AS MKTING_TERR_CAT_NM, TERR.CRT_DT_SK AS MKTING_TERR_CRT_DT_SK, TERR.MKTNG_TERR_DESC, TERR.EFF_DT_SK AS MKTING_TERR_EFF_DT_SK, TERR.LAST_UPDT_DT_SK AS MKTING_TERR_LAST_UPDT_DT_SK, TERR.REP_NM AS MKTING_TERR_REP_NM, TERR.TERM_DT_SK AS MKTING_TERR_TERM_DT_SK, TERR.MKTNG_TERR_UNIQ_KEY, TERR.MKTNG_TERR_CAT_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.MKTNG_TERR TERR LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG SYSCD ON TERR.SRC_SYS_CD_SK = SYSCD.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CATCD ON TERR.MKTNG_TERR_CAT_CD_SK = CATCD.CD_MPPNG_SK ) SELECT MKTNG_TERR_SK, SRC_SYS_CD, MKTNG_TERR_ID, MKTING_TERR_CAT_CD, '@{pipeline().parameters.CurrRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.CurrRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, MKTING_TERR_ACCT_CRDNTR_NM, MKTING_TERR_ACCT_EXEC_NM, MKTING_TERR_CAT_NM, MKTING_TERR_CRT_DT_SK, MKTNG_TERR_DESC, MKTING_TERR_EFF_DT_SK, MKTING_TERR_LAST_UPDT_DT_SK, MKTING_TERR_REP_NM, MKTING_TERR_TERM_DT_SK, MKTNG_TERR_UNIQ_KEY, @{pipeline().parameters.CurrRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, MKTNG_TERR_CAT_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ABC_TMP_IdsEdwMktngTerrDExtr FROM MKTNG_TERR_Joined",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyMktngTerrD",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_CreateTmpMktngTerr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABC_TMP_IdsEdwMktngTerrDExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "MKTNG_TERR_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/MktngTerrD"
+    }
+  },
+  "Description": "COPYRIGHT 2006 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:     EdwAgntTerrExtr\n\nDESCRIPTION:  \n  Pulls data from ids and loads to edw  \n      \n\nINPUTS:\n\tIDS - TERR\n  \nHASH FILES:\n                hf_cdma_codes         - CDMA code table - resolve code lookups\n               \n\nTRANSFORMS:  \n                  TRIM all the fields that are extracted or used in lookups\n                           \nPROCESSING:\n                  IDS - read from source, lookup all code SK values and get the natural codes\n                \n  \n\nOUTPUTS: \n                   TERR_D.dat\n\nMODIFICATIONS:\n              Sharon Andrew  08/12/2006    Originally Programmed  Task tracker 4013\n\nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nBalkarn Gill               07/12/2013        5114                              Create Load File for EDW Table MKTNG_TERR_D                            EnterpriseWhseDevl  Peter Marshall              9/23/2013\n\nAnnotations:\nReference Code Mapping Data for Code SK lookups\nJob Name: IdsEdwMktngTerrDExtr\nRead from source table MKTNG_TERR and CD_MPPNG from IDS.  Apply Run Cycle filters when applicable to get just the needed rows forward\nCode SK lookups for Denormalization\n\nLookup Keys:\nCD_MPPNG_SK\nWrite MKTNG_TERR_D Data into a Sequential file for Load Job IdsEdwMktngTerrDLoad.\nAdd Defaults and Null Handling."
+}

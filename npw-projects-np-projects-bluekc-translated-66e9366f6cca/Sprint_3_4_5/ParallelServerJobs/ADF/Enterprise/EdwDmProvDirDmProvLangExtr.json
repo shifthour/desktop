@@ -1,0 +1,90 @@
+{
+  "name": "EdwDmProvDirDmProvLangExtr",
+  "properties": {
+    "parameters": {
+      "CurrDate": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_EdwDmProvDirDmProvLang",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte AS ( SELECT PROV_D.PROV_ID AS PROV_ID, LANG_D.CMN_PRCT_LANG_SEQ_NO AS LANG_SEQ_NO, LANG_D.SRC_SYS_CD AS SRC_SYS_CD, CASE WHEN LANG_D.CMN_PRCT_LANG_DESC IS NULL OR LTRIM(RTRIM(LANG_D.CMN_PRCT_LANG_DESC)) = '' THEN '' ELSE LANG_D.CMN_PRCT_LANG_DESC END AS LANG_DESC, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_UPDT_DT FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.PROV_D PROV_D JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.CMN_PRCT_LANG_D LANG_D ON PROV_D.CMN_PRCT_SK = LANG_D.CMN_PRCT_SK WHERE PROV_D.SRC_SYS_CD = 'FACETS' AND LANG_D.CMN_PRCT_LANG_DESC NOT IN ('NA','English','[None or N/A]') ) SELECT PROV_ID, LANG_SEQ_NO, SRC_SYS_CD, LANG_DESC, LAST_UPDT_DT FROM cte",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "PROV_D"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'load')",
+              "param_filename": "PROV_DIR_DM_PROV_LANG.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/WebDataMart/ProviderDirectory/ProvDirDmProvLang"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2009 Blue Cross/Blue Shield of Kansas City\n\nPROCESSING:   Retrieves the data from EDW CMN_PRCT_LANG_D table and loads into the Web Provider Directory \n\nMODIFICATIONS:\nDeveloper                Date                 \\(9)Project/Altiris #      \\(9)Change Description                                        \\(9)Development Project      Code Reviewer          Date Reviewed       \n---------------------------    --------------------     \\(9)------------------------      \\(9)-----------------------------------------------------------------------         --------------------------------       -------------------------------   ----------------------------       \nRalph Tucker         2009-05-28\\(9)3500 - Web Realign Original Programming\\(9)\\(9)\\(9)devlEDWnew                  Steph Goddard          06/02/2009\n\nShiva Devagiri       06-20-2013                    5114               Original Programming                                                 EnterpriseWrhsDevl            Jag Yelavarthi           2013-08-31\n                                                                                    (Server to Parallel Conversion)\n\nAnnotations:\nWrite CMN_PRCT_LANG_D Data into a Sequential file for Load Job IdsEdwProvDirDmProvTypLoad\nRead from source table CMN_PRCT_LANG_D from EDW. Apply Run Cycle filters to get just the needed rows forward\nAdd Defaults\nJob Name: EdwProvDirDmProvLangExtr"
+}

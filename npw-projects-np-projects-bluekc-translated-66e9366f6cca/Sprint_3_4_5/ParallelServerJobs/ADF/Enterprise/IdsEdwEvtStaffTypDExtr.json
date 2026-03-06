@@ -1,0 +1,99 @@
+{
+  "name": "IdsEdwEvtStaffTypDExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_EVT_STAFF_TYP_D",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "sqlReaderQuery": {
+              "value": "WITH SRC AS ( SELECT EVT_STAFF_TYP.EVT_STAFF_TYP_SK, EVT_STAFF_TYP.EVT_STAFF_TYP_ID, COALESCE(CD.TRGT_CD,'UNK') AS SRC_SYS_CD, EVT_STAFF_TYP.LAST_UPDT_RUN_CYC_EXCTN_SK, EVT_STAFF_TYP.EVT_STAFF_TYP_DESC, EVT_STAFF_TYP.LAST_UPDT_DTM, EVT_STAFF_TYP.LAST_UPDT_USER_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.EVT_STAFF_TYP EVT_STAFF_TYP LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON EVT_STAFF_TYP.SRC_SYS_CD_SK = CD.CD_MPPNG_SK WHERE EVT_STAFF_TYP.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IdsRunCycle}), TRANS AS ( SELECT EVT_STAFF_TYP_SK, EVT_STAFF_TYP_ID, CASE WHEN dbo.trim_default(SRC_SYS_CD) = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_DTM AS EVT_STAFF_TYP_LAST_UPDT_DTM, EVT_STAFF_TYP_DESC, LAST_UPDT_USER_ID AS EVT_STAFF_TYP_LAST_UPDT_USR_ID, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK FROM SRC WHERE EVT_STAFF_TYP_SK <> 0 AND EVT_STAFF_TYP_SK <> 1 ), CONSTANTS AS ( SELECT 0 AS EVT_STAFF_TYP_SK, 'UNK' AS EVT_STAFF_TYP_ID, 'UNK' AS SRC_SYS_CD, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CAST('1753-01-01 00:00:00.000' AS DATETIME) AS EVT_STAFF_TYP_LAST_UPDT_DTM, '' AS EVT_STAFF_TYP_DESC, 'UNK' AS EVT_STAFF_TYP_LAST_UPDT_USR_ID, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK, 100 AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK UNION ALL SELECT 1, 'NA', 'NA', '1753-01-01', '1753-01-01', CAST('1753-01-01 00:00:00.000' AS DATETIME), '', 'NA', 100, 100, 100 ) SELECT * FROM TRANS UNION ALL SELECT * FROM CONSTANTS",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "EVT_STAFF_TYP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "EVT_STAFF_TYP_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "IdsRunCycle": {
+        "type": "Int",
+        "defaultValue": 0
+      },
+      "EDWRunCycle": {
+        "type": "Int",
+        "defaultValue": 0
+      },
+      "EDWRunCycleDate": {
+        "type": "String",
+        "defaultValue": "1900-01-01"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Scheduling/EvtStaffTypD"
+    }
+  },
+  "description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY: EdwProductExtrSeq\n\nPROCESSING: Extracts all IDS records and loads in to EDW EVT_STAFF_TYP_Dtable\n\n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #               Change Description                                    Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------              ----------------------------------   ---------------------------------    -------------------------   \nBhoomi Dasari                 08/14/2009         4113                          Originally Programmed                                    devlEDWnew                Steph Goddard             08/19/2009\n\nArchana Palivela             11/07/2013        5114                           Originally Programmed (In Parallel)                  EnterpriseWhseDevl      Jag Yelavarthi              2014-01-16\n\nAnnotations:\nJob name: IdsEdwEvtStaffTypDExtr\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file.\nRead data from source table EVT_STAFF_TYP\nWrite EVT_STAFF_TYP_D Data into a Sequential file for Load Ready Job."
+}

@@ -1,0 +1,161 @@
+{
+  "name": "FctsIncomeCleanupSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/Income/Seq"
+    },
+    "parameters": {
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CntlJobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TmpTableID": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Counter": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'ClearHash'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ClearHash",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/HASH.CLEAR')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "file_names": "3;hf_fcts_income_last_invc_id_lkup;hf_invc_rebills;hf_invc_non_rebills",
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "StartLoop",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "items": [
+            "K_FEE_DSCNT_TEMP",
+            "K_INVC_DSCRTN_TEMP",
+            "K_INVC_FEE_DSCNT_TEMP",
+            "K_INVC_SUB_TEMP",
+            "K_INVC_TEMP",
+            "K_BILL_SUM_TEMP",
+            "K_INVC_CMPNT_CT_TEMP"
+          ],
+          "activities": [
+            {
+              "name": "Set_Counter",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "typeProperties": {
+                "variableName": "Counter",
+                "value": {
+                  "value": "@item()",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Truncate_Table",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_Counter",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.TRUNCATE')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "owner_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "DBTable": {
+                    "value": "@variables('Counter')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

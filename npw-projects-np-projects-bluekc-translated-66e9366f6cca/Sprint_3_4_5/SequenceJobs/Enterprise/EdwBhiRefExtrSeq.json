@@ -1,0 +1,871 @@
+{
+  "name": "EdwBhiRefExtrSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/BHI/Seq"
+    },
+    "parameters": {
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "StartDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EndDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Prodln": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "AlphaPfxExtr",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiAlphaPfxExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiAlphaPfxExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiAlphaPfxExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "StartDate": {
+                    "value": "@pipeline().parameters.StartDate",
+                    "type": "Expression"
+                  },
+                  "EndDate": {
+                    "value": "@pipeline().parameters.EndDate",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ProdIn": {
+                    "value": "@pipeline().parameters.Prodln",
+                    "type": "Expression"
+                  },
+                  "MADataMartAsstOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_MADataMartAsstOwner",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "AlphaPfxExtrCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "AlphaPfxExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiAlphaPfxExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/alpha_prefix_ref",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "enterprise"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "EmptyChk_AlphaPfxExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "AlphaPfxExtrCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(activity('AlphaPfxExtrCnt').output.runOutput,'0'), equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiSubCtrlEmptyExtr_AlphaPfxExtr'), false))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubCtrlEmptyExtr_AlphaPfxExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiSubCtrlEmptyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ExtrNm": "STD_ALPHA_PREFIX_REF"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "PlnNtwkProfFcltyExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "EmptyChk_AlphaPfxExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiSubCtrlEmptyExtr_AlphaPfxExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiPlnNtwkProfFcltyExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiPlnNtwkProfFcltyExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiPlnNtwkProfFctlyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "StartDate": {
+                    "value": "@pipeline().parameters.StartDate",
+                    "type": "Expression"
+                  },
+                  "EndDate": {
+                    "value": "@pipeline().parameters.EndDate",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ProdIn": {
+                    "value": "@pipeline().parameters.Prodln",
+                    "type": "Expression"
+                  },
+                  "MADataMartAsstOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_MADataMartAsstOwner",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "PlnNtwkfacCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "PlnNtwkProfFcltyExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiPlnNtwkProfFcltyExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/net_cat_fac_ref",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "enterprise"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "EmptyExtr_PlnNtwkFac",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "PlnNtwkfacCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(activity('PlnNtwkfacCnt').output.runOutput,'0'), equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiSubCtrlEmptyExtr_PlnNtwkFac'), false))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubCtrlEmptyExtr_PlnNtwkFac",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiSubCtrlEmptyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ExtrNm": "STD_NET_CAT_FAC_REF"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "PlnNtwkprofCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "EmptyExtr_PlnNtwkFac",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiSubCtrlEmptyExtr_PlnNtwkFac",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/net_cat_prof_ref",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "enterprise"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "EmptyExtr_PlnNtwkProf",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "PlnNtwkprofCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(activity('PlnNtwkprofCnt').output.runOutput,'0'), equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiSubCtrlEmptyExtr_PlnNtwkProf'), false))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubCtrlEmptyExtr_PlnNtwkProf",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiSubCtrlEmptyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ExtrNm": "STD_NET_CAT_PROF_REF"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "TraceabilityExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "EmptyExtr_PlnNtwkProf",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiSubCtrlEmptyExtr_PlnNtwkProf",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiTraceabilityExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiTraceabilityExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiTraceabilityExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "StartDate": {
+                    "value": "@pipeline().parameters.StartDate",
+                    "type": "Expression"
+                  },
+                  "EndDate": {
+                    "value": "@pipeline().parameters.EndDate",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ProdIn": {
+                    "value": "@pipeline().parameters.Prodln",
+                    "type": "Expression"
+                  },
+                  "MADataMartAsstOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_MADataMartAsstOwner",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "TracExtrCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "TraceabilityExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiTraceabilityExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/traceability_ref",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "enterprise"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "EmptyExtr_TracExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "TracExtrCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(activity('TracExtrCnt').output.runOutput,'0')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubCtrlEmptyExtr_TracExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiSubCtrlEmptyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ExtrNm": "STD_TRACEABILITY_REF"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "AcctRptExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "EmptyExtr_TracExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiSubCtrlEmptyExtr_TracExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiAcctRptExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiAcctRptExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiAcctRptExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "StartDate": {
+                    "value": "@pipeline().parameters.StartDate",
+                    "type": "Expression"
+                  },
+                  "EndDate": {
+                    "value": "@pipeline().parameters.EndDate",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ProdIn": {
+                    "value": "@pipeline().parameters.Prodln",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "AccrRptExtrCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "AcctRptExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiAcctRptExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/account_reporting_ref",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "enterprise"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_8_of_EmptyChk_AlphaPfxExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "AccrRptExtrCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(activity('AccrRptExtrCnt').output.runOutput,'0')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubCtrlEmptyExtr_AccRptExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiSubCtrlEmptyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ExtrNm": "ACCOUNT_REPORTING_REF"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "SubParamExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Copy_8_of_EmptyChk_AlphaPfxExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EdwBhiSubCtrlEmptyExtr_AccRptExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'EdwBhiSubParamExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubParamExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/BHI/Reference/EdwBhiSubParamExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "ProdIn": {
+                    "value": "@pipeline().parameters.Prodln",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

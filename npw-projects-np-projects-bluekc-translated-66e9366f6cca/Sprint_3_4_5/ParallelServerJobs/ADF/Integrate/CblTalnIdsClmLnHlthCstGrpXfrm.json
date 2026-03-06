@@ -1,0 +1,273 @@
+{
+  "name": "CblTalnIdsClmLnHlthCstGrpXfrm",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "SrcSysCdSk": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      },
+      "FileName": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "ParquetReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z0CV_TMP_CblTaln;",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_adls_container}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/ds')",
+              "param_filename": "@concat('CLM_LN_HLTH_CST_GRP.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z0CV_TMP_CblTaln"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptTransform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "@concat(\n'DROP TABLE IF EXISTS ', pipeline().globalParameters.gbl_param_ids_staging, '.Z0CV_TMP_CblTalnPkeyOut; ',\n'SELECT ',\n\"('@{pipeline().parameters.SrcSysCd}' + ';' + CLM_ID + ';' + CAST(CLM_LN_SEQ_NO AS VARCHAR) + ';' + SRC_SYS_CD) AS PRI_NAT_KEY_STRING, \",\n\"CAST('@{pipeline().parameters.RunIDTimeStamp}' AS DATETIME) AS FIRST_RECYC_TS, \",\n\"0 AS CLM_LN_HLTH_CST_GRP_SK, \",\n\"CLM_ID, \",\n\"CLM_LN_SEQ_NO, \",\n\"SRC_SYS_CD AS CLM_SRC_SYS_CD, \",\n\"'@{pipeline().parameters.SrcSysCd}' AS SRC_SYS_CD, \",\n\"0 AS CRT_RUN_CYC_EXCTN_SK, \",\n\"0 AS LAST_UPDT_RUN_CYC_EXCTN_SK, \",\n\"CAST('@{pipeline().parameters.SrcSysCdSk}' AS INT) AS SRC_SYS_CD_SK, \",\n\"CASE WHEN LEN(RTRIM(LTRIM(CASE_ADM_ID)))=0 THEN 'NA' ELSE CASE_ADM_ID END AS CASE_ADM_ID, \",\n\"CASE WHEN MR_LN IS NULL THEN 'NA' ELSE UPPER(MR_LN) END AS MR_LN, \",\n\"CASE WHEN MR_LN_DTL IS NULL THEN 'NA' ELSE MR_LN_DTL END AS MR_LN_DTL, \",\n\"CASE WHEN MR_LN_CASE IS NULL THEN 'NA' ELSE MR_LN_CASE END AS MR_LN_CASE, \",\n\"MR_CASES_ADM, MR_UNIT_DAYS, MR_PROC, FCLTY_CASE_ID \",\n\"INTO \", pipeline().globalParameters.gbl_param_ids_staging, \".Z0CV_TMP_CblTalnPkeyOut \",\n\"FROM \", pipeline().globalParameters.gbl_param_ids_staging, \".Z0CV_TMP_CblTaln; \",\n\"DROP TABLE IF EXISTS \", pipeline().globalParameters.gbl_param_ids_staging, \".Z0CV_TMP_CblTalnSnapshot; \",\n\"SELECT CLM_ID, CLM_LN_SEQ_NO, CLM_SRC_SYS_CD_SK, CAST('@{pipeline().parameters.SrcSysCdSk}' AS INT) AS SRC_SYS_CD_SK \",\n\"INTO \", pipeline().globalParameters.gbl_param_ids_staging, \".Z0CV_TMP_CblTalnSnapshot \",\n\"FROM \", pipeline().globalParameters.gbl_param_ids_staging, \".Z0CV_TMP_CblTaln;\"\n)",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopySnapshot",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z0CV_TMP_CblTalnSnapshot"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "@concat('B_CLM_LN_HLTH_CST_GRP.', pipeline().parameters.SrcSysCd, '.dat')",
+              "param_col_delimiter": "','",
+              "param_row_delimiter": "@null",
+              "param_quote": "'^'",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyPkeyOut",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "ParquetWriteSettings",
+              "fileExtension": ".ds"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z0CV_TMP_CblTalnPkeyOut"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_adls_container}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/ds')",
+              "param_filename": "@concat('CLM_LN_HLTH_CST_GRP.', pipeline().parameters.SrcSysCd, '.xfrm.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "runtimeConfiguration": {
+      "integrationRuntime": {
+        "type": "Managed"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/HCG/ClmLnHlthCstGrp"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:\n\nPROCESSING:\n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #               Change Description                             Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRaja Gummadi                  2015-04-22      5460                                Originally Programmed                            IntegrateNewDevl          Kalyan Neelam            2015-04-23\nRaja Gummadi                  2015-05-12      5460                                Deleted 32 Columns                               IntegrateNewDevl          Kalyan Neelam            2015-05-15\nRaja Gummadi                  2016-08-22      TFS-12593                      Added FCLTY_CASE_ID column           IntegrateDev1                Kalyan Neelam            2016-08-24\nKrishnakanth                    2017-09-25       30001                             Removed the lookups stages since       IntegrateDev2                Kalyan Neelam            2017-09-26\n  Manivannan                                                                                   it was handled in previous job\n\nAnnotations:\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns.\nJobName: CblTalnIdsClmLnHlthCstGrpXfrm\n\nStrip field function and Tranforamtion rules are applied on the data Extracted from inboundfile"
+}

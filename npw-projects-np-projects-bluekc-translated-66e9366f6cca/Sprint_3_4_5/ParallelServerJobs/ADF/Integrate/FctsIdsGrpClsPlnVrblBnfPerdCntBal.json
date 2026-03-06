@@ -1,0 +1,279 @@
+{
+  "name": "FctsIdsGrpClsPlnVrblBnfPerdCntBal",
+  "properties": {
+    "type": "Pipeline",
+    "annotations": [],
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "ScriptApplyPushdown",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.XY12_TMP_Research; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.XY12_TMP_Notify; WITH base AS (SELECT GRP_CLS_PLN_VRBL_BNF_PERD.GRP_ID AS TRGT_GRP_ID, GRP_CLS_PLN_VRBL_BNF_PERD.CLS_ID AS TRGT_CLS_ID, GRP_CLS_PLN_VRBL_BNF_PERD.CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD AS TRGT_CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD, GRP_CLS_PLN_VRBL_BNF_PERD.CLS_PLN_ID AS TRGT_CLS_PLN_ID, GRP_CLS_PLN_VRBL_BNF_PERD.CLS_PLN_VRBL_BNF_PERD_EFF_DT_SK AS TRGT_CLS_PLN_VRBL_BNF_PERD_EFF_DT_SK, GRP_CLS_PLN_VRBL_BNF_PERD.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK, Bal.GRP_ID, Bal.CLS_ID, Bal.CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD, Bal.CLS_PLN_ID, Bal.CLS_PLN_VRBL_BNF_PERD_EFF_DT_SK, Bal.SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.GRP_CLS_PLN_VRBL_BNF_PERD GRP_CLS_PLN_VRBL_BNF_PERD FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.B_GRP_CLS_PLN_VRBL_BNF_PERD Bal ON GRP_CLS_PLN_VRBL_BNF_PERD.GRP_ID = Bal.GRP_ID AND GRP_CLS_PLN_VRBL_BNF_PERD.CLS_ID = Bal.CLS_ID AND GRP_CLS_PLN_VRBL_BNF_PERD.CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD = Bal.CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD AND GRP_CLS_PLN_VRBL_BNF_PERD.CLS_PLN_ID = Bal.CLS_PLN_ID AND GRP_CLS_PLN_VRBL_BNF_PERD.CLS_PLN_VRBL_BNF_PERD_EFF_DT_SK = Bal.CLS_PLN_VRBL_BNF_PERD_EFF_DT_SK AND GRP_CLS_PLN_VRBL_BNF_PERD.SRC_SYS_CD_SK = Bal.SRC_SYS_CD_SK WHERE GRP_CLS_PLN_VRBL_BNF_PERD.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle}) SELECT TRGT_GRP_ID, TRGT_CLS_ID, TRGT_CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD, TRGT_CLS_PLN_ID, TRGT_CLS_PLN_VRBL_BNF_PERD_EFF_DT_SK, TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.XY12_TMP_Research FROM base WHERE TRGT_CLS_ID IS NULL OR CLS_ID IS NULL OR TRGT_GRP_ID IS NULL OR GRP_ID IS NULL OR TRGT_CLS_PLN_ID IS NULL OR CLS_PLN_ID IS NULL OR TRGT_CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD IS NULL OR CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL OR SRC_SYS_CD_SK IS NULL; IF '@{pipeline().parameters.ToleranceCd}' = 'OUT' BEGIN SELECT 'ROW COUNT BALANCING FACETS - IDS GRP_CLS_PLN_VRBL_BNF_PERD OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.XY12_TMP_Notify END ELSE BEGIN SELECT TOP 0 CAST('' AS VARCHAR(100)) AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.XY12_TMP_Notify END",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyToResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptApplyPushdown",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "TRGT_GRP_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "TRGT_CLS_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "TRGT_CLS_PLN_DTL_CLS_PLN_PROD_CAT_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "TRGT_CLS_PLN_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "TRGT_CLS_PLN_VRBL_BNF_PERD_EFF_DT_SK",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "TRGT_SRC_SYS_CD_SK",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "XY12_TMP_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/research')",
+              "param_filename": "@concat('FctsIdsGrpClsPlnVrblBnfPerdResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyToErrorNotificationFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptApplyPushdown",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "NOTIFICATION",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "XY12_TMP_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/notify')",
+              "param_filename": "FctsIdsGrpClsPlnVrblBnfPerdBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/member/GrpClsPlnVrblBnfPerd/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:  xxxxxxxx\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target files are compared to see if there are any discrepancies \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                   ----------------------------------   ---------------------------------    -------------------------   \nKailashnath J                  2017-08-03          5630                             Originally Programmed                                        IntegrateDev1              Kalyan Neelam              2017-08-11\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - GRP_CLS_PLN_VRBL_BNF_PERD"
+}

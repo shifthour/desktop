@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwMbrCareOppIExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "IdsEdwMbrCareOppIExtr_Copy",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          },
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH source_data AS (SELECT M.MBR_CARE_OPP_SK,CASE WHEN dbo.trim_default(COALESCE(CD.TRGT_CD,'UNK')) = '' THEN 'UNK' ELSE dbo.trim_default(COALESCE(CD.TRGT_CD,'UNK')) END SRC_SYS_CD,M.MBR_UNIQ_KEY,M.PRCS_YR_MO_SK,M.CARE_OPP_ID,M.CARE_OPP_SK,M.MBR_MED_MESRS_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR_CARE_OPP M LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON M.SRC_SYS_CD_SK = CD.CD_MPPNG_SK WHERE M.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtractRunCycle}),filtered_data AS (SELECT MBR_CARE_OPP_SK,SRC_SYS_CD,MBR_UNIQ_KEY,PRCS_YR_MO_SK,CARE_OPP_ID,CARE_OPP_SK,MBR_MED_MESRS_SK,@{pipeline().parameters.CurrRunCycleDate} CRT_RUN_CYC_EXCTN_DT_SK,@{pipeline().parameters.CurrRunCycleDate} LAST_UPDT_RUN_CYC_EXCTN_DT_SK,@{pipeline().parameters.CurrRunCycle} CRT_RUN_CYC_EXCTN_SK,@{pipeline().parameters.CurrRunCycle} LAST_UPDT_RUN_CYC_EXCTN_SK FROM source_data WHERE MBR_CARE_OPP_SK <> 1 AND MBR_CARE_OPP_SK <> 0),row_one AS (SELECT 1 MBR_CARE_OPP_SK,'NA' SRC_SYS_CD,1 MBR_UNIQ_KEY,'175301' PRCS_YR_MO_SK,'NA' CARE_OPP_ID,'1753-01-01' CRT_RUN_CYC_EXCTN_DT_SK,'1753-01-01' LAST_UPDT_RUN_CYC_EXCTN_DT_SK,1 CARE_OPP_SK,1 MBR_MED_MESRS_SK,100 CRT_RUN_CYC_EXCTN_SK,100 LAST_UPDT_RUN_CYC_EXCTN_SK),row_two AS (SELECT 0 MBR_CARE_OPP_SK,'UNK' SRC_SYS_CD,0 MBR_UNIQ_KEY,'175301' PRCS_YR_MO_SK,'UNK' CARE_OPP_ID,'1753-01-01' CRT_RUN_CYC_EXCTN_DT_SK,'1753-01-01' LAST_UPDT_RUN_CYC_EXCTN_DT_SK,0 CARE_OPP_SK,0 MBR_MED_MESRS_SK,100 CRT_RUN_CYC_EXCTN_SK,100 LAST_UPDT_RUN_CYC_EXCTN_SK) SELECT * FROM filtered_data UNION ALL SELECT * FROM row_one UNION ALL SELECT * FROM row_two",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "MBR_CARE_OPP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "MBR_CARE_OPP_I.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ExtractRunCycle": {
+        "type": "string"
+      },
+      "CurrRunCycleDate": {
+        "type": "string"
+      },
+      "CurrRunCycle": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/MemberRisk/MbrCareOppI"
+    }
+  },
+  "Description": "COPYRIGHT 2008 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nPROCESSING:  Extract data from Mbr_Care_Opp\n\n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #               Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------   ----------------------------------   ---------------------------------    -------------------------   \nRalph Tucker                  4/3/2008       3036                               Originally Programmed                         devlEDW                         Steph Goddard            04/15/2008\n\nSrikanth Mettpalli              10/30/2013        5114                           Original Programming                          EnterpriseWrhsDevl        Jag Yelavarthi             2013-12-12\n                                                                                                       (Server to Parallel Conversion)\n\nAnnotations:\nWrite MBR_CARE_OPP_I Data into a Sequential file for Load Job IdsEdwMbrCareOppILoad.\nRead all the Data from IDS MBR_CARE_OPP_I Table;\nAdd Defaults and Null Handling.\nJob Name: IdsEdwMbrCareOppIExtr"
+}

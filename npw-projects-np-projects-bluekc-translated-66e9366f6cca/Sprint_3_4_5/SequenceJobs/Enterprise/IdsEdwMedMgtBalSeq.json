@@ -1,0 +1,738 @@
+{
+  "name": "IdsEdwMedMgtBalSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/MedMgt/Seq/Balancing"
+    },
+    "parameters": {
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExtrRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrentDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Target": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Subject": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Frequency": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Source": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ConcatIdsUmIp'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatIdsUmIp",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "snapshotPath": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate,'/',pipeline().globalParameters.gbl_param_environment,'/balancing/snapshot')",
+                    "type": "Expression"
+                  },
+                  "PATTERN": "IDS_UM_IP.*",
+                  "datasetName": "IDS_UM_IP",
+                  "keyPrimary": "-k9,9 -k5,5r",
+                  "keySecondary": "-k9,9",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "IdsMedMgtUmIpFBalExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "ConcatIdsUmIp",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/MedMgt/UmIpF/Balancing/IdsMedMgtUmIpFBalExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "LoadB_UM_IP_F",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "IdsMedMgtUmIpFBalExtr",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "B_UM_IP_F",
+                  "action": "REPLACE",
+                  "file_name": "B_UM_IP_F.dat",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "LoadB_UM_IP_F",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwRowToRowUmIpFBalSeq'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwRowToRowUmIpFBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwRowToRowUmIpFBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.ExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "ExclusionList": {
+                    "value": "@pipeline().parameters.ExclusionList",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.Source",
+                    "type": "Expression"
+                  },
+                  "Table": "UM_IP_F",
+                  "ColumnNm1": "UM_IP_CUR_TREAT_CAT_CD",
+                  "ColumnNm2": "UM_IP_STTUS_CD",
+                  "ColumnNm3": "IP_PRI_DIAG_CD"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsEdwRowToRowUmIpFBalSeq",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwClmnSumUmIpFBalSeq'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwClmnSumUmIpFBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwClmnSumUmIpFBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.ExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "ExclusionList": {
+                    "value": "@pipeline().parameters.ExclusionList",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.Source",
+                    "type": "Expression"
+                  },
+                  "TrgtTbl": "UM_IP_F",
+                  "SnpshtTbl": "B_UM_IP_F",
+                  "ColumnNm": "UM_IP_ACTL_LOS_DAYS_QTY"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ConcatIdsUmSvc'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatIdsUmSvc",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "snapshotPath": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate,'/',pipeline().globalParameters.gbl_param_environment,'/balancing/snapshot')",
+                    "type": "Expression"
+                  },
+                  "PATTERN": "IDS_UM_SVC.*",
+                  "datasetName": "IDS_UM_SVC",
+                  "keyPrimary": "-k9,9 -k5,5r",
+                  "keySecondary": "-k9,9",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "IdsMedMgtUmSvcFBalExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "ConcatIdsUmSvc",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/MedMgt/UmSvcF/Balancing/IdsMedMgtUmSvcFBalExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "LoadB_UM_SVC_F",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "IdsMedMgtUmSvcFBalExtr",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "B_UM_SVC_F",
+                  "action": "REPLACE",
+                  "file_name": "B_UM_SVC_F.dat",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "LoadB_UM_SVC_F",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwRowToRowUmSvcFBalSeq'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwRowToRowUmSvcFBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwRowToRowUmSvcFBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.ExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "ExclusionList": {
+                    "value": "@pipeline().parameters.ExclusionList",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.Source",
+                    "type": "Expression"
+                  },
+                  "Table": "UM_SVC_F",
+                  "ColumnNm1": "UM_SVC_TREAT_CAT_CD",
+                  "ColumnNm2": "PRI_DIAG_CD",
+                  "ColumnNm3": "PROC_CD"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsEdwRowToRowUmSvcFBalSeq",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwClmnSumUmSvcFBalSeq'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwClmnSumUmSvcFBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwClmnSumUmSvcFBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.ExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "ExclusionList": {
+                    "value": "@pipeline().parameters.ExclusionList",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.Source",
+                    "type": "Expression"
+                  },
+                  "TrgtTbl": "UM_SVC_F",
+                  "SnpshtTbl": "B_UM_SVC_F",
+                  "ColumnNm1": "UM_SVC_PD_AMT",
+                  "ColumnNm2": "UM_SVC_ALW_UNIT_CT"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

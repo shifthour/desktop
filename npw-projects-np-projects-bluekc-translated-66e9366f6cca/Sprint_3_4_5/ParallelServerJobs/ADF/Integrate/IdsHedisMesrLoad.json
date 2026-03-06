@@ -1,0 +1,220 @@
+{
+  "name": "IdsHedisMesrLoad",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "CurrRunCycle": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "cp_LoadHedisMesr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          },
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "HEDIS_MESR_SK"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "HEDIS_MESR_SK",
+                  "type": "Int64",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "HEDIS_MESR_NM",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "HEDIS_SUB_MESR_NM",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "HEDIS_MBR_BUCKET_ID",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_SK",
+                  "type": "Int64",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                  "type": "Int64",
+                  "physicalType": "INT"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Membership/GDIT/HedisMesr/load')",
+              "param_filename": "@concat('HEDIS_MESR.', pipeline().parameters.SrcSysCd, '.', pipeline().parameters.RunID, '.dat')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "HEDIS_MESR"
+            }
+          }
+        ]
+      },
+      {
+        "name": "nb_DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "cp_LoadHedisMesr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB2StatsSubroutine')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "@concat('HEDIS_MESR.', pipeline().parameters.SrcSysCd, '.', pipeline().parameters.RunID, '.dat')",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Membership/GDIT/HedisMesr"
+    }
+  },
+  "Description": "COPYRIGHT 2005, 2006, 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nJob Name : IdsHedisMesrLoad\n\nCalled By: GDITIdsMbrHedisMesrYRMOExtCntl\n\n                   \nPROCESSING:\n\nApplies Transformation rules for MBR_HEDIS_MESR_YR_MO\n\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                    ----------------------------------   ---------------------------------    -------------------------   \nAkhila M                            2018-03-22                 30001                                 Orig Development                                   IntegrateDev2           Jaideep Mankala         03/30/2018\n\nAnnotations:\nRead Load File created in the PKEY job\nCopy Stage for buffer\nLoad HEDIS_MESR table\nLoad rejects are redirected into a Reject file"
+}

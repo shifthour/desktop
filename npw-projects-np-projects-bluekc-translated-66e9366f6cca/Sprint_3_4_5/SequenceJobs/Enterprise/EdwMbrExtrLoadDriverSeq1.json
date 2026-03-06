@@ -1,0 +1,531 @@
+{
+  "name": "EdwMbrExtrLoadDriverSeq1",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/Seq"
+    },
+    "parameters": {
+      "DBLoadAction": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EDWRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrentDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "IDSExtractCycle": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "var_If_LoadCOB_branch": {
+        "type": "String",
+        "defaultValue": "0"
+      },
+      "var_If_TrunMbrCobD_branch": {
+        "type": "String",
+        "defaultValue": "0"
+      },
+      "var_If_TrunMbrCobD_Continuation_branch": {
+        "type": "String",
+        "defaultValue": "0"
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_MbrCOB",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwMbrCobDExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwMbrCobDExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/DataWarehouse/Membership/EdwLoads/MbrCobD/IdsEdwMbrCobDExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EDWRunCycleDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "EDWRunCycle": {
+                    "value": "@pipeline().parameters.EDWRunCycle",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_LoadCOB_Switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "If_MbrCOB",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsEdwMbrCobDExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwMbrCobDLoad'), false),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_If_LoadCOB_branch_True",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "userProperties": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "variableName": "var_If_LoadCOB_branch",
+                    "value": {
+                      "value": "@string('1')",
+                      "type": "Expression"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_If_LoadCOB_branch_False",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "variableName": "var_If_LoadCOB_branch",
+                "value": {
+                  "value": "@string('0')",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_TrunMbrCobD_Switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "If_LoadCOB_Switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(and(equals(variables('var_If_LoadCOB_branch'), '1'), equals(pipeline().parameters.DBLoadAction, 'REPLACE')),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_If_TrunMbrCobD_branch_True",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "userProperties": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "variableName": "var_If_TrunMbrCobD_branch",
+                    "value": {
+                      "value": "@string('1')",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "TrunMbrCobD",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "var_If_TrunMbrCobD_branch_True",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "userProperties": [],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_scripts, 'db_truncate')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "tableName": "MBR_COB_D",
+                      "action": "TRUNCATE",
+                      "filePath": {
+                        "value": "@pipeline().globalParameters.gbl_param_FilePath",
+                        "type": "Expression"
+                      },
+                      "EDWOwner": {
+                        "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                        "type": "Expression"
+                      },
+                      "edw_secret_name": {
+                        "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                        "type": "Expression"
+                      },
+                      "GlobalEnvironment": {
+                        "value": "@pipeline().globalParameters.gbl_param_environment",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_If_TrunMbrCobD_branch_False",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "variableName": "var_If_TrunMbrCobD_branch",
+                "value": {
+                  "value": "@string('0')",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_TrunMbrCobD_Continuation_Switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "If_TrunMbrCobD_Switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "TrunMbrCobD",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(equals(variables('var_If_LoadCOB_branch'), '1'),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_If_TrunMbrCobD_Continuation_branch_True",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "userProperties": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "variableName": "var_If_TrunMbrCobD_Continuation_branch",
+                    "value": {
+                      "value": "@string('1')",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "IdsEdwMbrCobDLoad",
+                  "type": "ExecutePipeline",
+                  "dependsOn": [
+                    {
+                      "activity": "var_If_TrunMbrCobD_Continuation_branch_True",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "userProperties": [],
+                  "policy": {
+                    "secureInput": false
+                  },
+                  "typeProperties": {
+                    "waitOnCompletion": true,
+                    "pipeline": {
+                      "referenceName": "IdsEdwMbrCobDLoad",
+                      "type": "PipelineReference"
+                    },
+                    "parameters": {
+                      "EDWOwner": {
+                        "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                        "type": "Expression"
+                      },
+                      "edw_secret_name": {
+                        "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_If_TrunMbrCobD_Continuation_branch_False",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "variableName": "var_If_TrunMbrCobD_Continuation_branch",
+                "value": {
+                  "value": "@string('0')",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_MbrGrnlLoc",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_MbrCOB",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsEdwMbrCobDExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwMbrGnrlLocHistDExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwMbrGnrlLocHistDExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/DataWarehouse/Membership/EdwLoads/MbrGnrlLocHistD/IdsEdwMbrGnrlLocHistDExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EDWRunCycle": {
+                    "value": "@pipeline().parameters.EDWRunCycle",
+                    "type": "Expression"
+                  },
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "EDWRunCycleDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_LoadMbrGrnlLoc",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_MbrGrnlLoc",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsEdwMbrGnrlLocHistDExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwMbrGnrlLocHistDLoad'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwMbrGnrlLocHistDLoad",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "waitOnCompletion": true,
+                "pipeline": {
+                  "referenceName": "IdsEdwMbrGnrlLocHistDLoad",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

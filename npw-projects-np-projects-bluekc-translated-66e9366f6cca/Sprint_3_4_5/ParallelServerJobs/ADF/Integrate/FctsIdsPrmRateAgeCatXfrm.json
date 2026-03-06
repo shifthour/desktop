@@ -1,0 +1,477 @@
+{
+  "name": "FctsIdsPrmRateAgeCatXfrm",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "SrcSysCdSk": {
+        "type": "Int"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_ExtrToTmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "ParquetReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABCD_TMP_FctsIdsPrmRateAgeCatXfrm",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/ds')",
+              "param_filename": "@concat('PRM_RATE_AGE_CAT.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABCD_TMP_FctsIdsPrmRateAgeCatXfrm"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_ExtrToTmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "continueOnError": false,
+          "forceUpgrade": false,
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH CTE_STAGEVAR AS (SELECT PDRA_REF_DTM, PDRA_AGE_FROM, PDRA_PREM_1, PDRA_PREM_2, PDRA_PREM_3, PDRA_PREM_4, PDRA_PREM_5, PDRA_PREM_6, PDRA_AGE_THRU, CAST(PDRA_REF_DTM AS datetime2(6)) AS SvAgeBandRefId FROM @{pipeline().globalParameters.gbl_param_ids_staging}.ABCD_TMP_FctsIdsPrmRateAgeCatXfrm), CTE_OUT AS (SELECT (CAST(CTE_STAGEVAR.SvAgeBandRefId AS varchar(50)) + ';' + CAST(PDRA_AGE_FROM AS varchar(10)) + ';' + '@{pipeline().parameters.SrcSysCd}') AS PRI_NAT_KEY_STRING, '@{pipeline().parameters.RunIDTimeStamp}' AS FIRST_RECYC_TS, 0 AS PRM_RATE_AGE_CAT_SK, CTE_STAGEVAR.SvAgeBandRefId AS AGE_BAND_REF_ID, PDRA_AGE_FROM AS AGE_FROM_NO, '@{pipeline().parameters.SrcSysCd}' AS SRC_SYS_CD, 0 AS CRT_RUN_CYC_EXCTN_SK, 0 AS LAST_UPDT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK, PDRA_PREM_1 AS PRM_1_AMT, PDRA_PREM_2 AS PRM_2_AMT, PDRA_PREM_3 AS PRM_3_AMT, PDRA_PREM_4 AS PRM_4_AMT, PDRA_PREM_5 AS PRM_5_AMT, PDRA_PREM_6 AS PRM_6_AMT, PDRA_AGE_THRU AS AGE_THRU_NO FROM CTE_STAGEVAR), CTE_SNAPSHOT AS (SELECT @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK, CTE_STAGEVAR.SvAgeBandRefId AS AGE_BAND_REF_ID, PDRA_AGE_FROM AS AGE_FROM_NO FROM CTE_STAGEVAR) DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABCD_TMP_FctsIdsPrmRateAgeCatXfrm_out SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ABCD_TMP_FctsIdsPrmRateAgeCatXfrm_out FROM CTE_OUT DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABCD_TMP_FctsIdsPrmRateAgeCatXfrm_snap SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ABCD_TMP_FctsIdsPrmRateAgeCatXfrm_snap FROM CTE_SNAPSHOT",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_TmpToXfm",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "ParquetWriteSettings"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "PRI_NAT_KEY_STRING",
+                    "type": "VARCHAR",
+                    "physicalType": "string"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "FIRST_RECYC_TS",
+                    "type": "DATETIME2",
+                    "physicalType": "datetime"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "PRM_RATE_AGE_CAT_SK",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "AGE_BAND_REF_ID",
+                    "type": "DATETIME2",
+                    "physicalType": "datetime"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "AGE_FROM_NO",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD",
+                    "type": "VARCHAR",
+                    "physicalType": "string"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "CRT_RUN_CYC_EXCTN_SK",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 8
+                  },
+                  "sink": {
+                    "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 9
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD_SK",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Decimal",
+                    "ordinal": 10
+                  },
+                  "sink": {
+                    "name": "PRM_1_AMT",
+                    "type": "DECIMAL",
+                    "physicalType": "decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Decimal",
+                    "ordinal": 11
+                  },
+                  "sink": {
+                    "name": "PRM_2_AMT",
+                    "type": "DECIMAL",
+                    "physicalType": "decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Decimal",
+                    "ordinal": 12
+                  },
+                  "sink": {
+                    "name": "PRM_3_AMT",
+                    "type": "DECIMAL",
+                    "physicalType": "decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Decimal",
+                    "ordinal": 13
+                  },
+                  "sink": {
+                    "name": "PRM_4_AMT",
+                    "type": "DECIMAL",
+                    "physicalType": "decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Decimal",
+                    "ordinal": 14
+                  },
+                  "sink": {
+                    "name": "PRM_5_AMT",
+                    "type": "DECIMAL",
+                    "physicalType": "decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Decimal",
+                    "ordinal": 15
+                  },
+                  "sink": {
+                    "name": "PRM_6_AMT",
+                    "type": "DECIMAL",
+                    "physicalType": "decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 16
+                  },
+                  "sink": {
+                    "name": "AGE_THRU_NO",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABCD_TMP_FctsIdsPrmRateAgeCatXfrm_out"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/ds')",
+              "param_filename": "@concat('PRM_RATE_AGE_CAT.', pipeline().parameters.SrcSysCd, '.xfrm.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_TmpToB",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD_SK",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "AGE_BAND_REF_ID",
+                    "type": "DATETIME2",
+                    "physicalType": "datetime"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "Int64",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "AGE_FROM_NO",
+                    "type": "INT",
+                    "physicalType": "integer"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABCD_TMP_FctsIdsPrmRateAgeCatXfrm_snap"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "@concat('B_PRM_RATE_AGE_CAT.', pipeline().parameters.SrcSysCd, '.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/PremiumRating/PrmRateAgeCat"
+    }
+  },
+  "Description": "COPYRIGHT 2005, 2006, 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nJob Name :  FctsIdsPrmRateAgeCatXfm\n\n                           \nPROCESSING:\n    Applies Strip Field and Transformation rules for Premium Rating infromation \n\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                    ----------------------------------   ---------------------------------    -------------------------   \n\nBhoomi Dasari                   2014-04-09       #5345                            Parallel rewrite from Server job                            IntegrateWrhsDevl       Sharon Andrew       2014-10-21\n\nAnnotations:\nJobName: FctsIdsPrmRateAgeCatXfm\n\nStrip field function and Tranforamtion rules are applied on the data Extracted from Facets\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns."
+}

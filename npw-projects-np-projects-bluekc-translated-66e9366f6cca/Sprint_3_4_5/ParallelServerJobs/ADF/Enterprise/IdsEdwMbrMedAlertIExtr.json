@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwMbrMedAlertIExtr",
+  "properties": {
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "String"
+      },
+      "CurrRunCycleDate": {
+        "type": "String"
+      },
+      "ExtractRunCycle": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "cpy_IdsEdwMbrMedAlertIExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH NormalRows AS ( SELECT M.MBR_MED_ALERT_SK, CASE WHEN dbo.trim_default(COALESCE(CD.TRGT_CD,'UNK')) = '' THEN 'UNK' ELSE COALESCE(CD.TRGT_CD,'UNK') END AS SRC_SYS_CD, M.MBR_UNIQ_KEY, M.PRCS_YR_MO_SK, M.MED_ALERT_ID, '@{pipeline().parameters.CurrRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.CurrRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, M.MED_ALERT_SK, M.MBR_MED_MESRS_SK, @{pipeline().parameters.CurrRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR_MED_ALERT M LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON M.SRC_SYS_CD_SK = CD.CD_MPPNG_SK WHERE (M.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtractRunCycle} OR M.MBR_MED_ALERT_SK IN (0,1)) AND M.MBR_MED_ALERT_SK NOT IN (0,1) ), UNK AS ( SELECT 0 AS MBR_MED_ALERT_SK, 'UNK' AS SRC_SYS_CD, 0 AS MBR_UNIQ_KEY, '175301' AS PRCS_YR_MO_SK, 'UNK' AS MED_ALERT_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 0 AS MED_ALERT_SK, 0 AS MBR_MED_MESRS_SK, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK ), NA_ AS ( SELECT 1 AS MBR_MED_ALERT_SK, 'NA' AS SRC_SYS_CD, 1 AS MBR_UNIQ_KEY, '175301' AS PRCS_YR_MO_SK, 'NA' AS MED_ALERT_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 1 AS MED_ALERT_SK, 1 AS MBR_MED_MESRS_SK, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK ) SELECT * FROM NormalRows UNION ALL SELECT * FROM UNK UNION ALL SELECT * FROM NA_",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "MBR_MED_ALERT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "MBR_MED_ALERT_I.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/MemberRisk/MbrMedAlertI"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2008 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    IdsClnclCncptMthExtr1Seq\n\n\nControl Job Rerun Information: \n             Previous Run Successful:    Restart, no other steps necessary\n             Previous Run Aborted:         Restart, no other steps necessary\n\nModifications:                        \n\nDEVELOPER                         DATE                 PROJECT                                                DESCRIPTION                                            DATASTAGE                                            CODE                            REVIEW\n                                                                                                                                                                                                              ENVIRONMENT                                       REVIEWER                   DATE                                              \n------------------------------------------   ----------------------      ------------------------------------------------                ---------------------------------------------------------------     ---------------------------------------------------              ------------------------------          --------------------\n\nHugh Sisson                            03/26/2008                                  3036                                 Original program                                                                                                        Steph Goddard          06/02/2008\n\nRaj Mangalampally               2013-09-05                                          5114                         Original Programming                                   EnterpriseWrhsDevl                                  Jag Yelavarthi              2013-12-09          \n                                                                                                                                          (Server to Parallel Conversion)\n\nAnnotations:\nThis is Source extract data from an IDS table and apply Code denormalization, create a load ready file.\n\nJob Name:\nIdsEdwMbrMedAlertI\n\nTable:\nMBR_MED_ALERT_I\nRead from source MBR_MED_ALERT table and Join on code mapping to bring SRC_SYS_CD  and pull records based on LAST_UPDT_RUN_CYC_EXTN_SK\nThis is a load ready file conforms to the target table structure.\n\nWrite MBR_MED_ALERT_I Data into a Sequential file for Load Job.\nAdd Defaults and Null Handling"
+}

@@ -1,0 +1,93 @@
+{
+  "name": "IdsEdwVbbRuleDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "Int"
+      }
+    },
+    "activities": [
+      {
+        "name": "copy_IdsEdwVbbRuleDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_source AS (SELECT V.VBB_RULE_SK, V.VBB_RULE_ID, COALESCE(CD.TRGT_CD, 'UNK') AS SRC_SYS_CD, V.CRT_RUN_CYC_EXCTN_SK, V.LAST_UPDT_RUN_CYC_EXCTN_SK, V.VBB_RULE_DESC FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.VBB_RULE V LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON V.SRC_SYS_CD_SK = CD.CD_MPPNG_SK), cte_transform_main AS (SELECT VBB_RULE_SK, VBB_RULE_ID, CASE WHEN dbo.trim_default(SRC_SYS_CD) = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, VBB_RULE_DESC, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_source WHERE VBB_RULE_SK <> 0 AND VBB_RULE_SK <> 1), cte_transform_unk AS (SELECT 0 AS VBB_RULE_SK, 'UNK' AS VBB_RULE_ID, 'UNK' AS SRC_SYS_CD, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 'UNK' AS VBB_RULE_DESC, 100 AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK), cte_transform_na AS (SELECT 1 AS VBB_RULE_SK, 'NA' AS VBB_RULE_ID, 'NA' AS SRC_SYS_CD, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 'NA' AS VBB_RULE_DESC, 100 AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK), cte_final AS (SELECT * FROM cte_transform_main UNION ALL SELECT * FROM cte_transform_unk UNION ALL SELECT * FROM cte_transform_na) SELECT VBB_RULE_SK, VBB_RULE_ID, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, VBB_RULE_DESC, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "VBB_RULE"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "VBB_RULE_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/VbbRuleD"
+    }
+  },
+  "Description": "MODIFICATIONS:\n\n                    \n\nDeveloper                          Date               Project/Altiris #               Change Description                                  Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------           ---------------------------------   ---------------------------------    -------------------------   \nKalyan Neelam                2013-01-17        4963 VBB Phase 3         Initial Programming                                   EnterpriseNewDevl       Bhoomi Dasari             2/11/2013 \n\nBalkarrn Gill              06/05/2013        5114                              Create Load File for EDW Table SVC_D       EnterpriseWrhsDevl       Pete Marshall               2013-08-08\n\nAnnotations:\nWrite VBB_RULE_D Data into a Sequential file for Load Job IdsEdwVbbRuleDLoad.\nRead all the Data from IDS VBB_RULE and CD_MPPNG Table.\nAdd Defaults and Null Handling.\nJob Name: \nIdsEdwVbbRuleDExtr"
+}

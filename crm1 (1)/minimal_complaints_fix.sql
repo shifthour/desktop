@@ -1,0 +1,45 @@
+-- Minimal fix - add only the essential columns that are causing immediate errors
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complaint_description TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complaint_title VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complaint_type VARCHAR(100);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS severity VARCHAR(50);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS priority VARCHAR(50);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS category VARCHAR(50);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS pincode VARCHAR(10);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(20);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS customer_address TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS product_name VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS product_model VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS serial_number VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS purchase_date DATE;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS warranty_status VARCHAR(50);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS department VARCHAR(100);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolution_description TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolution_date DATE;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolution_time_hours DECIMAL(8,2);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS customer_satisfaction_rating INTEGER;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS follow_up_required BOOLEAN DEFAULT FALSE;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS follow_up_date DATE;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS follow_up_notes TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS communication_history JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS escalation_level INTEGER DEFAULT 0;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS escalated_to VARCHAR(255);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS escalation_date DATE;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS escalation_reason TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS compensation_amount DECIMAL(10,2);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS refund_amount DECIMAL(10,2);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS cost_to_resolve DECIMAL(10,2);
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS root_cause TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS preventive_action TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS lessons_learned TEXT;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS installation_id UUID;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS amc_contract_id UUID;
+ALTER TABLE complaints ADD COLUMN IF NOT EXISTS source_reference VARCHAR(255);
+
+-- Refresh the schema cache
+NOTIFY pgrst, 'reload schema';

@@ -1,0 +1,98 @@
+{
+  "name": "UwsUwsProdSubjAreaBalSumLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "cpy_SubjAreaBalSum",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "@\"WITH src AS (SELECT TRGT_SYS_CD, SUBJ_AREA_NM, BAL_DT, CLMN_SUM_TLRNC_CD, ROW_TO_ROW_TLRNC_CD, RI_TLRNC_CD FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM WHERE TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND SUBJ_AREA_NM = '@{pipeline().parameters.Subject}') , classify AS (SELECT TRGT_SYS_CD, SUBJ_AREA_NM, BAL_DT, CLMN_SUM_TLRNC_CD, ROW_TO_ROW_TLRNC_CD, RI_TLRNC_CD, CASE WHEN CLMN_SUM_TLRNC_CD NOT IN ('BAL','IN','NA') OR ROW_TO_ROW_TLRNC_CD NOT IN ('BAL','IN','NA') OR RI_TLRNC_CD NOT IN ('BAL','IN','NA') THEN 'OUT' WHEN CLMN_SUM_TLRNC_CD IN ('IN') OR ROW_TO_ROW_TLRNC_CD IN ('IN') OR RI_TLRNC_CD IN ('IN') THEN 'IN' ELSE 'BAL' END AS ROW_TLRNC_STATUS FROM src WHERE CAST(BAL_DT AS DATE) = '@{pipeline().parameters.CurrDate}') , agg AS (SELECT TRGT_SYS_CD, SUBJ_AREA_NM, MAX(BAL_DT) AS MAX_BAL_DT, CASE WHEN SUM(CASE WHEN ROW_TLRNC_STATUS = 'OUT' THEN 1 ELSE 0 END) > 0 THEN 'OUT' WHEN SUM(CASE WHEN ROW_TLRNC_STATUS = 'IN' THEN 1 ELSE 0 END) > 0 THEN 'IN' ELSE 'BAL' END AS TLRNC_CD, CASE WHEN SUM(CASE WHEN ROW_TLRNC_STATUS = 'OUT' THEN 1 ELSE 0 END) > 0 THEN 'N' ELSE 'Y' END AS PREV_ISSUE_CRCTD_IN FROM classify GROUP BY TRGT_SYS_CD, SUBJ_AREA_NM) SELECT '@{pipeline().parameters.Target}' AS TRGT_SYS_CD, '@{pipeline().parameters.Subject}' AS SUBJ_AREA_NM, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_BAL_DT, TLRNC_CD, PREV_ISSUE_CRCTD_IN, @{pipeline().parameters.ExtrRunCycle} AS TRGT_RUN_CYC_NO, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS CRT_DTM, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_UPDT_DTM, '@{pipeline().parameters.UWSAcct}' AS USER_ID FROM agg\"",
+              "type": "Expression"
+            },
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "TRGT_SYS_CD",
+                "SUBJ_AREA_NM"
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "uws",
+            "type": "LinkedServiceReference"
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "TBL_BAL_SUM"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "SUBJ_AREA_BAL_SUM"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "Target": {
+        "type": "String"
+      },
+      "Subject": {
+        "type": "String"
+      },
+      "CurrDate": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "Int"
+      },
+      "UWSAcct": {
+        "type": "String"
+      }
+    },
+    "concurrency": 1,
+    "runDimensions": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/Balancing"
+    }
+  },
+  "description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:   IdsProdBalCntl\n\nPROCESSING:\n                  \n                The Job loads the SUBJECT_AREA_BAL_SUM table after the balancing control job is done for a given Subject Area              \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/19/2007          3264                              Originally Programmed                          devlEDW10               Steph Goddard            10/08/2007   \nLeandrew Moore               07/11/2013          5114                              rewrite in parallel                                   Enterprisewarehouse  Bhoomi Dasari             8/14/2013\n\nAnnotations:\nJob Name: UwsProdSubjAreaBalSumLoad\nExtraction From Table Balance Summary table for a given subject area and target system and loading into the Subject Area Balance Summary table\nRead all the Data from UWS TBL_BAL_SUM TBL_BAL_SUM Table; Pull records based on SOURCE AND  SUBJECT\nTBL_BAL_SUM  lookups\nLeft Join to pull the MemberCounts \nJoin Keys:\nSOURCE AND SUBJECT\nDefaults and Null Handling\nUpdate then Insert the SUBJ_AREA_BAL_SUM Data."
+}

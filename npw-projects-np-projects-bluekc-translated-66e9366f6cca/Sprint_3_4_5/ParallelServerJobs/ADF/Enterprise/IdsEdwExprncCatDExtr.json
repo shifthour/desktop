@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwExprncCatDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      },
+      "IDSRunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "copy_IdsEdwExprncCatDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH CTE AS (SELECT E.EXPRNC_CAT_SK, CASE WHEN dbo.trim_default(COALESCE(CD1.TRGT_CD,'UNK')) = '' THEN 'UNK' ELSE dbo.trim_default(COALESCE(CD1.TRGT_CD,'UNK')) END AS SRC_SYS_CD, E.EXPRNC_CAT_CD, E.EXPRNC_CAT_DESC, E.USER_ID, E.LAST_UPDT_DT_SK, CASE WHEN dbo.trim_default(COALESCE(CD2.TRGT_CD,'UNK')) = '' THEN 'UNK' ELSE dbo.trim_default(COALESCE(CD2.TRGT_CD,'UNK')) END AS FUND_CAT_CD, CASE WHEN dbo.trim_default(COALESCE(CD2.TRGT_CD_NM,'UNK')) = '' THEN 'UNK' ELSE dbo.trim_default(COALESCE(CD2.TRGT_CD_NM,'UNK')) END AS FUND_CAT_DESC FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.EXPRNC_CAT E LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON E.SRC_SYS_CD_SK = CD1.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD2 ON E.EXPRNC_CAT_FUND_CAT_CD_SK = CD2.CD_MPPNG_SK WHERE E.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle}) SELECT EXPRNC_CAT_SK, SRC_SYS_CD, EXPRNC_CAT_CD, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, EXPRNC_CAT_DESC, FUND_CAT_CD, FUND_CAT_DESC, USER_ID, LAST_UPDT_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM CTE",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "EXPRNC_CAT_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/ExprncCatD"
+    }
+  },
+  "Description": "COPYRIGHT 2006 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nJOB NAME:     EdwExpCatDimExtr\n\nMODIFICATIONS:\n\n\tSteph Goddard     12-19-2005   Original Program \n                \n\nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                    PROJECT                       REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\n\nArchana Palivela     05/23/2013        5114                              Originally Programmed                                                                         EnterpriseWhseDevl       Bhoomi Dasari           8/11/2013\n\nAnnotations:\nJob name: IdsEdwExprncCatDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file.\nRead data from source table EXPRNC_CAT\nCode SK lookups for Denormalization\n\nLookup Keys:\nEXPRNC_CAT_FUND_CAT_CD_SK\nReference Code Mapping Data for Code SK lookups\nWrite EXPRNC_CAT_D Data into a Sequential file for Load Ready Job."
+}

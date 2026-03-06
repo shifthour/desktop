@@ -1,0 +1,299 @@
+{
+  "name": "IdsIndvBeCchgRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_Bld_Temp",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal;WITH cte_src_trgt AS (SELECT SRC.INDV_BE_KEY AS SRC_INDV_BE_KEY,SRC.CCHG_STRT_YR_MO_SK AS SRC_CCHG_STRT_YR_MO_SK,SRC.PRCS_YR_MO_SK AS SRC_PRCS_YR_MO_SK,SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK,TRGT.INDV_BE_KEY AS TRGT_INDV_BE_KEY,TRGT.CCHG_STRT_YR_MO_SK AS TRGT_CCHG_STRT_YR_MO_SK,TRGT.PRCS_YR_MO_SK AS TRGT_PRCS_YR_MO_SK,TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_INDV_BE_CCHG AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.INDV_BE_CCHG AS TRGT ON TRGT.INDV_BE_KEY = SRC.INDV_BE_KEY AND TRGT.CCHG_STRT_YR_MO_SK = SRC.CCHG_STRT_YR_MO_SK AND TRGT.PRCS_YR_MO_SK = SRC.PRCS_YR_MO_SK AND TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle}) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal FROM cte_src_trgt;DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal_Research;SELECT SRC_INDV_BE_KEY,SRC_CCHG_STRT_YR_MO_SK,SRC_PRCS_YR_MO_SK,SRC_SRC_SYS_CD_SK,TRGT_INDV_BE_KEY,TRGT_CCHG_STRT_YR_MO_SK,TRGT_PRCS_YR_MO_SK,TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal_Research FROM @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal WHERE SRC_INDV_BE_KEY IS NULL OR SRC_CCHG_STRT_YR_MO_SK IS NULL OR SRC_PRCS_YR_MO_SK IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_INDV_BE_KEY IS NULL OR TRGT_CCHG_STRT_YR_MO_SK IS NULL OR TRGT_PRCS_YR_MO_SK IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL;DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal_Notify;SELECT TOP 1 'ROW COUNT BALANCING FACETS - IDS INDV_BE_CCHG IS OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal_Notify FROM @{pipeline().globalParameters.gbl_param_ids_staging}.StgTmp_TMP_IdsIndvBeCchgRowCntBal WHERE '@{pipeline().parameters.ToleranceCd}'='OUT';",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_Research",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Bld_Temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "SRC_INDV_BE_KEY",
+                    "type": "Decimal",
+                    "physicalType": "Decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "SRC_CCHG_STRT_YR_MO_SK",
+                    "type": "String",
+                    "physicalType": "CHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "SRC_PRCS_YR_MO_SK",
+                    "type": "String",
+                    "physicalType": "CHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "SRC_SRC_SYS_CD_SK",
+                    "type": "Int32",
+                    "physicalType": "int"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "TRGT_INDV_BE_KEY",
+                    "type": "Decimal",
+                    "physicalType": "Decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "TRGT_CCHG_STRT_YR_MO_SK",
+                    "type": "String",
+                    "physicalType": "CHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "TRGT_PRCS_YR_MO_SK",
+                    "type": "String",
+                    "physicalType": "CHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 8
+                  },
+                  "sink": {
+                    "name": "TRGT_SRC_SYS_CD_SK",
+                    "type": "Int32",
+                    "physicalType": "int"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "StgTmp_TMP_IdsIndvBeCchgRowCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/research')",
+              "param_filename": "@concat('IdsIndvBeCchgResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_Notify",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Bld_Temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "NOTIFICATION",
+                    "type": "String",
+                    "physicalType": "char"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "StgTmp_TMP_IdsIndvBeCchgRowCntBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/notify')",
+              "param_filename": "IdsCchgBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/CCHG/IndvBeCCHG/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on INDV_BE_CCHG and B_INDV_BE_CCHG tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam          2015-08-25           5460                               Initial Programming                                                                               IntegrateDev2            Bhoomi Dasari              8/30/2015\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - INDV_BE_CCHG"
+}

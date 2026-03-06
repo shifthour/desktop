@@ -1,0 +1,747 @@
+{
+  "name": "OPTUMDrugInvoiceUpdateSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim/SeqOptum"
+    },
+    "parameters": {
+      "SourceSys": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SourceSysCdSK": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrentDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunCycleDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": "\"\""
+      },
+      "FileName": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1AA",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(pipeline().parameters.ExclusionList, 'OPTUMDrugClmInvoicePrep'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ExecRemoveSingleQuotes",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": "@concat('#', '$FilePath', '/landing/', pipeline().parameters.FileName)",
+                  "trgt_file_with_path": "@concat('#', '$FilePath', '/verified/', pipeline().parameters.FileName)",
+                  "command": "cat",
+                  "project": "integrate"
+                }
+              }
+            },
+            {
+              "name": "OPTUMDrugClmInvoicePrep",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "ExecRemoveSingleQuotes",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/Invoice/OPTUMDrugClmInvoicePrep')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "FileName": {
+                    "value": "@pipeline().parameters.FileName",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1AA",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMDrugClmInvoicePrep",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(pipeline().parameters.ExclusionList, 'OPTUMDrugClmInvoiceLand'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "OPTUMDrugClmInvoiceLand",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/Invoice/OPTUMDrugClmInvoiceLand')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMDrugClmInvoiceLand",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(pipeline().parameters.ExclusionList, 'OPTUMClmInvoicePKExtr'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "OPTUMClmInvoicePKExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/Invoice/OPTUMClmInvoicePKExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "SrcSysCd": {
+                    "value": "@pipeline().parameters.SourceSys",
+                    "type": "Expression"
+                  },
+                  "SrcSysCdSK": {
+                    "value": "@pipeline().parameters.SourceSysCdSK",
+                    "type": "Expression"
+                  },
+                  "CurrRunCycle": {
+                    "value": "@pipeline().parameters.RunCycle",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMClmInvoicePKExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(pipeline().parameters.ExclusionList, 'OPTUMIdsUpd'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "OPTUMIdsUpd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/Invoice/OPTUMIdsUpd')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "SourceSys": {
+                    "value": "@pipeline().parameters.SourceSys",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "RunCycle": {
+                    "value": "@pipeline().parameters.RunCycle",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.RunCycleDate",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMClmInvoicePKExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(pipeline().parameters.ExclusionList, 'OPTUMEdwUpd'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "OPTUMEdwUpd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/Invoice/OPTUMEdwUpd')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "SourceSys": {
+                    "value": "@pipeline().parameters.SourceSys",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "RunCycle": {
+                    "value": "@pipeline().parameters.RunCycle",
+                    "type": "Expression"
+                  },
+                  "RunCycleDate": {
+                    "value": "@pipeline().parameters.RunCycleDate",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMClmInvoicePKExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(pipeline().parameters.ExclusionList, 'OPTUMWebDMUpd'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "OPTUMWebDMUpd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/Invoice/OPTUMWebDMUpd')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "SourceSys": {
+                    "value": "@pipeline().parameters.SourceSys",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "RunCycle": {
+                    "value": "@pipeline().parameters.RunCycle",
+                    "type": "Expression"
+                  },
+                  "RunCycleDate": {
+                    "value": "@pipeline().parameters.RunCycleDate",
+                    "type": "Expression"
+                  },
+                  "CurrentDate": {
+                    "value": "@pipeline().parameters.CurrentDate",
+                    "type": "Expression"
+                  },
+                  "ClmMartOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_ClmMartOwner",
+                    "type": "Expression"
+                  },
+                  "clmmart_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_ClmMartSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "OPTUMDrugInvoiceUpdateSeq1",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          {
+            "activity": "If_3C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMWebDMUpd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "If_3A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMIdsUpd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "If_3B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMEdwUpd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "OPTUMDrugInvoiceUpdateSeq1",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "EDWFilePath": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWFilePath",
+              "type": "Expression"
+            },
+            "SourceSys": {
+              "value": "@pipeline().parameters.SourceSys",
+              "type": "Expression"
+            },
+            "SourceSysCdSK": {
+              "value": "@pipeline().parameters.SourceSysCdSK",
+              "type": "Expression"
+            },
+            "CurrentDate": {
+              "value": "@pipeline().parameters.CurrentDate",
+              "type": "Expression"
+            },
+            "EmailSupport": {
+              "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+              "type": "Expression"
+            },
+            "RunCycle": {
+              "value": "@pipeline().parameters.RunCycle",
+              "type": "Expression"
+            },
+            "RunCycleDate": {
+              "value": "@pipeline().parameters.RunCycleDate",
+              "type": "Expression"
+            },
+            "RunID": {
+              "value": "@pipeline().parameters.RunID",
+              "type": "Expression"
+            },
+            "ExclusionList": {
+              "value": "@pipeline().parameters.ExclusionList",
+              "type": "Expression"
+            },
+            "EDWOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+              "type": "Expression"
+            },
+            "edw_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "ids_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "ClmMartOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_ClmMartOwner",
+              "type": "Expression"
+            },
+            "clmmart_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_ClmMartSecret",
+              "type": "Expression"
+            },
+            "FileName": {
+              "value": "@pipeline().parameters.FileName",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "If_3D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMWebDMUpd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "If_3A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMIdsUpd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "If_3B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "OPTUMEdwUpd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(pipeline().parameters.ExclusionList, 'MvInvcPdUpdt'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "MvInvcPdUpdt",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": "@concat('#', '$FilePath', '/verified/processed/OPTUMRXDrugClmInvoicePaidUpdt.dat.', pipeline().parameters.RunID)",
+                  "trgt_file_with_path": "@concat('#', '$FilePath', '/verified/processed/archive/OPTUMRXDrugClmInvoicePaidUpdt.dat.', pipeline().parameters.RunID)",
+                  "command": "move",
+                  "project": "integrate"
+                }
+              }
+            },
+            {
+              "name": "MvInvcPrep",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "MvInvcPdUpdt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": "@concat('#', '$FilePath', '/verified/processed/OPTUMRX_DrugInvoice.dat.', pipeline().parameters.RunID)",
+                  "trgt_file_with_path": "@concat('#', '$FilePath', '/verified/processed/archive/OPTUMRX_DrugInvoice.dat.', pipeline().parameters.RunID)",
+                  "command": "move",
+                  "project": "integrate"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

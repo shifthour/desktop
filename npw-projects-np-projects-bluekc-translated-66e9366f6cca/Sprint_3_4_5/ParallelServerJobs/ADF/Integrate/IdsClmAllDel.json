@@ -1,0 +1,146 @@
+{
+  "name": "IdsClmAllDel",
+  "properties": {
+    "parameters": {
+      "TableName": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyFileToTempTbl",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.B74_TMP_IdsClmAllDel",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "CLM_ID",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD_SK",
+                  "type": "Int64",
+                  "physicalType": "Int64"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/landing')",
+              "param_filename": "IdsClmDelList.dat",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "B74_TMP_IdsClmAllDel"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DeleteRows",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTempTbl",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH delRows AS (SELECT CLM_ID, SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_ids_staging}.B74_TMP_IdsClmAllDel) DELETE T FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.@{pipeline().parameters.TableName} T JOIN delRows R ON T.CLM_ID = R.CLM_ID AND T.SRC_SYS_CD_SK = R.SRC_SYS_CD_SK; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.B74_TMP_IdsClmAllDel",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/claim/delete"
+    }
+  },
+  "Description": "* VC LOGS *\n^1_1 03/10/09 09:25:21 Batch  15045_33943 INIT bckcetl ids20 dcg01 sa Bringing ALL Claim code down to devlIDS\n^1_3 02/10/09 11:16:45 Batch  15017_40611 INIT bckcetl ids20 dsadm dsadm\n^1_1 01/29/08 08:55:59 Batch  14639_32164 INIT bckcetl ids20 dsadm dsadm\n^1_1 12/28/07 10:13:19 Batch  14607_36806 INIT bckcetl ids20 dsadm dsadm\n^1_1 11/26/07 09:37:10 Batch  14575_34636 INIT bckcetl ids20 dsadm dsadm\n^1_2 08/30/07 07:19:35 Batch  14487_26382 INIT bckcetl ids20 dsadm dsadm\n^1_1 08/27/07 10:06:05 Batch  14484_36371 INIT bckcetl ids20 dsadm dsadm\n^1_3 03/26/07 12:34:37 Batch  14330_45286 INIT bckcetl ids20 dsadm dsadm\n^1_1 03/07/07 16:30:43 Batch  14311_59451 INIT bckcetl ids20 dsadm dsadm\n^1_2 03/07/07 15:24:05 Batch  14311_55447 INIT bckcetl ids20 dcg01 sa\n^1_1 02/26/07 15:19:29 Batch  14302_55338 PROMOTE bckcetl ids20 dsadm rc for Brent\n^1_1 02/26/07 15:12:16 Batch  14302_54748 INIT bckcett testIDS30 dsadm rc for Brent \n^1_1 02/23/07 13:40:37 Batch  14299_49241 PROMOTE bckcett testIDS30 u08717 Brent\n^1_1 02/23/07 13:39:28 Batch  14299_49172 INIT bckcett devlIDS30 u08717 Brent\n\n\u00c2\u00a9 Copyright 2007 Blue Cross/Blue Shield of Kansas City\n\n\nCALLED BY:  EdwClmAllDelCntl\n               \n\nPROCESSING:   Deletes claims from a specified table defined by input parameter.\n\n\nMODIFICATIONS:\nDeveloper                Date                 Project/Altiris #      Change Description                                                                     Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------                             --------------------------------       -------------------------------   ----------------------------       \nBrent Leland            2007-02-22       IAD Prod. Sup.      Original Programming.                                                                  devlIDS30\n\nAnnotations:\nUser created file /ids/prod/update/IdsClmDelList.dat is moved by control job to /ids/prod/landing\nIDS Claim Hit List Delete"
+}

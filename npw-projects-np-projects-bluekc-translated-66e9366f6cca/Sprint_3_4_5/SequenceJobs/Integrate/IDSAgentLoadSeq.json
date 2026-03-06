@@ -1,0 +1,467 @@
+{
+  "name": "IDSAgentLoadSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/Agents/Seq"
+    },
+    "parameters": {
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Logging": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_MktngTerrConcat",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ConcatMktngTerr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatMktngTerr",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "keyDirectory": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate, '/', pipeline().globalParameters.gbl_param_environment, '/key')",
+                    "type": "Expression"
+                  },
+                  "PATTERN": "*.MktngTerr",
+                  "outputFile": "IdsMktngTerritoryExtr.MktngTerr",
+                  "sortKeys": "'-k9,9 -k5,5r'",
+                  "uniqKeys": "'-k9,9'",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_MktngTerrFKey",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_MktngTerrConcat",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsMktngTerritoryFkey'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsMktngTerritoryFkey",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/Agents/MarketingTerrority/IdsMktngTerritoryFkey')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Logging": {
+                    "value": "@pipeline().parameters.Logging",
+                    "type": "Expression"
+                  },
+                  "InFile": "IdsMktngTerritoryExtr.MktngTerr.uniq"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_mvMktngTerr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_MktngTerrFKey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'RmTerr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "RmTerr",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/key/IdsMktngTerritoryExtr.MktngTerr.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "integrate"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_mvMktngTerr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'LoadMktngTerr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadMktngTerr",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "MKTNG_TERR",
+                  "action": "UPDATE",
+                  "file_name": "MKTNG_TERR.dat",
+                  "run_stat": "N",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_AgntConcat",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ConcatAgntMktngTerr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatAgntMktngTerr",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "keyDirectory": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate, '/', pipeline().globalParameters.gbl_param_environment, '/key')",
+                    "type": "Expression"
+                  },
+                  "PATTERN": "*.AgntMktngTerr",
+                  "outputFile": "IdsAgntMktngTerritoryExtr.AgntMktngTerr",
+                  "sortKeys": "'-k9,9 -k5,5r'",
+                  "uniqKeys": "'-k9,9'",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_AgntTerrFKey",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_AgntConcat",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsAgntMktngTerritoryFkey'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsAgntMktngTerritoryFkey",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/Agents/AgentMarketingTerritory/IdsAgntMktngTerritoryFkey')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Logging": {
+                    "value": "@pipeline().parameters.Logging",
+                    "type": "Expression"
+                  },
+                  "InFile": "IdsAgntMktngTerritoryExtr.AgntMktngTerr.uniq"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_mvAgnt",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_AgntTerrFKey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'RmAgntMktngTerr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "RmAgntMktngTerr",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/key/IdsAgntMktngTerritoryExtr.AgntMktngTerr.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "integrate"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_LoadAgntMktngTerr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_mvAgnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'LoadAgntMktngTerr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadAgntMktngTerr",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "AGNT_MKTNG_TERR",
+                  "action": "REPLACE",
+                  "file_name": "AGNT_MKTNG_TERR.dat",
+                  "run_stat": "N",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

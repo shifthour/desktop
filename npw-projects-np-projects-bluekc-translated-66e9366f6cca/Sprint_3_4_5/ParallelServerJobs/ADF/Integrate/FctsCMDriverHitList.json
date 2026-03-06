@@ -1,0 +1,136 @@
+{
+  "name": "FctsCMDriverHitList",
+  "properties": {
+    "parameters": {
+      "DriverTable": {
+        "type": "String",
+        "defaultValue": "#DriverTable"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyFileToTmp_FctsCMDriverHitList",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RND1_TMP_FctsCMDriverHitList",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "CMCM_ID",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'update')",
+              "param_filename": "FctsMedMgtCMHitList.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "RND1_TMP_FctsCMDriverHitList"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Create_and_Dedupe_in_TempTable",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTmp_FctsCMDriverHitList",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS tempdb..@{pipeline().parameters.DriverTable};WITH cte_dedupe AS (SELECT CMCM_ID,ROW_NUMBER() OVER (PARTITION BY CMCM_ID ORDER BY (SELECT 1)) as rn FROM @{pipeline().globalParameters.gbl_param_ids_staging}.RND1_TMP_FctsCMDriverHitList) SELECT CMCM_ID INTO tempdb..@{pipeline().parameters.DriverTable} FROM cte_dedupe WHERE rn=1",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/MedMgt/MedMgt/Driver"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2006 Blue Cross/Blue Shield of Kansas City\n\nJOB NAME:  FctsMedMgtCntl\n\n\nDESCRIPTION: Job loads Hit List records to Temp table for further processing\n\n\nCALLED BY:  MEDMGT_MEDMGT_DLY_WRHS_000\n\n\n\nDeveloper                          Date                    Project/Altiris #                     Change Description                                                         Development Project               Code Reviewer                      Date Reviewed\n----------------------------------      -------------------      -----------------------------------           ---------------------------------------------------------                                  ----------------------------------              ---------------------------------            -------------------------\nJaideep Mankala               06/18/2019     US110616                         Original program to load hit list case management records     IntegrateDev1\\(9)\\(9)Abhiram Dasarathy\\(9)          2019-06-21\nPrabhu ES                         2022-03-07      S2S Remediation               MSSQL ODBC conn params added                                       IntegrateDev5                                     Manasa Andru                        2022-06-14\n\nAnnotations:\nCase management data loaded to Temp Table\nRead Facets MedMgt Case Management Hit List file, validate, and load to TMP_IDS_CM#RunID# table"
+}

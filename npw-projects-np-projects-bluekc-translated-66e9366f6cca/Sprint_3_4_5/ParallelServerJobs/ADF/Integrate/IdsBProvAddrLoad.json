@@ -1,0 +1,179 @@
+{
+  "name": "IdsBProvAddrLoad",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_B_PROV_ADDR",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_IDSOwner}.B_PROV_ADDR",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD_SK",
+                  "type": "Int64",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "PROV_ADDR_ID",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "PROV_ADDR_TYP_CD_SK",
+                  "type": "Int64",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "PROV_ADDR_EFF_DT_SK",
+                  "type": "String",
+                  "physicalType": "char"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Provider/ProvAddr/Balancing/load')",
+              "param_filename": "@concat('B_PROV_ADDR.', pipeline().parameters.SrcSysCd, '.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "B_PROV_ADDR"
+            }
+          }
+        ]
+      },
+      {
+        "name": "NBK_DB2Stats",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Copy_B_PROV_ADDR",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "@concat('B_PROV_ADDR.', pipeline().parameters.SrcSysCd, '.dat')",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/ProvAddr/Balancing"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nJag Yelavarthi            2014-09-10           5345                             Original Programming                                                                             IntegrateWrhsDevl    Kalyan Neelam           2015-01-06\n\nAnnotations:\nJob Name: IdsIdsWCdmEtlDrvrLoad\nRead Load File created in the FKEY job\nCopy Stage for buffer\nTruncate and Load B_PROV_ADDR table\nLoad rejects are redirected into a Reject file"
+}

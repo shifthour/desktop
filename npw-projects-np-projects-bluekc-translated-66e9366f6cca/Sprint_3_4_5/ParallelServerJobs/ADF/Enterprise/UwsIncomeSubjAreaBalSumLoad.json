@@ -1,0 +1,95 @@
+{
+  "name": "UwsIncomeSubjAreaBalSumLoad",
+  "properties": {
+    "parameters": {
+      "Target": {
+        "type": "String"
+      },
+      "Subject": {
+        "type": "String"
+      },
+      "CurrDate": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "Int"
+      },
+      "UWSAcct": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_UwsIncomeSubjAreaBalSumLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_balance AS (SELECT TRGT_SYS_CD,SUBJ_AREA_NM,BAL_DT,CLMN_SUM_TLRNC_CD,ROW_TO_ROW_TLRNC_CD,ROW_NUMBER() OVER (ORDER BY BAL_DT ASC) AS row_num,COUNT(*) OVER () AS row_count FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM T WHERE T.TRGT_SYS_CD='@{pipeline().parameters.Target}' AND T.SUBJ_AREA_NM='@{pipeline().parameters.Subject}'), cte_recursive AS (SELECT row_num,row_count,TRGT_SYS_CD,SUBJ_AREA_NM,BAL_DT,CLMN_SUM_TLRNC_CD,ROW_TO_ROW_TLRNC_CD,0 AS svPrevCount,1 AS svCurrCount,'' AS svTempTlrncCd,'' AS svTempRslvIn,'' AS svTempRslvIncd FROM cte_balance WHERE row_num=1 UNION ALL SELECT c2.row_num,c2.row_count,c2.TRGT_SYS_CD,c2.SUBJ_AREA_NM,c2.BAL_DT,c2.CLMN_SUM_TLRNC_CD,c2.ROW_TO_ROW_TLRNC_CD,r.svCurrCount AS svPrevCount,r.svCurrCount+1 AS svCurrCount,CASE WHEN SUBSTRING(CONVERT(VARCHAR(10),c2.BAL_DT,120),1,10)<>'@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' WHEN (c2.CLMN_SUM_TLRNC_CD IN(''BAL'',''NA'')) AND (c2.ROW_TO_ROW_TLRNC_CD IN(''BAL'',''NA'')) AND r.svTempTlrncCd NOT IN(''OUT'',''IN'') THEN 'BAL' WHEN ((c2.CLMN_SUM_TLRNC_CD IN(''BAL'',''IN'')) OR (c2.ROW_TO_ROW_TLRNC_CD IN(''BAL'',''IN''))) AND r.svTempTlrncCd<>'OUT' THEN 'IN' ELSE 'OUT' END AS svTempTlrncCd,CASE WHEN SUBSTRING(CONVERT(VARCHAR(10),c2.BAL_DT,120),1,10)='@{pipeline().parameters.CurrDate}' THEN r.svTempRslvIn WHEN ((c2.CLMN_SUM_TLRNC_CD IN(''BAL'',''IN'')) OR (c2.ROW_TO_ROW_TLRNC_CD IN(''BAL'',''IN''))) AND r.svTempRslvIncd<>'OUT' THEN 'Y' ELSE 'N' END AS svTempRslvIn,CASE WHEN SUBSTRING(CONVERT(VARCHAR(10),c2.BAL_DT,120),1,10)='@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' WHEN (c2.CLMN_SUM_TLRNC_CD IN(''BAL'',''NA'')) AND (c2.ROW_TO_ROW_TLRNC_CD IN(''BAL'',''NA'')) AND r.svTempRslvIncd NOT IN(''OUT'',''IN'') THEN 'BAL' WHEN ((c2.CLMN_SUM_TLRNC_CD IN(''BAL'',''IN'')) OR (c2.ROW_TO_ROW_TLRNC_CD IN(''BAL'',''IN''))) AND r.svTempRslvIncd<>'OUT' THEN 'IN' ELSE 'OUT' END AS svTempRslvIncd FROM cte_balance c2 JOIN cte_recursive r ON c2.row_num=r.row_num+1) SELECT '@{pipeline().parameters.Target}' AS TRGT_SYS_CD,'@{pipeline().parameters.Subject}' AS SUBJ_AREA_NM,CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_BAL_DT,r.svTempTlrncCd AS TLRNC_CD,r.svTempRslvIn AS PREV_ISSUE_CRCTD_IN,@{pipeline().parameters.ExtrRunCycle} AS TRGT_RUN_CYC_NO,CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS CRT_DTM,CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_UPDT_DTM,'@{pipeline().parameters.UWSAcct}' AS USER_ID FROM cte_recursive r WHERE r.row_num=r.row_count",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "TRGT_SYS_CD",
+                "SUBJ_AREA_NM"
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "uws",
+            "type": "LinkedServiceReference"
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "TBL_BAL_SUM"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "SUBJ_AREA_BAL_SUM"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Income/EdwLoads/Balancing"
+    }
+  },
+  "Description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:   IdsIncomeBalCntl\n\nPROCESSING:\n                  \n                The Job loads the SUBJECT_AREA_BAL_SUM table after the balancing control job is done for a given Subject Area              \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/10/2007          3264                              Originally Programmed                          devlEDW10                Steph Goddard           10/26/2007   \n\nSrikanth Mettpalli             10/01/2013          5114                            Updated  Sequencer                             EnterpriseWrhsDevl      Bhoomi Dasari             12/9/2013\n                                                                                                       (Server to Parallel Conversion)\n\nAnnotations:\nJob Name: UwsIncomeSubjAreaBalSumLoad\nExtraction From Table Balance Summary table for a given subject area and target system and loading into the Subject Area Balance Summary table\nRead all the Data from UWS TBL_BAL_SUM TBL_BAL_SUM Table; Pull records based on SOURCE AND  SUBJECT\nReference Code Mapping Data for Code SK lookups\nLeft Join to pull the MemberCounts \nJoin Keys:\nSOURCE AND SUBJECT\nDefaults and Null Handling\nUpdate then Insert the SUBJ_AREA_BAL_SUM Data."
+}

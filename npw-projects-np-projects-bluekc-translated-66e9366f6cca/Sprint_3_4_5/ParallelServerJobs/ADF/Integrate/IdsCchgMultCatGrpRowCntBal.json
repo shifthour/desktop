@@ -1,0 +1,317 @@
+{
+  "name": "IdsCchgMultCatGrpRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyToTemp_1",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT SRC.CCHG_MULT_CAT_GRP_ID AS SRC_CCHG_MULT_CAT_GRP_ID, SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK, TRGT.CCHG_MULT_CAT_GRP_ID AS TRGT_CCHG_MULT_CAT_GRP_ID, TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_CCHG_MULT_CAT_GRP AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CCHG_MULT_CAT_GRP AS TRGT ON TRGT.CCHG_MULT_CAT_GRP_ID = SRC.CCHG_MULT_CAT_GRP_ID AND TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle}",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TT_TMP_IdsCchgMultCatGrpRowCntBalInput",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "B_CCHG_MULT_CAT_GRP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TT_TMP_IdsCchgMultCatGrpRowCntBalInput"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptTransform_2",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTemp_1",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TT_TMP_IdsCchgMultCatGrpRowCntBal_Research; SELECT SRC_CCHG_MULT_CAT_GRP_ID, SRC_SRC_SYS_CD_SK, TRGT_CCHG_MULT_CAT_GRP_ID, TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TT_TMP_IdsCchgMultCatGrpRowCntBal_Research FROM @{pipeline().globalParameters.gbl_param_ids_staging}.TT_TMP_IdsCchgMultCatGrpRowCntBalInput WHERE SRC_CCHG_MULT_CAT_GRP_ID IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_CCHG_MULT_CAT_GRP_ID IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TT_TMP_IdsCchgMultCatGrpRowCntBal_Notify; SELECT 'ROW COUNT BALANCING FACETS - IDS CCHG_MULT_CAT_GRP IS OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TT_TMP_IdsCchgMultCatGrpRowCntBal_Notify WHERE '@{pipeline().parameters.ToleranceCd}' = 'OUT'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearchFile_3",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform_2",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "SRC_CCHG_MULT_CAT_GRP_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "SRC_SRC_SYS_CD_SK",
+                    "type": "Int32",
+                    "physicalType": "Integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "TRGT_CCHG_MULT_CAT_GRP_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "TRGT_SRC_SYS_CD_SK",
+                    "type": "Int32",
+                    "physicalType": "Integer"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TT_TMP_IdsCchgMultCatGrpRowCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/research')",
+              "param_filename": "IdsCchgMultCatGrpResearch.dat.@{pipeline().parameters.RunID}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyNotifyFile_4",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform_2",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "NOTIFICATION",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TT_TMP_IdsCchgMultCatGrpRowCntBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/notify')",
+              "param_filename": "IdsCchgBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/CCHG/CchgMultCatGrp/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on CCHG_MULT_CAT_GRP and B_CCHG_MULT_CAT_GRP tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam          2015-08-25           5460                               Initial Programming                                                                               IntegrateDev1           Bhoomi Dasari      8/30/2015\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - CCHG_MULT_CAT_GRP"
+}

@@ -1,0 +1,51 @@
+{
+  "name": "EdwLoadMbrPcpAttrbtnDRunCycUpdt_EE",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/PCMH/EdwLoads/RunCycle"
+    },
+    "annotations": [],
+    "parameters": {
+      "BeginCycle": {
+        "type": "String"
+      },
+      "IDSBCBSKCRunCycle": {
+        "type": "String"
+      },
+      "IdsBCBSARunCycle": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Act_UpdatePRunCyc",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_min_run_cyc AS (SELECT SRC_SYS_CD, TRGT_SYS_CD, SUBJ_CD, MIN(RUN_CYC_NO) AS RUN_CYC_NO FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC WHERE TRGT_SYS_CD = 'IDS' AND SUBJ_CD = 'PCMH' AND EDW_LOAD_IN = 'N' AND ((SRC_SYS_CD = 'TREO' AND RUN_CYC_NO >= @{pipeline().parameters.BeginCycle}) OR (SRC_SYS_CD = 'BCBSKC' AND RUN_CYC_NO >= @{pipeline().parameters.IDSBCBSKCRunCycle}) OR (SRC_SYS_CD = 'BCBSA' AND RUN_CYC_NO >= @{pipeline().parameters.IdsBCBSARunCycle})) GROUP BY SRC_SYS_CD, TRGT_SYS_CD, SUBJ_CD) UPDATE T SET EDW_LOAD_IN = 'Y' FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC T INNER JOIN cte_min_run_cyc M ON T.SRC_SYS_CD = M.SRC_SYS_CD AND T.SUBJ_CD = M.SUBJ_CD AND T.TRGT_SYS_CD = M.TRGT_SYS_CD WHERE T.RUN_CYC_NO >= M.RUN_CYC_NO AND T.EDW_LOAD_IN = 'N'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ]
+  },
+  "Description": "\u00c2\u00a9 Copyright 2013 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    IdsMbrPcpAttrbtnDCntl\n\nProcessing:\n                    Extracts the P_RUN_CYC records for IDS PCMH with the EDW_LOAD_IN = 'N'.  \n                    These rows are used to update the P_RUN_CYCLE load indicator field for the particular source and subject.  \n                    All run cycles >= to the current run cycle where the indicator is \"N\" are updated to \"Y\"\n\nControl Job Rerun Information: \n                    Previous Run Successful:    Restart, no other steps necessary\n                    Previous Run Aborted:         Restart, no other steps necessary\n\nModifications:                        \n                                                          Project/                                                                                                                                          Code                   Date\nDeveloper           Date                       Altiris #                        Change Description                                              Environment                  Reviewer            Reviewed\n-------------------------  -------------------            -------------                     -----------------------------------------------------------------------------------------------------------------   -------------------------  -------------------\nKalyan Neelam  2013-05-21 4917       PCMH                       Initial Programming                                                                                  Kalyan Neelam     2013-06-27\n/Santosh   \n\nKalyan Neelam  2013-08-19 4917       PCMH                       changed SUBJ_CD to PCMH                                                                 SAndrew               2013-09-05\n\n\nPooja Sunkara    04/03/2013              5114                              Converted from Server to Parallel                   EnterpriseWrhsDevl       Jag Yelavarthi     2014-04-23\n\nSantosh Bokka    06/11/2014            4917                   Added BCBSKC Runcyle to load TREO Historical file   EnterpriseNewDevl  Bhoomi Dasari       6/23/201\nKalyan Neelam       2015-05-27      5212 - PI                  Added run cycle for BCBSA                                        EnterpriseCurDevl      Bhoomi Dasari       5/28/2015\n\nAnnotations:\nSet EDW_LOAD_IN to 'Y'\nEDW MBR PCP ATTRBTN Load Indicator Update\nExtract P_RUN_CYC records for IDS PCMH with a value \\\"N\\\" in the  EDW_LOAD_IN where the run cycle is >= to the current run cycle used for extracting.\nUpdate the P_RUN_CYC table to indicate source system data has been loaded to the EDW for each of the run cycles processed."
+}

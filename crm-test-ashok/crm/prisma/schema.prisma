@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Org {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  
+  users     User[]
+  projects  Project[]
+  leads     Lead[]
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  AGENT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  orgId        String
+  email        String   @unique
+  name         String
+  role         UserRole @default(AGENT)
+  passwordHash String
+  createdAt    DateTime @default(now())
+  
+  org        Org        @relation(fields: [orgId], references: [id])
+  activities Activity[]
+  assignedLeads Lead[]  @relation("AssignedTo")
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  location  String?
+  builder   String?
+  createdAt DateTime @default(now())
+  
+  org       Org         @relation(fields: [orgId], references: [id])
+  leads     Lead[]
+  siteVisits SiteVisit[]
+}
+
+enum Stage {
+  NEW
+  CONTACTED
+  SCHEDULED
+  VISITED
+  NEGOTIATION
+  BOOKED
+  DROPPED
+  RESCHEDULED
+  INVALID
+}
+
+model Lead {
+  id             String   @id @default(cuid())
+  orgId          String
+  projectId      String?
+  name           String?
+  phone          String
+  email          String?
+  source         String   // google_ads | meta | website | csv
+  campaign       String?
+  adset          String?
+  ad             String?
+  gclid          String?
+  fbclid         String?
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  bedroomsPref   Int?
+  budgetMin      Int?
+  budgetMax      Int?
+  locationPref   String?
+  stage          Stage    @default(NEW)
+  score          Int      @default(0)
+  assignedToId   String?
+  duplicateOf    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  org         Org          @relation(fields: [orgId], references: [id])
+  project     Project?     @relation(fields: [projectId], references: [id])
+  assignedTo  User?        @relation("AssignedTo", fields: [assignedToId], references: [id])
+  activities  Activity[]
+  siteVisits  SiteVisit[]
+}
+
+enum ActivityType {
+  CALL
+  WHATSAPP
+  EMAIL
+  NOTE
+  STATUS_CHANGE
+  ASSIGNMENT
+}
+
+model Activity {
+  id      String       @id @default(cuid())
+  leadId  String
+  userId  String?
+  type    ActivityType
+  note    String?
+  payload Json?
+  at      DateTime     @default(now())
+  
+  lead Lead  @relation(fields: [leadId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+}
+
+enum VisitStatus {
+  SCHEDULED
+  DONE
+  NO_SHOW
+  RESCHEDULED
+}
+
+model SiteVisit {
+  id          String      @id @default(cuid())
+  leadId      String
+  projectId   String?
+  scheduledAt DateTime
+  status      VisitStatus @default(SCHEDULED)
+  outcomeNote String?
+  createdAt   DateTime    @default(now())
+  
+  lead    Lead     @relation(fields: [leadId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+}

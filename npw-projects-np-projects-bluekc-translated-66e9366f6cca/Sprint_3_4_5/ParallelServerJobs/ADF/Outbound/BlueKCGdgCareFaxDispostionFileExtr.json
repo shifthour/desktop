@@ -1,0 +1,196 @@
+{
+  "name": "BlueKCGdgCareFaxDispostionFileExtr",
+  "properties": {
+    "parameters": {
+      "PerceptiveURL": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "AHOutboundFile": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_Transform",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.[BKCG_TMP_BlueKCGdgCareFaxDispostionFileExtr];WITH cte1 AS (SELECT C.COMM_SK, C.COMM_ID AS FileIdentifier, C.COMM_FILE_NM AS OriginalFilename, C.COMM_TMPLT_NM AS TemplateName, C.COMM_SENT_DTM AS FilePrintDate, C.COMM_JOB_ID AS JobNumber, null AS DocumentPageCount, C.COMM_STTUS_CD, CAST(C.IMG_ID AS VARCHAR(40)) AS IMG_ID, T.VIEW_ID FROM @{pipeline().globalParameters.gbl_param_CommTrnsmsnOwner}.[COMM] C INNER JOIN [COMM_TRNSMSN].[dbo].[COMM_TMPLT_RECPNT_TRNSMSN_TYP] T ON C.COMM_TMPLT_NM = T.COMM_TMPLT_RECPNT_TRNSMSN_TYP_NM WHERE LTRIM(RTRIM(C.COMM_STTUS_CMNT_TX)) NOT IN ('File Not Found') AND ((C.COMM_TRGT_SYS_MDUL_CD='RGHTFAX' AND C.COMM_TYP_CD='FAXSTS' AND C.COMM_STTUS_CD IN ('SUCCESS','WARNING','CANCELLED','FAILED')) OR (C.COMM_TRGT_SYS_MDUL_CD='RGHTFAX' AND C.COMM_TYP_CD='ALTRSTAFILE' AND C.COMM_STTUS_CD='ERROR'))), cte2 AS (SELECT cte1.*, CASE WHEN cte1.COMM_STTUS_CD='SUCCESS' THEN 'Fax Successful' WHEN cte1.COMM_STTUS_CD='CANCELLED' THEN 'Fax Cancelled' WHEN cte1.COMM_STTUS_CD='WARNING' THEN 'Fax Warning' ELSE 'Fax Failed' END AS Status, 'No provider data was found' AS ErrorMessage FROM cte1), cte3 AS (SELECT cte2.COMM_SK, cte2.FileIdentifier, cte2.OriginalFilename, CASE WHEN cte2.COMM_STTUS_CD='ERROR' THEN NULL ELSE cte2.FilePrintDate END AS FilePrintDate, cte2.JobNumber, cte2.DocumentPageCount, CASE WHEN cte2.COMM_STTUS_CD='ERROR' THEN '' ELSE dbo.trim_default(REPLACE('@{pipeline().parameters.PerceptiveURL}', 'replace', cte2.VIEW_ID)) + '%27' + cte2.IMG_ID + '%27>' + cte2.TemplateName + '-' + cte2.Status + '</a>' END AS Link, CASE WHEN cte2.COMM_STTUS_CD='ERROR' THEN cte2.ErrorMessage ELSE cte2.Status END AS FinalStatus, 'COMMTRNSMSN' AS COMM_SRC_SYS_CD, 'ALTRSTA' AS COMM_TRGT_SYS_CD, 'SUCCESS' AS COMM_STTUS_CD, 'FAXDSPSTN' AS COMM_TYP_CD, 'Fax Disposition Successful' AS COMM_STTUS_CMNT_TX, GETDATE() AS LAST_UPDT_DTM FROM cte2) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.[BKCG_TMP_BlueKCGdgCareFaxDispostionFileExtr] FROM cte3",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "bcbs",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_SeqLetterBundleRegister",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_bcbs",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "BKCG_TMP_BlueKCGdgCareFaxDispostionFileExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/GuidingCare/Fullfilment')",
+              "param_filename": "@concat(pipeline().parameters.AHOutboundFile,'_',pipeline().parameters.RunID,'.txt')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_FaxDisposition",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_bcbs",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "BKCG_TMP_BlueKCGdgCareFaxDispostionFileExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/GuidingCare/Fullfilment')",
+              "param_filename": "GuidingCare_FaxDispstion_Update.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2017 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY : BlueKCGdgCareFaxDispostionSeq\n\n\nPROCESSING : Job creates Fax Disposition file for AH\n\nMODIFICATIONS :\n\nDeveloper                               Date                         Project                                   Change Description            Development Project          Code Reviewer                   Date Reviewed       \n------------------------------              ------------------        ----------------------             ---------------------------------------       ------------------------------\\(9)----------------------------------         -------------------------------        \nBharani Chalamalasetty      04/01/2020             Fullfillment                       Original Programming               OutboundDev3                    Jaideep Mankala              04/20/2020\n\nBharani Chalamalasetty      07/20/2020            US243985   Updated Job to Included Warning,Cancelled Status      OutboundDev3                   Jaideep Mankala                 07/22/2020\n\nSaranya A                                2021-06-29            US370660         Modified Job to process NextPage and RightFax    OutboundDev3          Jaideep Mankala                 06/30/2021\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)jobs in Parallel\n\\(9)\\(9)\\(9)\\(9)\\(9)        \nSaranya A                                2021-10-14           US396204        Modified Logic to populate URL link column    OutboundDev3    Jaideep Mankala         10/15/2021    \n\nSaranya A                          2022-03-15               US502007            Replace DataSets with Sequential file                    OutboundDev3                    Jaideep Mankala                03/16/2022     \n\\(9)\\(9)\\(9)\\(9)\\(9)\n\nAnnotations:\nDSJobStartTimestamp used instead of Timestamp variable as rows need to be updated with new timestamp."
+}

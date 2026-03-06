@@ -1,0 +1,200 @@
+{
+  "name": "EdwMbrDriverDeleteTblSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/Seq"
+    },
+    "parameters": {
+      "MonthEnd": {
+        "type": "String",
+        "defaultValue": "N"
+      },
+      "CommitPoint": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "IDSExtractCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwMbrDriverExtracts'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwMbrDriverExtracts",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/DataWarehouse/Membership/EdwLoads/Driver/IdsEdwMbrDriverExtracts')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "APT_STRING_PADCHAR": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_STRING_PADCHAR",
+                    "type": "Expression"
+                  },
+                  "IDSFilePath": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSFilePath",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "IDSExtractCycle": {
+                    "value": "@pipeline().parameters.IDSExtractCycle",
+                    "type": "Expression"
+                  },
+                  "MonthEnd": {
+                    "value": "@pipeline().parameters.MonthEnd",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsWMbrDrvrLoad'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsWMbrDrvrLoad",
+              "type": "ExecutePipeline",
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsWMbrDrvrLoad",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "IDSFilePath": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSFilePath",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'EdwWMbrDelLoad'), false), equals(pipeline().parameters.MonthEnd, 'N'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwWMbrDelLoad",
+              "type": "ExecutePipeline",
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "EdwWMbrDelLoad",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

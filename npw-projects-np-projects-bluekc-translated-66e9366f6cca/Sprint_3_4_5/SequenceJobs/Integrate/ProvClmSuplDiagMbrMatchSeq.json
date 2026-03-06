@@ -1,0 +1,580 @@
+{
+  "name": "ProvClmSuplDiagMbrMatchSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim/SeqProvClmSuplDiag"
+    },
+    "parameters": {
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "InputFile": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ErrorFile": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RejectFile": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ProviderName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcSysCd": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcSysCdSk": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Environment": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FTP_IND": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ProvClmSuplDiagMbrMatch'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ProvClmSuplDiagMbrMatch",
+              "type": "DatabricksNotebook",
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/ProvClmsSuplDiag/ProvClmSuplDiagMbrMatch')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "InFile": {
+                    "value": "@pipeline().parameters.InputFile",
+                    "type": "Expression"
+                  },
+                  "ProviderName": {
+                    "value": "@pipeline().parameters.ProviderName",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(pipeline().parameters.FTP_IND, 'Y')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Ftp_Sub_ID_not_found_file",
+              "type": "DatabricksNotebook",
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/verified')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": {
+                    "value": "@concat(pipeline().parameters.ProviderName, '.DIAG.Member_Sub_IDs_Not_Found.', pipeline().parameters.RunID, '.TXT')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/",
+                  "REMOTEFILENAME": {
+                    "value": "@if(equals(pipeline().parameters.Environment, 'P'), concat('P1.BKCADF.PROD.', pipeline().parameters.ProviderName, '.DIAG.Member_Sub_IDs_Not_Found.', pipeline().parameters.RunID, '.TXT'), concat('T1.BKCADF.TEST.', pipeline().parameters.ProviderName, '.DIAG.Member_Sub_IDs_Not_Found.', pipeline().parameters.RunID, '.TXT'))",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FTP_Dupe_Rows_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Ftp_Sub_ID_not_found_file",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/verified')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": {
+                    "value": "@concat(pipeline().parameters.ProviderName, '.DIAG.Duplicate_Rows_In_Source_File.', pipeline().parameters.RunID, '.TXT')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/",
+                  "REMOTEFILENAME": {
+                    "value": "@if(equals(pipeline().parameters.Environment, 'P'), concat('P1.BKCADF.PROD.', pipeline().parameters.ProviderName, '.DIAG.Duplicate_Rows_In_Source_File.', pipeline().parameters.RunID, '.TXT'), concat('T1.BKCADF.TEST.', pipeline().parameters.ProviderName, '.DIAG.Duplicate_Rows_In_Source_File.', pipeline().parameters.RunID, '.TXT'))",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FTP_Mbr_Match_Err_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "FTP_Dupe_Rows_File",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/verified')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": {
+                    "value": "@concat(pipeline().parameters.ProviderName, '.DIAG.MEMBER_MATCH_ERRORS.', pipeline().parameters.RunID, '.TXT')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/",
+                  "REMOTEFILENAME": {
+                    "value": "@if(equals(pipeline().parameters.Environment, 'P'), concat('P1.BKCADF.PROD.', pipeline().parameters.ProviderName, '.DIAG.MEMBER_MATCH_ERRORS.', pipeline().parameters.RunID, '.TXT'), concat('T1.BKCADF.TEST.', pipeline().parameters.ProviderName, '.DIAG.MEMBER_MATCH_ERRORS.', pipeline().parameters.RunID, '.TXT'))",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FTP_Updated_Src_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "FTP_Mbr_Match_Err_File",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/landing')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": {
+                    "value": "@concat(pipeline().parameters.InputFile, '_MBRMATCHFINAL')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/",
+                  "REMOTEFILENAME": {
+                    "value": "@if(equals(pipeline().parameters.Environment, 'P'), concat('P1.BKCADF.PROD.', pipeline().parameters.InputFile, '_MBRMATCHFINAL.TXT'), concat('T1.BKCADF.TEST.', pipeline().parameters.InputFile, '_MBRMATCHFINAL.TXT'))",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Archive_Sub_ID_Not_Found_Move",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "integrate"
+          }
+        }
+      },
+      {
+        "name": "Archive_Sub_ID_Not_Found_Compress",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Archive_Sub_ID_Not_Found_Move",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "command": "compress",
+            "project": "integrate"
+          }
+        }
+      },
+      {
+        "name": "Archive_Dupe_Rows_Move",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Archive_Sub_ID_Not_Found_Compress",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "integrate"
+          }
+        }
+      },
+      {
+        "name": "Archive_Dupe_Rows_Compress",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Archive_Dupe_Rows_Move",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "command": "compress",
+            "project": "integrate"
+          }
+        }
+      },
+      {
+        "name": "Archive_Mbr_Match_Err_Move",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Archive_Dupe_Rows_Compress",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "integrate"
+          }
+        }
+      },
+      {
+        "name": "Archive_Mbr_Match_Err_Compress",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Archive_Mbr_Match_Err_Move",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/.TXT",
+              "type": "Expression"
+            },
+            "command": "compress",
+            "project": "integrate"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,280 @@
+{
+  "name": "CblTalnIdsIndvBeMaraRsltExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyTo_CblTalnIdsIndvBeMaraRsltExtr_TMP",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.CblTalnIdsIndvBeMaraRsltExtr_TMP",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/landing')",
+              "param_filename": "@{pipeline().parameters.FileName}",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "CblTalnIdsIndvBeMaraRsltExtr_TMP"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptTransform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyTo_CblTalnIdsIndvBeMaraRsltExtr_TMP",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "ALTER TABLE @{pipeline().globalParameters.gbl_param_ids_staging}.CblTalnIdsIndvBeMaraRsltExtr_TMP ADD ErrInd VARCHAR(1), VRSN_ID VARCHAR(100); UPDATE @{pipeline().globalParameters.gbl_param_ids_staging}.CblTalnIdsIndvBeMaraRsltExtr_TMP SET MBR_ID = LTRIM(RTRIM(MBR_ID)), MDL_NM = UPPER(LTRIM(RTRIM(MDL_NM))), ErrInd = CASE WHEN MBR_ID IS NULL OR MDL_NM IS NULL OR TOT_SCORE IS NULL OR RX_SCORE IS NULL OR MED_SCORE IS NULL OR IP_SCORE IS NULL OR OP_SCORE IS NULL OR PHYS_SCORE IS NULL OR ER_SCORE IS NULL OR OTHR IS NULL OR AGE IS NULL OR GNDR IS NULL OR EXPSR_MO IS NULL OR PRIOR_CST_TOT IS NULL OR PRIOR_CST_MED IS NULL OR PRIOR_CST_RX IS NULL OR CATLCD IS NULL OR UNCATLCD IS NULL OR CATNDC IS NULL OR UNCATNDC IS NULL THEN 'Y' ELSE 'N' END, VRSN_ID = '@{pipeline().parameters.VRSN_ID}'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyTo_IndvBeMaraRsltDsFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT MBR_ID, MDL_NM, TOT_SCORE, RX_SCORE, MED_SCORE, IP_SCORE, OP_SCORE, PHYS_SCORE, ER_SCORE, OTHR, AGE, GNDR, EXPSR_MO, PRIOR_CST_TOT, PRIOR_CST_MED, PRIOR_CST_RX, CATLCD, UNCATLCD, CATNDC, UNCATNDC, VRSN_ID FROM @{pipeline().globalParameters.gbl_param_ids_staging}.CblTalnIdsIndvBeMaraRsltExtr_TMP WHERE ErrInd = 'N'",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "CblTalnIdsIndvBeMaraRsltExtr_TMP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/ds')",
+              "param_filename": "@concat('INDV_BE_MARA_RSLT.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyTo_ModelOutputErrorsDat",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT MBR_ID, MDL_NM, TOT_SCORE, RX_SCORE, MED_SCORE, IP_SCORE, OP_SCORE, PHYS_SCORE, ER_SCORE, OTHR, AGE, GNDR, EXPSR_MO, PRIOR_CST_TOT, PRIOR_CST_MED, PRIOR_CST_RX, CATLCD, UNCATLCD, CATNDC, UNCATNDC FROM @{pipeline().globalParameters.gbl_param_ids_staging}.CblTalnIdsIndvBeMaraRsltExtr_TMP WHERE ErrInd = 'Y'",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "CblTalnIdsIndvBeMaraRsltExtr_TMP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/external')",
+              "param_filename": "@concat(pipeline().parameters.Vendor, '_MODELOUTPUT_ERRORS.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "FileName": {
+        "type": "String"
+      },
+      "Vendor": {
+        "type": "String"
+      },
+      "VRSN_ID": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/MARA/IndvBeMaraRslt"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #               Change Description                             Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRaja Gummadi                  03/04/2015      5460                                Originally Programmed                            IntegrateNewDevl         Kalyan Neelam             2015-03-06\n\nKrishnakanth                    09/13/2017      30001                              Changed the Input file format                  IntegrateDev2              Kalyan Neelam             2017-09-13\n  Manivannan                                                                                    from CSV to \"|\" delimited.\n\nKrishnakanth                    12/05/2017      30001                              Replaced the ErrorFile                            IntegrateDev2              Kalyan Neelam             2017-12-06\n  Manivannan                                                                                    Vendor component (COBALTTALON) \n                                                                                                          to the variable Vendor.\nVenkatesh Babu             2020-11-01                                              Added VRSN_ID                                      IntegrateDev2              Jeyaprasanna               2020-11-12\nMunnangi\n\nAnnotations:\nJob name: CblTalnIdsIndvBeMaraRsltExtr\nINPUT : MILLIMAN.MARA_MODELOUTPUT.*.TXT\nOUTPUT: INDV_BE_MARA_RSLT.#SrcSysCd#.extr.#RunID#.ds\n11-06-2020  : Added VRSN_ID"
+}

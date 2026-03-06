@@ -1,0 +1,102 @@
+{
+  "name": "ProcessRptExtr_EE",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_ProcessRptExtr_EE",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH T1 AS (SELECT r.SUBJ_CD, r.SRC_SYS_CD, r.TRGT_SYS_CD, r.STRT_DTM, r.END_DTM, c.DAY_OF_WK_FULL_NM, CAST(r.END_DTM - r.STRT_DTM AS VARCHAR(30)) AS DURATION, ROW_NUMBER() OVER(ORDER BY r.STRT_DTM) AS NUMBERROW FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC r, @{pipeline().globalParameters.gbl_param_IDSOwner}.P_BTCH_CYC b, @{pipeline().globalParameters.gbl_param_IDSOwner}.CLNDR_DT c WHERE r.SUBJ_CD = '@{pipeline().parameters.Subject}' AND r.TRGT_SYS_CD = '@{pipeline().parameters.TargetSys}' AND r.SRC_SYS_CD = '@{pipeline().parameters.SourceSys}' AND r.BTCH_CYC_SK = b.BTCH_CYC_SK AND b.BTCH_CYC_DESC = c.CLNDR_DT_SK AND r.RUN_CYC_NO = @{pipeline().parameters.RunCycle}), T2 AS (SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, SUBSTRING(DURATION, 10, 2) + ':' + SUBSTRING(DURATION, 12, 2) AS TIME_DURATION, NUMBERROW AS ROW_COUNT FROM T1) SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, TIME_DURATION, ROW_COUNT FROM T2 ORDER BY STRT_DTM",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "P_RUN_CYC"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/scripts/log')",
+              "param_filename": "processing_rpt.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "RunCycle": {
+        "type": "int"
+      },
+      "Subject": {
+        "type": "string"
+      },
+      "SourceSys": {
+        "type": "string"
+      },
+      "TargetSys": {
+        "type": "string"
+      },
+      "RowCount": {
+        "type": "int"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/JobSequencer/CommonComponents"
+    }
+  },
+  "Description": "MODIFICATIONS:\nDeveloper                Date                 Project/Altiris #      Change Description                                                                     Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------                             --------------------------------       -------------------------------   ----------------------------       \nBrent Leland            2008-02-14       IAD Prod. Supp     Original Programming.                                                                   devlIDScur                     Steph Goddard          02/22/2008\nlee moore                 2013-07-01      5114                        rewrite  in parallel                                                                          Enterprisewh\n\nAnnotations:\nAdd Defaults and Null Handling\nWrite out processing statistics to file\n\nJob Name:\nIdsEdwProcessRptExtr\nSelect data from P_RUN_CYC table based on job parameters\nRecords are appended to file\n/ids/prod/scripts/log/processing_rpt.dat"
+}

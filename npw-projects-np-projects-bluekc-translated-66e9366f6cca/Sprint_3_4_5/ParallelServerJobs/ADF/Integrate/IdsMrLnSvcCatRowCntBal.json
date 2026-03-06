@@ -1,0 +1,180 @@
+{
+  "name": "IdsMrLnSvcCatRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_IdsMrLnSvcCatRowCntBal",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A12_TMP_IdsMrLnSvcCatRowCntBal; SELECT SRC.MR_LN_ID AS SRC_MR_LN_ID, SRC.EFF_DT_SK AS SRC_EFF_DT_SK, SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK, TRGT.MR_LN_ID AS TRGT_MR_LN_ID, TRGT.EFF_DT_SK AS TRGT_EFF_DT_SK, TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A12_TMP_IdsMrLnSvcCatRowCntBal FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_MR_LN_SVC_CAT AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.MR_LN_SVC_CAT AS TRGT ON TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK AND TRGT.MR_LN_ID = SRC.MR_LN_ID AND TRGT.EFF_DT_SK = SRC.EFF_DT_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle}; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A12_TMP_IdsMrLnSvcCatRowCntBal_Research; SELECT SRC_MR_LN_ID, SRC_EFF_DT_SK, SRC_SRC_SYS_CD_SK, TRGT_MR_LN_ID, TRGT_EFF_DT_SK, TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A12_TMP_IdsMrLnSvcCatRowCntBal_Research FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A12_TMP_IdsMrLnSvcCatRowCntBal WHERE SRC_MR_LN_ID IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR SRC_EFF_DT_SK IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL OR TRGT_MR_LN_ID IS NULL OR TRGT_EFF_DT_SK IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A12_TMP_IdsMrLnSvcCatRowCntBal_Notify; SELECT 'ROW COUNT BALANCING FACETS - IDS MR LN SVC CAT IS OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A12_TMP_IdsMrLnSvcCatRowCntBal_Notify WHERE @{pipeline().parameters.ToleranceCd} = 'OUT';",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_ResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsMrLnSvcCatRowCntBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A12_TMP_IdsMrLnSvcCatRowCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/research')",
+              "param_filename": "@concat('IdsMaraClnclClsResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_ErrorNotificationFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsMrLnSvcCatRowCntBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A12_TMP_IdsMrLnSvcCatRowCntBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/notify')",
+              "param_filename": "ClmLnHlthBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/HCG/MrLnSvcCat/Balancing"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\n\nRaja Gummadi         2015-04-22          5460                         Original Programming                                                                             IntegrateNewDevl          Kalyan Neelam              2015-04-24\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - MR_LN_SVC_CAT\nJob Name: IdsIdsWCdmEtlDrvrLoad"
+}

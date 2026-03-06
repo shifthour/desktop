@@ -1,0 +1,85 @@
+{
+  "name": "IdsEdwLfstylRateFctrDExtr",
+  "properties": {
+    "parameters": {
+      "IDSRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwLfstylRateFctrDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte1 AS (SELECT T1.LFSTYL_RATE_FCTR_SK, T1.LFSTYL_RATE_FCTR_ID, LTRIM(RTRIM(T1.MBR_LFSTYL_BNF_CD)) AS MBR_LFSTYL_BNF_CD, T1.LFSTYL_RATE_FCTR_EFF_DT, T1.SRC_SYS_CD, T1.CRT_RUN_CYC_EXCTN_SK, T1.LAST_UPDT_RUN_CYC_EXCTN_SK, T1.MBR_LFSTYL_BNF_CD_SK, T1.LFSTYL_RATE_FCTR_TERM_DT, T1.LFSTYL_RATE_FCTR, T2.TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.LFSTYL_RATE_FCTR T1 LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG T2 ON LTRIM(RTRIM(T1.MBR_LFSTYL_BNF_CD)) = LTRIM(RTRIM(T2.SRC_CD)) AND T2.SRC_SYS_CD = 'FACETS' AND T2.SRC_CLCTN_CD = 'FACETS DBO' AND T2.SRC_DOMAIN_NM = 'MEMBER LIFESTYLE BENEFIT' AND T2.TRGT_CLCTN_CD = 'IDS' AND T2.TRGT_DOMAIN_NM = 'MEMBER LIFESTYLE BENEFIT' WHERE T1.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle}), cte2 AS (SELECT LFSTYL_RATE_FCTR_SK, LFSTYL_RATE_FCTR_ID, MBR_LFSTYL_BNF_CD, CAST(LFSTYL_RATE_FCTR_EFF_DT AS date) AS LFSTYL_RATE_FCTR_EFF_DT, SRC_SYS_CD, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CASE WHEN TRGT_CD_NM IS NULL OR TRGT_CD_NM = '' THEN 'UNK' ELSE TRGT_CD_NM END AS MBR_LFSTYL_BNF_NM, CAST(LFSTYL_RATE_FCTR_TERM_DT AS date) AS LFSTYL_RATE_FCTR_TERM_DT, LFSTYL_RATE_FCTR, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK, MBR_LFSTYL_BNF_CD_SK FROM cte1) SELECT * FROM cte2",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "LFSTYL_RATE_FCTR"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Capitation/EdwLoads/LfstylRateFctrD/load')",
+              "param_filename": "LFSTYL_RATE_FCTR_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Capitation/EdwLoads/LfstylRateFctrD"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2010 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY: EdwLfstylRateFctrDCntl\nPROCESSING:\n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #               Change Description                                                                                        Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------                                                                 ----------------------------------   ---------------------------------    -------------------------   \nManasa Andru                 2018-08-20         60037                             Original Programming                                                                                         EnterpriseDev2            Abhiram Dasarathy\t2018-08-24\n                                                                Attribution/Capitation       (Extracts data from IDS LFSTYL_RATE_FCTR table\n                                                                                                        to load EDW-LFSTYL_RATE_FCTR_D table)\n\nAnnotations:\nExtract  data from LFSTYL_RATE_FCTR table in IDS\nLoad file for LFSTYL_RATE_FCTR_D data to load into EDW."
+}

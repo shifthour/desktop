@@ -1,0 +1,115 @@
+{
+  "name": "NewdirIdsMbrAplLoad",
+  "properties": {
+    "parameters": {
+      "CurrDate": {
+        "type": "String"
+      },
+      "NDBHSrcFile": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyFileToTMPNewdirIdsMbrAplLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_NewdirIdsMbrAplLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/Appeals/Apl')",
+              "param_filename": "@{pipeline().parameters.NDBHSrcFile}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP_NewdirIdsMbrAplLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_xfm_Newdir_Load",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTMPNewdirIdsMbrAplLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_source AS (SELECT AUTH_NO, MBR_ID, MBR_NM, AGE, AUTH_UNIT, CO_NM, DT_LTR_SENT, DCSN, SVC_TYP, DENIAL_STG, DENIAL_TYP, DENIAL_PHYS_RVWR_ID, PHYS_RVWR, STTUS, STRT_DT, END_DT, LOB, LOB_2, MBR_DOB, NOTE, DCSN_DT, PEER_RVW_RCVD_DT, RCRD_LAST_UPDT_USER, USER_NM, RQST_UNIT, RQST_DTM, RVSED_UNIT, RVW_TYP, SVC_DESC, SVC_CD, DENIAL_SUBTYP, APL_SUBMT_BY, ACKNMT_LTR, PROVIDER_NAME, INN_ONN FROM @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_NewdirIdsMbrAplLoad), cte_vars AS (SELECT cte_source.*, CASE WHEN AUTH_NO IS NULL THEN '' ELSE 'N' + REPLICATE('0', 9 - (LEN(AUTH_NO) + 1)) + LTRIM(RTRIM(AUTH_NO)) END AS svNewauthno, CASE WHEN MBR_NM IS NULL THEN '' ELSE LTRIM(RTRIM(SUBSTRING(LTRIM(RTRIM(SUBSTRING(MBR_NM, CHARINDEX(',', MBR_NM) + 1, 8000))), 1, CHARINDEX(' ', LTRIM(RTRIM(SUBSTRING(MBR_NM, CHARINDEX(',', MBR_NM) + 1, 8000)))) - 1))) END AS svMbrfname, CASE WHEN MBR_NM IS NULL THEN '' ELSE LTRIM(RTRIM(SUBSTRING(LTRIM(RTRIM(SUBSTRING(MBR_NM, CHARINDEX(',', MBR_NM) + 1, 8000))), CHARINDEX(' ', LTRIM(RTRIM(SUBSTRING(MBR_NM, CHARINDEX(',', MBR_NM) + 1, 8000))))) + 1, 8000))) END AS svMbrmname, CASE WHEN CHARINDEX(',', MBR_NM) = 0 THEN MBR_NM ELSE LEFT(MBR_NM, CHARINDEX(',', MBR_NM) - 1) END AS svMbrlname FROM cte_source), cte_final AS (SELECT CASE WHEN MBR_ID IS NULL THEN '' ELSE UPPER(LTRIM(RTRIM(MBR_ID))) END AS SUB_ID, CASE WHEN MBR_NM IS NULL THEN '' ELSE UPPER(LTRIM(RTRIM(MBR_NM))) END AS MBR_FULL_NM, CASE WHEN MBR_DOB IS NULL THEN '1753-01-01' ELSE TRY_CONVERT(date, MBR_DOB, 101) END AS MBR_BRTH_DT, CASE WHEN AUTH_NO IS NULL THEN '' ELSE svNewauthno END AS NEWDIR_APL_AUTH_ID, CASE WHEN PEER_RVW_RCVD_DT IS NULL THEN '1753-01-01' ELSE TRY_CONVERT(date, PEER_RVW_RCVD_DT, 101) END AS NEWDIR_APL_RCVD_DT, TRY_CONVERT(date, '@{pipeline().parameters.CurrDate}', 23) AS PRCS_DT, UPPER(svMbrfname) AS MBR_FIRST_NM, UPPER(svMbrmname) AS MBR_MIDINIT, UPPER(svMbrlname) AS MBR_LAST_NM, CAST(NULLIF(LTRIM(RTRIM(AGE)), '') AS int) AS MBR_AGE, CAST(NULLIF(LTRIM(RTRIM(AUTH_UNIT)), '') AS int) AS PROC_AUTH_UNIT_CT, UPPER(LTRIM(RTRIM(CO_NM))) AS NEWDIR_CO_NM, CASE WHEN DT_LTR_SENT IS NULL OR DT_LTR_SENT = 'NULL' THEN NULL ELSE TRY_CONVERT(datetime, DT_LTR_SENT, 101) END AS APL_DCSN_LTR_SENT_DTM, UPPER(LTRIM(RTRIM(DCSN))) AS APL_CUR_DCSN_TX, UPPER(LTRIM(RTRIM(SVC_TYP))) AS APL_CAT_TX, UPPER(LTRIM(RTRIM(DENIAL_STG))) AS APL_DENIAL_STG_TX, UPPER(LTRIM(RTRIM(DENIAL_TYP))) AS APL_DENIAL_TYP_TX, UPPER(LTRIM(RTRIM(DENIAL_PHYS_RVWR_ID))) AS APL_DENIAL_PHYS_RVWR_ID, UPPER(LTRIM(RTRIM(PHYS_RVWR))) AS APL_DENIAL_PHYS_RVWR_FULL_NM, UPPER(LTRIM(RTRIM(STTUS))) AS APL_STTUS_TX, CASE WHEN STRT_DT IS NULL THEN NULL ELSE TRY_CONVERT(date, STRT_DT, 101) END AS UM_SVC_STRT_DT, CASE WHEN END_DT IS NULL THEN NULL ELSE TRY_CONVERT(date, END_DT, 101) END AS UM_SVC_END_DT, UPPER(LTRIM(RTRIM(LOB))) AS FNCL_LOB_TX, CASE WHEN LOB_2 IS NULL THEN NULL ELSE UPPER(LTRIM(RTRIM(LOB_2))) END AS FNCL_LOB_DESC, CASE WHEN NOTE IS NULL THEN NULL ELSE UPPER(LTRIM(RTRIM(NOTE))) END AS APL_NOTE_TX, UPPER(LTRIM(RTRIM(RCRD_LAST_UPDT_USER))) AS NEWDIR_LAST_UPDT_USER_ID, UPPER(LTRIM(RTRIM(USER_NM))) AS NEWDIR_LAST_UPDT_USER_FULL_NM, CAST(NULLIF(LTRIM(RTRIM(RQST_UNIT)), '') AS int) AS PROC_RQST_UNIT_CT, CASE WHEN RQST_DTM IS NULL OR RQST_DTM = 'NULL' THEN NULL ELSE TRY_CONVERT(datetime, RQST_DTM, 101) END AS APL_RQST_DTM, CAST(NULLIF(LTRIM(RTRIM(RVSED_UNIT)), '') AS int) AS PROC_RVSED_UNIT_CT, UPPER(LTRIM(RTRIM(RVW_TYP))) AS APL_RVW_TYP_TX, UPPER(LTRIM(RTRIM(SVC_DESC))) AS APL_SVC_DESC, UPPER(LTRIM(RTRIM(SVC_CD))) AS APL_SVC_TX, CASE WHEN DENIAL_SUBTYP IS NULL THEN NULL ELSE UPPER(LTRIM(RTRIM(DENIAL_SUBTYP))) END AS APL_DENIAL_SUBTYP_TX, CASE WHEN APL_SUBMT_BY IS NULL THEN NULL ELSE LTRIM(RTRIM(APL_SUBMT_BY)) END AS APL_SUBMTR_TYP_TX, CASE WHEN ACKNMT_LTR IS NULL OR ACKNMT_LTR = 'NULL' THEN NULL ELSE TRY_CONVERT(datetime, ACKNMT_LTR, 101) END AS APL_ACKNMT_LTR_SENT_DTM FROM cte_vars) MERGE @{pipeline().globalParameters.gbl_param_IDSOwner}.P_MBR_NEWDIR_APL AS T USING cte_final AS S ON T.SUB_ID = S.SUB_ID AND T.MBR_FULL_NM = S.MBR_FULL_NM AND T.MBR_BRTH_DT = S.MBR_BRTH_DT AND T.NEWDIR_APL_AUTH_ID = S.NEWDIR_APL_AUTH_ID AND T.NEWDIR_APL_RCVD_DT = S.NEWDIR_APL_RCVD_DT AND T.PRCS_DT = S.PRCS_DT WHEN MATCHED THEN UPDATE SET T.MBR_FIRST_NM = S.MBR_FIRST_NM, T.MBR_MIDINIT = S.MBR_MIDINIT, T.MBR_LAST_NM = S.MBR_LAST_NM, T.MBR_AGE = S.MBR_AGE, T.PROC_AUTH_UNIT_CT = S.PROC_AUTH_UNIT_CT, T.NEWDIR_CO_NM = S.NEWDIR_CO_NM, T.APL_DCSN_LTR_SENT_DTM = S.APL_DCSN_LTR_SENT_DTM, T.APL_CUR_DCSN_TX = S.APL_CUR_DCSN_TX, T.APL_CAT_TX = S.APL_CAT_TX, T.APL_DENIAL_STG_TX = S.APL_DENIAL_STG_TX, T.APL_DENIAL_TYP_TX = S.APL_DENIAL_TYP_TX, T.APL_DENIAL_PHYS_RVWR_ID = S.APL_DENIAL_PHYS_RVWR_ID, T.APL_DENIAL_PHYS_RVWR_FULL_NM = S.APL_DENIAL_PHYS_RVWR_FULL_NM, T.APL_STTUS_TX = S.APL_STTUS_TX, T.UM_SVC_STRT_DT = S.UM_SVC_STRT_DT, T.UM_SVC_END_DT = S.UM_SVC_END_DT, T.FNCL_LOB_TX = S.FNCL_LOB_TX, T.FNCL_LOB_DESC = S.FNCL_LOB_DESC, T.APL_NOTE_TX = S.APL_NOTE_TX, T.NEWDIR_LAST_UPDT_USER_ID = S.NEWDIR_LAST_UPDT_USER_ID, T.NEWDIR_LAST_UPDT_USER_FULL_NM = S.NEWDIR_LAST_UPDT_USER_FULL_NM, T.PROC_RQST_UNIT_CT = S.PROC_RQST_UNIT_CT, T.APL_RQST_DTM = S.APL_RQST_DTM, T.PROC_RVSED_UNIT_CT = S.PROC_RVSED_UNIT_CT, T.APL_RVW_TYP_TX = S.APL_RVW_TYP_TX, T.APL_SVC_DESC = S.APL_SVC_DESC, T.APL_SVC_TX = S.APL_SVC_TX, T.APL_DENIAL_SUBTYP_TX = S.APL_DENIAL_SUBTYP_TX, T.APL_SUBMTR_TYP_TX = S.APL_SUBMTR_TYP_TX, T.APL_ACKNMT_LTR_SENT_DTM = S.APL_ACKNMT_LTR_SENT_DTM WHEN NOT MATCHED THEN INSERT (SUB_ID, MBR_FULL_NM, MBR_BRTH_DT, NEWDIR_APL_AUTH_ID, NEWDIR_APL_RCVD_DT, PRCS_DT, MBR_FIRST_NM, MBR_MIDINIT, MBR_LAST_NM, MBR_AGE, PROC_AUTH_UNIT_CT, NEWDIR_CO_NM, APL_DCSN_LTR_SENT_DTM, APL_CUR_DCSN_TX, APL_CAT_TX, APL_DENIAL_STG_TX, APL_DENIAL_TYP_TX, APL_DENIAL_PHYS_RVWR_ID, APL_DENIAL_PHYS_RVWR_FULL_NM, APL_STTUS_TX, UM_SVC_STRT_DT, UM_SVC_END_DT, FNCL_LOB_TX, FNCL_LOB_DESC, APL_NOTE_TX, NEWDIR_LAST_UPDT_USER_ID, NEWDIR_LAST_UPDT_USER_FULL_NM, PROC_RQST_UNIT_CT, APL_RQST_DTM, PROC_RVSED_UNIT_CT, APL_RVW_TYP_TX, APL_SVC_DESC, APL_SVC_TX, APL_DENIAL_SUBTYP_TX, APL_SUBMTR_TYP_TX, APL_ACKNMT_LTR_SENT_DTM) VALUES (S.SUB_ID, S.MBR_FULL_NM, S.MBR_BRTH_DT, S.NEWDIR_APL_AUTH_ID, S.NEWDIR_APL_RCVD_DT, S.PRCS_DT, S.MBR_FIRST_NM, S.MBR_MIDINIT, S.MBR_LAST_NM, S.MBR_AGE, S.PROC_AUTH_UNIT_CT, S.NEWDIR_CO_NM, S.APL_DCSN_LTR_SENT_DTM, S.APL_CUR_DCSN_TX, S.APL_CAT_TX, S.APL_DENIAL_STG_TX, S.APL_DENIAL_TYP_TX, S.APL_DENIAL_PHYS_RVWR_ID, S.APL_DENIAL_PHYS_RVWR_FULL_NM, S.APL_STTUS_TX, S.UM_SVC_STRT_DT, S.UM_SVC_END_DT, S.FNCL_LOB_TX, S.FNCL_LOB_DESC, S.APL_NOTE_TX, S.NEWDIR_LAST_UPDT_USER_ID, S.NEWDIR_LAST_UPDT_USER_FULL_NM, S.PROC_RQST_UNIT_CT, S.APL_RQST_DTM, S.PROC_RVSED_UNIT_CT, S.APL_RVW_TYP_TX, S.APL_SVC_DESC, S.APL_SVC_TX, S.APL_DENIAL_SUBTYP_TX, S.APL_SUBMTR_TYP_TX, S.APL_ACKNMT_LTR_SENT_DTM);",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/Appeals/Apl"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2014 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nDESCRIPTION:  \n\n\nCalled By:Control Job- NewDirAplCntl and McasAplCntl\n\nMODIFICATIONS:\nDeveloper                               Date                 Project/Altiris #      Change Description                                                                                                           Development Project      Code Reviewer          Date Reviewed       \n------------------                           --------------------     ------------------------      -----------------------------------------------------------------------                                                                   --------------------------------       -------------------------------   ----------------------------       \nRavi Singh                        2018-08-20            5796                      Original Devlopment                                                                                                            Integrate                       Kalyan Neelam            2018-09-24\n\nRavi Singh                        2018-11-30            5841                    This is existing job but I modified job name  NewdirIdsMbrAplLoad                                       IntegrateDev2               Kalyan Neelam            2018-12-10    \n                                                                                                   instead of  NewdirIdxMbrAplLoad and added few more columns in \n                                                                                                   source as per new requirements.\n\nAnnotations:\nExtract data from the source file.\nLoads data into P_MBR_NEWDIR_APL table.\nMonthly, appeals will be sent to BlueKC and loaded into the IDS/EDW Appeals table P_MBR_NEWDIR_APL."
+}

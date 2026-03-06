@@ -1,0 +1,238 @@
+{
+  "name": "EdwEdwBCustSvcFBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "script_EdwEdwBCustSvcFBal",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_main AS ( SELECT CustSvcF.SRC_SYS_CD, CustSvcF.CUST_SVC_ID, CustSvcF.CUST_SVC_CT, ROW_NUMBER() OVER (ORDER BY (SELECT 1)) as rownum FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.CUST_SVC_F CustSvcF FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.B_CUST_SVC_F BCustSvcF ON CustSvcF.SRC_SYS_CD = BCustSvcF.SRC_SYS_CD AND CustSvcF.CUST_SVC_ID = BCustSvcF.CUST_SVC_ID WHERE CustSvcF.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND CustSvcF.CUST_SVC_CT <> BCustSvcF.CUST_SVC_CT ) DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.EdwEdwBCustSvcFBal_TMP_1; SELECT SRC_SYS_CD, CUST_SVC_ID, CUST_SVC_CT INTO @{pipeline().globalParameters.gbl_param_edw_staging}.EdwEdwBCustSvcFBal_TMP_1 FROM cte_main; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.EdwEdwBCustSvcFBal_TMP_2; SELECT 'COLUMN SUM BALANCING IDS - EDW CUST SVC F OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_edw_staging}.EdwEdwBCustSvcFBal_TMP_2 FROM cte_main WHERE rownum = 1",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "copy_EdwEdwBCustSvcFBal_TMP_1_to_ResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "script_EdwEdwBCustSvcFBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "CUST_SVC_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "CUST_SVC_CT",
+                    "type": "Int32",
+                    "physicalType": "Integer"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "EdwEdwBCustSvcFBal_TMP_1"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/research')",
+              "param_filename": "@concat('IdsEdwCustSvcFColumnSumResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "copy_EdwEdwBCustSvcFBal_TMP_2_to_NotificationFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "script_EdwEdwBCustSvcFBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "NOTIFICATION",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "EdwEdwBCustSvcFBal_TMP_2"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/notify')",
+              "param_filename": "CustSvcBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/CustSvc/EdwLoads/CustSvcF/Balancing"
+    }
+  },
+  "Description": "CALLED BY:          IdsEdwCustSvcFBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target tables are compared on the specified column to see if there are any discrepancies\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               08/29/2007          3264                              Originally Programmed                           devlEDW10              Steph Goddard            10/21/2007                \n\nBhupinder Kaur                12/06/2013          5114                               Rewrite in Parallel                            EnterpriseWhseDevl       Jag Yelavarthi               2014-02-25\n\nAnnotations:\nRows with Failed Comparison on Specified columns\nDetail file for on-call to research errors\nJob: EdwEdwBCustSvcFBal\nFile checked later for rows and email to on-call\nCopy stage used to remove duplicates and create one record for the Notification file.\nPull all the Missing Records from\nCUST_SVC_ F\nB_CUST_SVC_F"
+}

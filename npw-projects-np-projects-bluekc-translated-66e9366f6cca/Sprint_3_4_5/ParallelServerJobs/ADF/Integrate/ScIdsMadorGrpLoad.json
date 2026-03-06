@@ -1,0 +1,119 @@
+{
+  "name": "ScIdsMadorGrpLoad",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "AsOfDtm": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyToTemp_ScIdsMadorGrpLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.tmp_ScIdsMadorGrpLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "GRP_MA_DOR.@{pipeline().parameters.SrcSysCd}.@{pipeline().parameters.RunID}.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "tmp_ScIdsMadorGrpLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Upsert_ScIdsMadorGrpLoad",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTemp_ScIdsMadorGrpLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_stg AS (SELECT GRP_MA_DOR_SK, GRP_ID, TAX_YR, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, AS_OF_DTM, GRP_SK, GRP_NM, GRP_CNTCT_FIRST_NM, GRP_CNTCT_MIDINIT, GRP_CNTCT_LAST_NM, GRP_ADDR_LN_1, GRP_ADDR_LN_2, GRP_ADDR_LN_3, GRP_ADDR_CITY_NM, GRP_ADDR_ST_CD_SK, GRP_ADDR_ZIP_CD_5, GRP_ADDR_ZIP_CD_4 FROM @{pipeline().globalParameters.gbl_param_ids_staging}.tmp_ScIdsMadorGrpLoad) MERGE @{pipeline().globalParameters.gbl_param_IDSOwner}.GRP_MA_DOR AS T USING cte_stg AS S ON T.GRP_MA_DOR_SK = S.GRP_MA_DOR_SK WHEN MATCHED THEN UPDATE SET T.GRP_ID = S.GRP_ID, T.TAX_YR = S.TAX_YR, T.SRC_SYS_CD = S.SRC_SYS_CD, T.CRT_RUN_CYC_EXCTN_SK = S.CRT_RUN_CYC_EXCTN_SK, T.LAST_UPDT_RUN_CYC_EXCTN_SK = S.LAST_UPDT_RUN_CYC_EXCTN_SK, T.AS_OF_DTM = S.AS_OF_DTM, T.GRP_SK = S.GRP_SK, T.GRP_NM = S.GRP_NM, T.GRP_CNTCT_FIRST_NM = S.GRP_CNTCT_FIRST_NM, T.GRP_CNTCT_MIDINIT = S.GRP_CNTCT_MIDINIT, T.GRP_CNTCT_LAST_NM = S.GRP_CNTCT_LAST_NM, T.GRP_ADDR_LN_1 = S.GRP_ADDR_LN_1, T.GRP_ADDR_LN_2 = S.GRP_ADDR_LN_2, T.GRP_ADDR_LN_3 = S.GRP_ADDR_LN_3, T.GRP_ADDR_CITY_NM = S.GRP_ADDR_CITY_NM, T.GRP_ADDR_ST_CD_SK = S.GRP_ADDR_ST_CD_SK, T.GRP_ADDR_ZIP_CD_5 = S.GRP_ADDR_ZIP_CD_5, T.GRP_ADDR_ZIP_CD_4 = S.GRP_ADDR_ZIP_CD_4 WHEN NOT MATCHED THEN INSERT (GRP_MA_DOR_SK, GRP_ID, TAX_YR, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, AS_OF_DTM, GRP_SK, GRP_NM, GRP_CNTCT_FIRST_NM, GRP_CNTCT_MIDINIT, GRP_CNTCT_LAST_NM, GRP_ADDR_LN_1, GRP_ADDR_LN_2, GRP_ADDR_LN_3, GRP_ADDR_CITY_NM, GRP_ADDR_ST_CD_SK, GRP_ADDR_ZIP_CD_5, GRP_ADDR_ZIP_CD_4) VALUES (S.GRP_MA_DOR_SK, S.GRP_ID, S.TAX_YR, S.SRC_SYS_CD, S.CRT_RUN_CYC_EXCTN_SK, S.LAST_UPDT_RUN_CYC_EXCTN_SK, S.AS_OF_DTM, S.GRP_SK, S.GRP_NM, S.GRP_CNTCT_FIRST_NM, S.GRP_CNTCT_MIDINIT, S.GRP_CNTCT_LAST_NM, S.GRP_ADDR_LN_1, S.GRP_ADDR_LN_2, S.GRP_ADDR_LN_3, S.GRP_ADDR_CITY_NM, S.GRP_ADDR_ST_CD_SK, S.GRP_ADDR_ZIP_CD_5, S.GRP_ADDR_ZIP_CD_4); MERGE @{pipeline().globalParameters.gbl_param_IDSOwner}.GRP_MA_DOR_HIST AS T USING (SELECT GRP_MA_DOR_SK, @{pipeline().parameters.AsOfDtm} AS AS_OF_DTM, GRP_ID, TAX_YR, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, GRP_SK, GRP_NM, GRP_CNTCT_FIRST_NM, GRP_CNTCT_MIDINIT, GRP_CNTCT_LAST_NM, GRP_ADDR_LN_1, GRP_ADDR_LN_2, GRP_ADDR_LN_3, GRP_ADDR_CITY_NM, GRP_ADDR_ST_CD_SK, GRP_ADDR_ZIP_CD_5, GRP_ADDR_ZIP_CD_4 FROM cte_stg) AS S ON T.GRP_MA_DOR_SK = S.GRP_MA_DOR_SK AND T.AS_OF_DTM = S.AS_OF_DTM WHEN MATCHED THEN UPDATE SET T.GRP_ID = S.GRP_ID, T.TAX_YR = S.TAX_YR, T.SRC_SYS_CD = S.SRC_SYS_CD, T.CRT_RUN_CYC_EXCTN_SK = S.CRT_RUN_CYC_EXCTN_SK, T.LAST_UPDT_RUN_CYC_EXCTN_SK = S.LAST_UPDT_RUN_CYC_EXCTN_SK, T.GRP_SK = S.GRP_SK, T.GRP_NM = S.GRP_NM, T.GRP_CNTCT_FIRST_NM = S.GRP_CNTCT_FIRST_NM, T.GRP_CNTCT_MIDINIT = S.GRP_CNTCT_MIDINIT, T.GRP_CNTCT_LAST_NM = S.GRP_CNTCT_LAST_NM, T.GRP_ADDR_LN_1 = S.GRP_ADDR_LN_1, T.GRP_ADDR_LN_2 = S.GRP_ADDR_LN_2, T.GRP_ADDR_LN_3 = S.GRP_ADDR_LN_3, T.GRP_ADDR_CITY_NM = S.GRP_ADDR_CITY_NM, T.GRP_ADDR_ST_CD_SK = S.GRP_ADDR_ST_CD_SK, T.GRP_ADDR_ZIP_CD_5 = S.GRP_ADDR_ZIP_CD_5, T.GRP_ADDR_ZIP_CD_4 = S.GRP_ADDR_ZIP_CD_4 WHEN NOT MATCHED THEN INSERT (GRP_MA_DOR_SK, AS_OF_DTM, GRP_ID, TAX_YR, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, GRP_SK, GRP_NM, GRP_CNTCT_FIRST_NM, GRP_CNTCT_MIDINIT, GRP_CNTCT_LAST_NM, GRP_ADDR_LN_1, GRP_ADDR_LN_2, GRP_ADDR_LN_3, GRP_ADDR_CITY_NM, GRP_ADDR_ST_CD_SK, GRP_ADDR_ZIP_CD_5, GRP_ADDR_ZIP_CD_4) VALUES (S.GRP_MA_DOR_SK, S.AS_OF_DTM, S.GRP_ID, S.TAX_YR, S.SRC_SYS_CD, S.CRT_RUN_CYC_EXCTN_SK, S.LAST_UPDT_RUN_CYC_EXCTN_SK, S.GRP_SK, S.GRP_NM, S.GRP_CNTCT_FIRST_NM, S.GRP_CNTCT_MIDINIT, S.GRP_CNTCT_LAST_NM, S.GRP_ADDR_LN_1, S.GRP_ADDR_LN_2, S.GRP_ADDR_LN_3, S.GRP_ADDR_CITY_NM, S.GRP_ADDR_ST_CD_SK, S.GRP_ADDR_ZIP_CD_5, S.GRP_ADDR_ZIP_CD_4);",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/MADOR/Group"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:\n\nPROCESSING:\n\n\nMODIFICATIONS:\n\nDeveloper                          Date                 Project/Altiris #               Change Description                             Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nSethuraman Rajendran     03/30/2018      5839- MADOR                 Originally Programmed                            IntegrateDev2            Kalyan Neelam             2018-06-14\n\nAnnotations:\nInsert the data into GRP_MA_DOR_HIST\nExtract Data from the Load file GRP_MA_DOR.dat\nUpdate and insert the data into GRP_MA_DOR"
+}

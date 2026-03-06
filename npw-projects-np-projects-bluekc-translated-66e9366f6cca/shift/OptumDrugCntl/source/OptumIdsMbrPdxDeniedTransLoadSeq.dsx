@@ -1,0 +1,2155 @@
+BEGIN HEADER
+   CharacterSet "ENGLISH"
+   ExportingTool "IBM InfoSphere DataStage Export"
+   ToolVersion "8"
+   ServerName "BCKCDSP1:31538"
+   ToolInstanceID "Integrate"
+   MDISVersion "1.0"
+   Date "2025-01-12"
+   Time "08.02.08"
+   ServerVersion "11.7"
+END HEADER
+BEGIN DSJOB
+   Identifier "OptumIdsMbrPdxDeniedTransLoadSeq"
+   DateModified "2024-09-15"
+   TimeModified "08.13.39"
+   BEGIN DSRECORD
+      Identifier "ROOT"
+      OLEType "CJobDefn"
+      Readonly "0"
+      Name "OptumIdsMbrPdxDeniedTransLoadSeq"
+      Description "6131 - PBM REPLACEMENT: Extract OPTUMRX Denied data from FILE and load IDS tables"
+      NextID "964"
+      Container "V0"
+      FullDescription =+=+=+=
+*****************************************************************************************************************************************************************************
+COPYRIGHT 2014 BLUE CROSS/BLUE SHIELD OF KANSAS CITY 
+
+
+DESCRIPTION:  OPTUMRX Claims denied data is extracted from source file and loaded into the  MBR_PDX_DENIED_TRANS Table
+
+
+Called By: OptumDrugCntl
+
+PROCESSING : 6131 - PBM REPLACEMENT: Transform the  OPTUMRX Denied data FILE and load IDS tables.
+
+MODIFICATIONS :
+
+Developer                                Date                 	Project                                                          Change Description                                                   Development Project	          Code Reviewer          Date Reviewed       
+------------------                             --------------------     	------------------------                                        -----------------------------------------------------------------------                  ------------------------------	         -------------------------------   ----------------------------       
+Ravi Singh                            2018-09-14	                5796	                                                   Original Programming                   
+Peter Gichiri                           2019-10-20                6131	         IntegrateDev1                 6131 - PBM REPLACEMENT to OPTUMRX                                                                     Kalyan Neelam          2019-11-21       
+=+=+=+=
+      JobVersion "56.0.0"
+      JobControlCode =+=+=+=
+* Tokens were replaced below as follows:
+* IdV952S0%%Result2%%0 <= IdsMbrPdxDeniedClaimsFkey.$UserStatus
+* IdV952S0%%Result1%%1 <= IdsMbrPdxDeniedClaimsFkey.$JobStatus
+* IdV952S0%%Name%%2 <= IdsMbrPdxDeniedClaimsFkey.$JobName
+* IdV952S1%%Result2%%3 <= IdsMbrPdxDeniedClmPkey.$UserStatus
+* IdV952S1%%Result1%%4 <= IdsMbrPdxDeniedClmPkey.$JobStatus
+* IdV952S1%%Name%%5 <= IdsMbrPdxDeniedClmPkey.$JobName
+* IdV952S2%%Result2%%6 <= OptumIdsMbrPdxDeniedClmXfm.$UserStatus
+* IdV952S2%%Result1%%7 <= OptumIdsMbrPdxDeniedClmXfm.$JobStatus
+* IdV952S2%%Name%%8 <= OptumIdsMbrPdxDeniedClmXfm.$JobName
+* IdV953S3%%Result2%%9 <= IdsMbrPdxDeniedClmLoad.$UserStatus
+* IdV953S3%%Result1%%10 <= IdsMbrPdxDeniedClmLoad.$JobStatus
+* IdV953S3%%Name%%11 <= IdsMbrPdxDeniedClmLoad.$JobName
+* IdV0S677%%Result1%%12 <= DeniedClaimsLandingFile.$ReturnValue
+* IdV0S677%%Name%%13 <= DeniedClaimsLandingFile.$CommandName
+* IdV0S677%%Result2%%14 <= DeniedClaimsLandingFile.$CommandOutput
+* IdV962S0%%Result1%%15 <= DeniedPkeyFile.$ReturnValue
+* IdV962S0%%Name%%16 <= DeniedPkeyFile.$CommandName
+* IdV962S0%%Result2%%17 <= DeniedPkeyFile.$CommandOutput
+* IdV963S0%%Result1%%18 <= DeniedLoadile.$ReturnValue
+* IdV963S0%%Name%%19 <= DeniedLoadile.$CommandName
+* IdV963S0%%Result2%%20 <= DeniedLoadile.$CommandOutput
+*
+*** [Generated at 2024-09-15 09:13:39 - 11.7.1.0]
+   $INCLUDE DSINCLUDE DSJ_XFUNCS.H
+   EQU Time$$ Lit "Oconv(Time(), 'MTS:'):': '"
+****************************************
+* Graphical Sequencer generated code for Job OptumIdsMbrPdxDeniedTransLoadSeq
+****************************************
+   
+   seq$V952S4$count = 0
+   seq$V952S4$status = 0
+   seq$V952S6$count = 0
+   seq$V952S6$status = 0
+   seq$V952S7$count = 0
+   seq$V952S7$status = 0
+   seq$V953S0$count = 0
+   seq$V953S0$status = 0
+   seq$V0S675$count = 0
+   seq$V0S675$status = 0
+   handle$list = ""
+   id$list = ""
+   abort$list = ""
+   b$Abandoning = @False
+   b$CPRestarted = @False
+   b$InErrorRef = @False
+   summary$restarting = @False
+*** Create new checkpoint for sequence if not restarting
+   If DSCheckPointExists(DSJ.ME, cp$dtm) Then GoTo L$RESTART
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0015\\Starting new run of checkpointed Sequence job", ""), "@Coordinator")
+   If (Not(DSCheckPointValidate(DSJ.ME, cp$msg))) Then
+      err$source = "@Coordinator"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0016\\Error creating checkpoint record<L>%1", cp$msg)
+      msg$id = "@Coordinator"; GoTo L$ERROR
+   End
+   GoTo L$MAINSTART
+L$RESTART:
+*** Validate restarted job matches prior state
+   summary$restarting = @True
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0017\\Sequence job is being restarted after failure<L>Checkpoint record last modified at %1", cp$dtm), "@Coordinator")
+   b$CPRestarted = @True
+   If Not(DSCheckPointValidate(DSJ.ME, cp$msg)) Then
+      Call DSLogWarn(cp$msg, "@Coordinator")
+   End
+L$MAINSTART:
+*** Sequence start point
+   summary$ = DSMakeMsg("DSTAGE_JSG_M_0048\\Summary of sequence run", "")
+   If summary$restarting Then
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0049\\Sequence restarted after failure", ""))
+   End Else
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0050\\Sequence started (checkpointing on)", ""))
+   End
+   GoTo L$V952S8$START
+L$RETURN$1:
+   GoTo L$WAITFORJOB
+**************************************************
+L$V952S0$START:
+*** Activity "IdsMbrPdxDeniedClaimsFkey": Initialize job
+   b$InErrorRef$V952S0 = b$InErrorRef
+   h$V952S0 = DSAttachJob("IdsMbrPdxDeniedClmFkey", DSJ.ERRNONE)
+   If (Not(h$V952S0)) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", "IdsMbrPdxDeniedClmFkey":@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   If DSGetJobInfo(h$V952S0, DSJ.JOBMULTIINVOKABLE) Then
+      jb$V952S0 = "IdsMbrPdxDeniedClmFkey":'.':"IdsMbrPdxDeniedClaimsFkey"
+   End Else
+      jb$V952S0 = "IdsMbrPdxDeniedClmFkey"
+   End
+   dummy$ = DSDetachJob(h$V952S0)
+   b$V952S0skipping = @False
+   h$V952S0$cp = "h$V952S0"
+   If DSCheckPointGetValue(DSJ.ME, h$V952S0$cp, cp$value) = DSJE.NOERROR Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0021\\Skipped run of job '%1' on restart", jb$V952S0), "@IdsMbrPdxDeniedClaimsFkey")
+      job$V952S0$status = Raise(cp$value<1>)
+      job$V952S0$userstatus = Raise(cp$value<2>)
+      IdV952S0%%Result2%%0 = job$V952S0$userstatus
+      IdV952S0%%Result1%%1 = job$V952S0$status
+      IdV952S0%%Name%%2 = jb$V952S0
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0060\\%1 (JOB %2) skipped", "IdsMbrPdxDeniedClaimsFkey":@FM:jb$V952S0))
+      b$V952S0skipping = @True
+      Goto L$V952S0$SKIPPED
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0057\\%1 (JOB %2) started", "IdsMbrPdxDeniedClaimsFkey":@FM:jb$V952S0))
+   h$V952S0 = DSAttachJob(jb$V952S0, DSJ.ERRNONE)
+   If (Not(h$V952S0)) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", jb$V952S0:@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   h$V952S0 = DSPrepareJob(h$V952S0)
+   If (Not(h$V952S0)) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0012\\Error calling DSPrepareJob(%1)<L>%2", jb$V952S0:@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+L$V952S0$PREPARED:
+   p$V952S0$1 = ($FilePath)
+   err$code = DSSetParam(h$V952S0, "$FilePath", p$V952S0$1)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$FilePath":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$2 = ($APT_CONFIG_FILE)
+   err$code = DSSetParam(h$V952S0, "$APT_CONFIG_FILE", p$V952S0$2)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$APT_CONFIG_FILE":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$3 = (SrcSysCd)
+   err$code = DSSetParam(h$V952S0, "SrcSysCd", p$V952S0$3)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "SrcSysCd":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$4 = (IDSRunCycle)
+   err$code = DSSetParam(h$V952S0, "IDSRunCycle", p$V952S0$4)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "IDSRunCycle":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$5 = ($IDSDB)
+   err$code = DSSetParam(h$V952S0, "$IDSDB", p$V952S0$5)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$6 = ($IDSAcct)
+   err$code = DSSetParam(h$V952S0, "$IDSAcct", p$V952S0$6)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSAcct":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$7 = ($IDSOwner)
+   err$code = DSSetParam(h$V952S0, "$IDSOwner", p$V952S0$7)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSOwner":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$8 = ($IDSPW)
+   err$code = DSSetParam(h$V952S0, "$IDSPW", p$V952S0$8)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSPW":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$9 = (RunID)
+   err$code = DSSetParam(h$V952S0, "RunID", p$V952S0$9)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "RunID":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   p$V952S0$10 = (PrefixFkeyFailedFileName)
+   err$code = DSSetParam(h$V952S0, "PrefixFkeyFailedFileName", p$V952S0$10)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "PrefixFkeyFailedFileName":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   err$code = DSRunJob(h$V952S0, DSJ.RUNNORMAL)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0003\\Error calling DSRunJob(%1), code=%2[E]", jb$V952S0:@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   handle$list<-1> = h$V952S0
+   id$list<-1> = "V952S0"
+   GoTo L$V952S3$RETURN$1
+**************************************************
+L$V952S0$FINISHED:
+   job$V952S0$status = DSGetJobInfo(h$V952S0, DSJ.JOBSTATUS)
+   job$V952S0$userstatus = DSGetJobInfo(h$V952S0, DSJ.USERSTATUS)
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0063\\%1 (JOB %2) finished, status=%3[E]", "IdsMbrPdxDeniedClaimsFkey":@FM:jb$V952S0:@FM:job$V952S0$status))
+   IdV952S0%%Result2%%0 = job$V952S0$userstatus
+   IdV952S0%%Result1%%1 = job$V952S0$status
+   IdV952S0%%Name%%2 = jb$V952S0
+   If (job$V952S0$status <> DSJS.RUNOK) Then
+      Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0030\\Job %1 did not finish OK, status = '%2'", jb$V952S0:@FM:DSTranslateCode(job$V952S0$status)), "@IdsMbrPdxDeniedClaimsFkey")
+   End
+   rpt$V952S0 = DSMakeJobReport(h$V952S0, 1, "CRLF")
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0004\\Report on job: %1<L>%2", jb$V952S0:@FM:rpt$V952S0), "@IdsMbrPdxDeniedClaimsFkey")
+   dummy$ = DSDetachJob(h$V952S0)
+   If (job$V952S0$status <> DSJS.RUNOK And job$V952S0$status <> DSJS.RUNWARN And Not(b$Abandoning)) Then
+      err$source = "IdsMbrPdxDeniedClaimsFkey"; err$number = 1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0024\\Unhandled abort encountered in job %1", jb$V952S0)
+      msg$id = "@IdsMbrPdxDeniedClaimsFkey"; GoTo L$ERROR
+   End
+   If b$InErrorRef$V952S0 Or (job$V952S0$status <> DSJS.RUNOK And job$V952S0$status <> DSJS.RUNWARN) Then Goto L$V952S0$SKIPPED
+   cp$value = Lower(job$V952S0$status)
+   cp$value<2> = Lower(job$V952S0$userstatus)
+   dummy$ = DSCheckPointSetValue(DSJ.ME, h$V952S0$cp, cp$value)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0025\\Checkpointed run of job '%1'", jb$V952S0), "@IdsMbrPdxDeniedClaimsFkey")
+**************************************************
+L$V952S0$SKIPPED:
+   If b$Abandoning Then GoTo L$WAITFORJOB
+   GoSub L$V952S7$START
+   If b$V952S0skipping Then GoTo L$V952S3$RETURN$1
+   GoTo L$WAITFORJOB
+**************************************************
+L$V952S1$START:
+*** Activity "IdsMbrPdxDeniedClmPkey": Initialize job
+   b$InErrorRef$V952S1 = b$InErrorRef
+   h$V952S1 = DSAttachJob("IdsMbrPdxDeniedClmPkey", DSJ.ERRNONE)
+   If (Not(h$V952S1)) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", "IdsMbrPdxDeniedClmPkey":@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   If DSGetJobInfo(h$V952S1, DSJ.JOBMULTIINVOKABLE) Then
+      jb$V952S1 = "IdsMbrPdxDeniedClmPkey":'.':"IdsMbrPdxDeniedClmPkey"
+   End Else
+      jb$V952S1 = "IdsMbrPdxDeniedClmPkey"
+   End
+   dummy$ = DSDetachJob(h$V952S1)
+   b$V952S1skipping = @False
+   h$V952S1$cp = "h$V952S1"
+   If DSCheckPointGetValue(DSJ.ME, h$V952S1$cp, cp$value) = DSJE.NOERROR Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0021\\Skipped run of job '%1' on restart", jb$V952S1), "@IdsMbrPdxDeniedClmPkey")
+      job$V952S1$status = Raise(cp$value<1>)
+      job$V952S1$userstatus = Raise(cp$value<2>)
+      IdV952S1%%Result2%%3 = job$V952S1$userstatus
+      IdV952S1%%Result1%%4 = job$V952S1$status
+      IdV952S1%%Name%%5 = jb$V952S1
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0060\\%1 (JOB %2) skipped", "IdsMbrPdxDeniedClmPkey":@FM:jb$V952S1))
+      b$V952S1skipping = @True
+      Goto L$V952S1$SKIPPED
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0057\\%1 (JOB %2) started", "IdsMbrPdxDeniedClmPkey":@FM:jb$V952S1))
+   h$V952S1 = DSAttachJob(jb$V952S1, DSJ.ERRNONE)
+   If (Not(h$V952S1)) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", jb$V952S1:@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   h$V952S1 = DSPrepareJob(h$V952S1)
+   If (Not(h$V952S1)) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0012\\Error calling DSPrepareJob(%1)<L>%2", jb$V952S1:@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+L$V952S1$PREPARED:
+   p$V952S1$1 = ($FilePath)
+   err$code = DSSetParam(h$V952S1, "$FilePath", p$V952S1$1)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$FilePath":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$2 = ($APT_CONFIG_FILE)
+   err$code = DSSetParam(h$V952S1, "$APT_CONFIG_FILE", p$V952S1$2)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$APT_CONFIG_FILE":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$3 = ($IDSDB)
+   err$code = DSSetParam(h$V952S1, "$IDSDB", p$V952S1$3)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$4 = ($IDSOwner)
+   err$code = DSSetParam(h$V952S1, "$IDSOwner", p$V952S1$4)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSOwner":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$5 = ($IDSAcct)
+   err$code = DSSetParam(h$V952S1, "$IDSAcct", p$V952S1$5)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSAcct":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$6 = ($IDSPW)
+   err$code = DSSetParam(h$V952S1, "$IDSPW", p$V952S1$6)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSPW":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$7 = (IDSRunCycle)
+   err$code = DSSetParam(h$V952S1, "IDSRunCycle", p$V952S1$7)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "IDSRunCycle":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$8 = (SrcSysCd)
+   err$code = DSSetParam(h$V952S1, "SrcSysCd", p$V952S1$8)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "SrcSysCd":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$9 = ($IDSDB2ArraySize)
+   err$code = DSSetParam(h$V952S1, "$IDSDB2ArraySize", p$V952S1$9)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB2ArraySize":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$10 = ($IDSDB2RecordCount)
+   err$code = DSSetParam(h$V952S1, "$IDSDB2RecordCount", p$V952S1$10)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB2RecordCount":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   p$V952S1$11 = (RunID)
+   err$code = DSSetParam(h$V952S1, "RunID", p$V952S1$11)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "RunID":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   err$code = DSRunJob(h$V952S1, DSJ.RUNNORMAL)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0003\\Error calling DSRunJob(%1), code=%2[E]", jb$V952S1:@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   handle$list<-1> = h$V952S1
+   id$list<-1> = "V952S1"
+   GoTo L$V952S5$RETURN$1
+**************************************************
+L$V952S1$FINISHED:
+   job$V952S1$status = DSGetJobInfo(h$V952S1, DSJ.JOBSTATUS)
+   job$V952S1$userstatus = DSGetJobInfo(h$V952S1, DSJ.USERSTATUS)
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0063\\%1 (JOB %2) finished, status=%3[E]", "IdsMbrPdxDeniedClmPkey":@FM:jb$V952S1:@FM:job$V952S1$status))
+   IdV952S1%%Result2%%3 = job$V952S1$userstatus
+   IdV952S1%%Result1%%4 = job$V952S1$status
+   IdV952S1%%Name%%5 = jb$V952S1
+   If (job$V952S1$status <> DSJS.RUNOK) Then
+      Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0030\\Job %1 did not finish OK, status = '%2'", jb$V952S1:@FM:DSTranslateCode(job$V952S1$status)), "@IdsMbrPdxDeniedClmPkey")
+   End
+   rpt$V952S1 = DSMakeJobReport(h$V952S1, 1, "CRLF")
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0004\\Report on job: %1<L>%2", jb$V952S1:@FM:rpt$V952S1), "@IdsMbrPdxDeniedClmPkey")
+   dummy$ = DSDetachJob(h$V952S1)
+   If (job$V952S1$status <> DSJS.RUNOK And job$V952S1$status <> DSJS.RUNWARN And Not(b$Abandoning)) Then
+      err$source = "IdsMbrPdxDeniedClmPkey"; err$number = 1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0024\\Unhandled abort encountered in job %1", jb$V952S1)
+      msg$id = "@IdsMbrPdxDeniedClmPkey"; GoTo L$ERROR
+   End
+   If b$InErrorRef$V952S1 Or (job$V952S1$status <> DSJS.RUNOK And job$V952S1$status <> DSJS.RUNWARN) Then Goto L$V952S1$SKIPPED
+   cp$value = Lower(job$V952S1$status)
+   cp$value<2> = Lower(job$V952S1$userstatus)
+   dummy$ = DSCheckPointSetValue(DSJ.ME, h$V952S1$cp, cp$value)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0025\\Checkpointed run of job '%1'", jb$V952S1), "@IdsMbrPdxDeniedClmPkey")
+**************************************************
+L$V952S1$SKIPPED:
+   If b$Abandoning Then GoTo L$WAITFORJOB
+   GoSub L$V952S4$START
+   If b$V952S1skipping Then GoTo L$V952S5$RETURN$1
+   GoTo L$WAITFORJOB
+**************************************************
+L$V952S2$START:
+*** Activity "OptumIdsMbrPdxDeniedClmXfm": Initialize job
+   b$InErrorRef$V952S2 = b$InErrorRef
+   h$V952S2 = DSAttachJob("OptumIdsMbrPdxDeniedClmXfm", DSJ.ERRNONE)
+   If (Not(h$V952S2)) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", "OptumIdsMbrPdxDeniedClmXfm":@FM:DSGetLastErrorMsg())
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   If DSGetJobInfo(h$V952S2, DSJ.JOBMULTIINVOKABLE) Then
+      jb$V952S2 = "OptumIdsMbrPdxDeniedClmXfm":'.':"OptumIdsMbrPdxDeniedClmXfm"
+   End Else
+      jb$V952S2 = "OptumIdsMbrPdxDeniedClmXfm"
+   End
+   dummy$ = DSDetachJob(h$V952S2)
+   b$V952S2skipping = @False
+   h$V952S2$cp = "h$V952S2"
+   If DSCheckPointGetValue(DSJ.ME, h$V952S2$cp, cp$value) = DSJE.NOERROR Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0021\\Skipped run of job '%1' on restart", jb$V952S2), "@OptumIdsMbrPdxDeniedClmXfm")
+      job$V952S2$status = Raise(cp$value<1>)
+      job$V952S2$userstatus = Raise(cp$value<2>)
+      IdV952S2%%Result2%%6 = job$V952S2$userstatus
+      IdV952S2%%Result1%%7 = job$V952S2$status
+      IdV952S2%%Name%%8 = jb$V952S2
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0060\\%1 (JOB %2) skipped", "OptumIdsMbrPdxDeniedClmXfm":@FM:jb$V952S2))
+      b$V952S2skipping = @True
+      Goto L$V952S2$SKIPPED
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0057\\%1 (JOB %2) started", "OptumIdsMbrPdxDeniedClmXfm":@FM:jb$V952S2))
+   h$V952S2 = DSAttachJob(jb$V952S2, DSJ.ERRNONE)
+   If (Not(h$V952S2)) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", jb$V952S2:@FM:DSGetLastErrorMsg())
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   h$V952S2 = DSPrepareJob(h$V952S2)
+   If (Not(h$V952S2)) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0012\\Error calling DSPrepareJob(%1)<L>%2", jb$V952S2:@FM:DSGetLastErrorMsg())
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+L$V952S2$PREPARED:
+   p$V952S2$1 = ($IDSAcct)
+   err$code = DSSetParam(h$V952S2, "$IDSAcct", p$V952S2$1)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSAcct":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$2 = ($IDSDB)
+   err$code = DSSetParam(h$V952S2, "$IDSDB", p$V952S2$2)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$3 = ($IDSPW)
+   err$code = DSSetParam(h$V952S2, "$IDSPW", p$V952S2$3)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSPW":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$4 = ($APT_CONFIG_FILE)
+   err$code = DSSetParam(h$V952S2, "$APT_CONFIG_FILE", p$V952S2$4)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$APT_CONFIG_FILE":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$5 = ($FilePath)
+   err$code = DSSetParam(h$V952S2, "$FilePath", p$V952S2$5)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$FilePath":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$6 = ($IDSOwner)
+   err$code = DSSetParam(h$V952S2, "$IDSOwner", p$V952S2$6)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSOwner":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$7 = ($IDSDB2ArraySize)
+   err$code = DSSetParam(h$V952S2, "$IDSDB2ArraySize", p$V952S2$7)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB2ArraySize":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$8 = ($IDSDB2RecordCount)
+   err$code = DSSetParam(h$V952S2, "$IDSDB2RecordCount", p$V952S2$8)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB2RecordCount":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$9 = (IDSRunCycle)
+   err$code = DSSetParam(h$V952S2, "IDSRunCycle", p$V952S2$9)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "IDSRunCycle":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$10 = (SrcSysCd)
+   err$code = DSSetParam(h$V952S2, "SrcSysCd", p$V952S2$10)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "SrcSysCd":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$11 = (RunID)
+   err$code = DSSetParam(h$V952S2, "RunID", p$V952S2$11)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "RunID":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   p$V952S2$12 = (CurrDate)
+   err$code = DSSetParam(h$V952S2, "CurrDate", p$V952S2$12)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "CurrDate":@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   err$code = DSRunJob(h$V952S2, DSJ.RUNNORMAL)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0003\\Error calling DSRunJob(%1), code=%2[E]", jb$V952S2:@FM:err$code)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   handle$list<-1> = h$V952S2
+   id$list<-1> = "V952S2"
+   GoTo L$V952S8$RETURN$1
+**************************************************
+L$V952S2$FINISHED:
+   job$V952S2$status = DSGetJobInfo(h$V952S2, DSJ.JOBSTATUS)
+   job$V952S2$userstatus = DSGetJobInfo(h$V952S2, DSJ.USERSTATUS)
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0063\\%1 (JOB %2) finished, status=%3[E]", "OptumIdsMbrPdxDeniedClmXfm":@FM:jb$V952S2:@FM:job$V952S2$status))
+   IdV952S2%%Result2%%6 = job$V952S2$userstatus
+   IdV952S2%%Result1%%7 = job$V952S2$status
+   IdV952S2%%Name%%8 = jb$V952S2
+   If (job$V952S2$status <> DSJS.RUNOK) Then
+      Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0030\\Job %1 did not finish OK, status = '%2'", jb$V952S2:@FM:DSTranslateCode(job$V952S2$status)), "@OptumIdsMbrPdxDeniedClmXfm")
+   End
+   rpt$V952S2 = DSMakeJobReport(h$V952S2, 1, "CRLF")
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0004\\Report on job: %1<L>%2", jb$V952S2:@FM:rpt$V952S2), "@OptumIdsMbrPdxDeniedClmXfm")
+   dummy$ = DSDetachJob(h$V952S2)
+   If (job$V952S2$status <> DSJS.RUNOK And job$V952S2$status <> DSJS.RUNWARN And Not(b$Abandoning)) Then
+      err$source = "OptumIdsMbrPdxDeniedClmXfm"; err$number = 1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0024\\Unhandled abort encountered in job %1", jb$V952S2)
+      msg$id = "@OptumIdsMbrPdxDeniedClmXfm"; GoTo L$ERROR
+   End
+   If b$InErrorRef$V952S2 Or (job$V952S2$status <> DSJS.RUNOK And job$V952S2$status <> DSJS.RUNWARN) Then Goto L$V952S2$SKIPPED
+   cp$value = Lower(job$V952S2$status)
+   cp$value<2> = Lower(job$V952S2$userstatus)
+   dummy$ = DSCheckPointSetValue(DSJ.ME, h$V952S2$cp, cp$value)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0025\\Checkpointed run of job '%1'", jb$V952S2), "@OptumIdsMbrPdxDeniedClmXfm")
+**************************************************
+L$V952S2$SKIPPED:
+   If b$Abandoning Then GoTo L$WAITFORJOB
+   GoSub L$V952S6$START
+   If b$V952S2skipping Then GoTo L$V952S8$RETURN$1
+   GoTo L$WAITFORJOB
+**************************************************
+L$V952S3$START:
+*** Decision "If_1C"
+   b$V952S3else = @True
+   If (Count (ExclusionList, ";": "IdsMbrPdxDeniedTransFkey" :";") = 0) Then b$V952S3else = @False; GoTo L$V952S0$START
+L$V952S3$RETURN$1:
+   If b$V952S3else Then GoSub L$V952S7$START
+   GoTo L$V952S4$RETURN$1
+**************************************************
+L$V952S4$START:
+*** Sequencer "Or_1B": wait until inputs ready
+   seq$V952S4$status = 1
+   If seq$V952S4$count > 0 Then Return
+   seq$V952S4$count += 1
+   seq$V952S4$status = 2
+   GoTo L$V952S3$START
+L$V952S4$RETURN$1:
+   Return
+**************************************************
+L$V952S5$START:
+*** Decision "If_1B"
+   b$V952S5else = @True
+   If (Count (ExclusionList, ";": "IdsMbrPdxDeniedTransPkey" :";") = 0) Then b$V952S5else = @False; GoTo L$V952S1$START
+L$V952S5$RETURN$1:
+   If b$V952S5else Then GoSub L$V952S4$START
+   GoTo L$V952S6$RETURN$1
+**************************************************
+L$V952S6$START:
+*** Sequencer "Or_1A": wait until inputs ready
+   seq$V952S6$status = 1
+   If seq$V952S6$count > 0 Then Return
+   seq$V952S6$count += 1
+   seq$V952S6$status = 2
+   GoTo L$V952S5$START
+L$V952S6$RETURN$1:
+   Return
+**************************************************
+L$V952S7$START:
+*** Sequencer "Or_1C": wait until inputs ready
+   seq$V952S7$status = 1
+   If seq$V952S7$count > 0 Then Return
+   seq$V952S7$count += 1
+   seq$V952S7$status = 2
+   GoTo L$V953S1$START
+L$V952S7$RETURN$1:
+   Return
+**************************************************
+L$V952S8$START:
+*** Decision "If_1A"
+   b$V952S8else = @True
+   If (Count (ExclusionList, ";": "OptumIdsMbrPdxDeniedClmXfm" :";") = 0) Then b$V952S8else = @False; GoTo L$V952S2$START
+L$V952S8$RETURN$1:
+   If b$V952S8else Then GoSub L$V952S6$START
+   GoTo L$RETURN$1
+**************************************************
+L$V953S0$START:
+*** Sequencer "Or_1D": wait until inputs ready
+   seq$V953S0$status = 1
+   If seq$V953S0$count > 0 Then Return
+   seq$V953S0$count += 1
+   seq$V953S0$status = 2
+   GoSub L$V0S675$START
+   Return
+**************************************************
+L$V953S1$START:
+*** Decision "If_1D"
+   b$V953S1else = @True
+   If (Count (ExclusionList, ";": "IdsMbrPdxDeniedTransLoad" :";") = 0) Then b$V953S1else = @False; GoTo L$V953S3$START
+L$V953S1$RETURN$1:
+   If b$V953S1else Then GoSub L$V953S0$START
+   GoTo L$V952S7$RETURN$1
+**************************************************
+L$V953S3$START:
+*** Activity "IdsMbrPdxDeniedClmLoad": Initialize job
+   b$InErrorRef$V953S3 = b$InErrorRef
+   h$V953S3 = DSAttachJob("IdsMbrPdxDeniedClmLoad", DSJ.ERRNONE)
+   If (Not(h$V953S3)) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", "IdsMbrPdxDeniedClmLoad":@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   If DSGetJobInfo(h$V953S3, DSJ.JOBMULTIINVOKABLE) Then
+      jb$V953S3 = "IdsMbrPdxDeniedClmLoad":'.':"IdsMbrPdxDeniedClmLoad"
+   End Else
+      jb$V953S3 = "IdsMbrPdxDeniedClmLoad"
+   End
+   dummy$ = DSDetachJob(h$V953S3)
+   b$V953S3skipping = @False
+   h$V953S3$cp = "h$V953S3"
+   If DSCheckPointGetValue(DSJ.ME, h$V953S3$cp, cp$value) = DSJE.NOERROR Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0021\\Skipped run of job '%1' on restart", jb$V953S3), "@IdsMbrPdxDeniedClmLoad")
+      job$V953S3$status = Raise(cp$value<1>)
+      job$V953S3$userstatus = Raise(cp$value<2>)
+      IdV953S3%%Result2%%9 = job$V953S3$userstatus
+      IdV953S3%%Result1%%10 = job$V953S3$status
+      IdV953S3%%Name%%11 = jb$V953S3
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0060\\%1 (JOB %2) skipped", "IdsMbrPdxDeniedClmLoad":@FM:jb$V953S3))
+      b$V953S3skipping = @True
+      Goto L$V953S3$SKIPPED
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0057\\%1 (JOB %2) started", "IdsMbrPdxDeniedClmLoad":@FM:jb$V953S3))
+   h$V953S3 = DSAttachJob(jb$V953S3, DSJ.ERRNONE)
+   If (Not(h$V953S3)) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0001\\Error calling DSAttachJob(%1)<L>%2", jb$V953S3:@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   h$V953S3 = DSPrepareJob(h$V953S3)
+   If (Not(h$V953S3)) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0012\\Error calling DSPrepareJob(%1)<L>%2", jb$V953S3:@FM:DSGetLastErrorMsg())
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+L$V953S3$PREPARED:
+   p$V953S3$1 = ($FilePath)
+   err$code = DSSetParam(h$V953S3, "$FilePath", p$V953S3$1)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$FilePath":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$2 = ($IDSInstance)
+   err$code = DSSetParam(h$V953S3, "$IDSInstance", p$V953S3$2)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSInstance":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$3 = ($IDSAcct)
+   err$code = DSSetParam(h$V953S3, "$IDSAcct", p$V953S3$3)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSAcct":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$4 = ($IDSPW)
+   err$code = DSSetParam(h$V953S3, "$IDSPW", p$V953S3$4)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSPW":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$5 = ($IDSDB)
+   err$code = DSSetParam(h$V953S3, "$IDSDB", p$V953S3$5)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$6 = ($IDSOwner)
+   err$code = DSSetParam(h$V953S3, "$IDSOwner", p$V953S3$6)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSOwner":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$7 = ($IDSDB2ArraySize)
+   err$code = DSSetParam(h$V953S3, "$IDSDB2ArraySize", p$V953S3$7)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB2ArraySize":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$8 = ($IDSDB2RecordCount)
+   err$code = DSSetParam(h$V953S3, "$IDSDB2RecordCount", p$V953S3$8)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "$IDSDB2RecordCount":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$9 = (SrcSysCd)
+   err$code = DSSetParam(h$V953S3, "SrcSysCd", p$V953S3$9)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "SrcSysCd":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   p$V953S3$10 = (RunID)
+   err$code = DSSetParam(h$V953S3, "RunID", p$V953S3$10)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0002\\Error calling DSSetParam(%1), code=%2[E]", "RunID":@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   err$code = DSRunJob(h$V953S3, DSJ.RUNNORMAL)
+   If (err$code <> DSJE.NOERROR) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = -1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0003\\Error calling DSRunJob(%1), code=%2[E]", jb$V953S3:@FM:err$code)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   handle$list<-1> = h$V953S3
+   id$list<-1> = "V953S3"
+   GoTo L$V953S1$RETURN$1
+**************************************************
+L$V953S3$FINISHED:
+   job$V953S3$status = DSGetJobInfo(h$V953S3, DSJ.JOBSTATUS)
+   job$V953S3$userstatus = DSGetJobInfo(h$V953S3, DSJ.USERSTATUS)
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0063\\%1 (JOB %2) finished, status=%3[E]", "IdsMbrPdxDeniedClmLoad":@FM:jb$V953S3:@FM:job$V953S3$status))
+   IdV953S3%%Result2%%9 = job$V953S3$userstatus
+   IdV953S3%%Result1%%10 = job$V953S3$status
+   IdV953S3%%Name%%11 = jb$V953S3
+   If (job$V953S3$status <> DSJS.RUNOK) Then
+      Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0030\\Job %1 did not finish OK, status = '%2'", jb$V953S3:@FM:DSTranslateCode(job$V953S3$status)), "@IdsMbrPdxDeniedClmLoad")
+   End
+   rpt$V953S3 = DSMakeJobReport(h$V953S3, 1, "CRLF")
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0004\\Report on job: %1<L>%2", jb$V953S3:@FM:rpt$V953S3), "@IdsMbrPdxDeniedClmLoad")
+   dummy$ = DSDetachJob(h$V953S3)
+   If (job$V953S3$status <> DSJS.RUNOK And job$V953S3$status <> DSJS.RUNWARN And Not(b$Abandoning)) Then
+      err$source = "IdsMbrPdxDeniedClmLoad"; err$number = 1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0024\\Unhandled abort encountered in job %1", jb$V953S3)
+      msg$id = "@IdsMbrPdxDeniedClmLoad"; GoTo L$ERROR
+   End
+   If b$InErrorRef$V953S3 Or (job$V953S3$status <> DSJS.RUNOK And job$V953S3$status <> DSJS.RUNWARN) Then Goto L$V953S3$SKIPPED
+   cp$value = Lower(job$V953S3$status)
+   cp$value<2> = Lower(job$V953S3$userstatus)
+   dummy$ = DSCheckPointSetValue(DSJ.ME, h$V953S3$cp, cp$value)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0025\\Checkpointed run of job '%1'", jb$V953S3), "@IdsMbrPdxDeniedClmLoad")
+**************************************************
+L$V953S3$SKIPPED:
+   If b$Abandoning Then GoTo L$WAITFORJOB
+   GoSub L$V953S0$START
+   If b$V953S3skipping Then GoTo L$V953S1$RETURN$1
+   GoTo L$WAITFORJOB
+**************************************************
+L$V0S675$START:
+*** Sequencer "Sequencer_675": wait until inputs ready
+   seq$V0S675$status = 1
+   seq$V0S675$count += 1
+   If seq$V0S675$count < 1 Then Return
+   seq$V0S675$status = 2
+   GoTo L$V0S677$START
+L$V0S675$RETURN$1:
+   Return
+**************************************************
+L$V0S677$START:
+*** Activity "DeniedClaimsLandingFile": Execute command
+   x$V0S677$cp = "x$V0S677"
+   If DSCheckPointGetValue(DSJ.ME, x$V0S677$cp, cp$value) = DSJE.NOERROR Then
+   x$masked$cmd = "cd "
+   x$masked$output = ''
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0023\\Skipped execution of command '%1' on restart", x$masked$cmd), "@DeniedClaimsLandingFile")
+      x$V0S677 = Raise(cp$value<1>)
+      x$V0S677$output = Raise(cp$value<2>)
+      IdV0S677%%Result1%%12 = x$V0S677
+      IdV0S677%%Name%%13 = "cd "
+      IdV0S677%%Result2%%14 = x$V0S677$output
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0062\\%1 (COMMAND %2) skipped", "DeniedClaimsLandingFile":@FM:"cd "))
+      Goto L$V0S677$SKIPPED
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0059\\%1 (COMMAND %2) started", "DeniedClaimsLandingFile":@FM:"cd "))
+   p$V0S677$1 = ($FilePath:"/verified; mv -f ":SrcSysCd:"_DeniedClaims_Landing.dat.":RunID:"   processed/;    compress -f   processed/":SrcSysCd:"_DeniedClaims_Landing.dat.":RunID:" ")
+   x$cmd = "cd ":" ":p$V0S677$1
+   x$type = (If System(91) = 1 Then "NT" Else "UNIX")
+   Call DSExecute(x$type, x$cmd, x$V0S677$output, x$V0S677)
+   x$masked$cmd = x$cmd
+   x$masked$output = x$V0S677$output
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0007\\Executed: %1<L>Reply=%2<L>Output from command ====><L>%3", x$masked$cmd:@FM:x$V0S677:@FM:Lower(x$masked$output)), "@DeniedClaimsLandingFile")
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0064\\%1 finished, reply=%2", "DeniedClaimsLandingFile":@FM:x$V0S677))
+   IdV0S677%%Result1%%12 = x$V0S677
+   IdV0S677%%Name%%13 = "cd "
+   IdV0S677%%Result2%%14 = x$V0S677$output
+   If x$V0S677 <> 0 Then
+      Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0043\\Command %1 did not finish OK, reply = '%2'", "cd ":@FM:x$V0S677), "@DeniedClaimsLandingFile")
+   End
+   If (x$V0S677 <> 0) Then
+      err$source = "DeniedClaimsLandingFile"; err$number = 1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0044\\Unhandled failure (%1) encountered executing command %2", x$V0S677:@FM:"cd ")
+      msg$id = "@DeniedClaimsLandingFile"; GoTo L$ERROR
+   End
+   x$masked$cmd = "cd "
+   x$masked$output = ''
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+   If b$InErrorRef Or (x$V0S677 <> 0) Then Goto L$V0S677$SKIPPED
+   cp$value = Lower(x$V0S677)
+   cp$value<2> = Lower(x$V0S677$output)
+   dummy$ = DSCheckPointSetValue(DSJ.ME, x$V0S677$cp, cp$value)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0027\\Checkpointed execution of command '%1'", x$masked$cmd), "@DeniedClaimsLandingFile")
+**************************************************
+L$V0S677$SKIPPED:
+   GoTo L$V962S0$START
+L$V0S677$RETURN$1:
+   GoTo L$V0S675$RETURN$1
+**************************************************
+L$V962S0$START:
+*** Activity "DeniedPkeyFile": Execute command
+   x$V962S0$cp = "x$V962S0"
+   If DSCheckPointGetValue(DSJ.ME, x$V962S0$cp, cp$value) = DSJE.NOERROR Then
+   x$masked$cmd = "cd "
+   x$masked$output = ''
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0023\\Skipped execution of command '%1' on restart", x$masked$cmd), "@DeniedPkeyFile")
+      x$V962S0 = Raise(cp$value<1>)
+      x$V962S0$output = Raise(cp$value<2>)
+      IdV962S0%%Result1%%15 = x$V962S0
+      IdV962S0%%Name%%16 = "cd "
+      IdV962S0%%Result2%%17 = x$V962S0$output
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0062\\%1 (COMMAND %2) skipped", "DeniedPkeyFile":@FM:"cd "))
+      Goto L$V962S0$SKIPPED
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0059\\%1 (COMMAND %2) started", "DeniedPkeyFile":@FM:"cd "))
+   p$V962S0$1 = ($FilePath:"/key/; mv -f MBR_PDX_DENIED_TRANS.":SrcSysCd:".pkey.":RunID:".dat processed/; compress -f   processed/MBR_PDX_DENIED_TRANS.":SrcSysCd:".pkey.":RunID:".dat")
+   x$cmd = "cd ":" ":p$V962S0$1
+   x$type = (If System(91) = 1 Then "NT" Else "UNIX")
+   Call DSExecute(x$type, x$cmd, x$V962S0$output, x$V962S0)
+   x$masked$cmd = x$cmd
+   x$masked$output = x$V962S0$output
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0007\\Executed: %1<L>Reply=%2<L>Output from command ====><L>%3", x$masked$cmd:@FM:x$V962S0:@FM:Lower(x$masked$output)), "@DeniedPkeyFile")
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0064\\%1 finished, reply=%2", "DeniedPkeyFile":@FM:x$V962S0))
+   IdV962S0%%Result1%%15 = x$V962S0
+   IdV962S0%%Name%%16 = "cd "
+   IdV962S0%%Result2%%17 = x$V962S0$output
+   If x$V962S0 <> 0 Then
+      Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0043\\Command %1 did not finish OK, reply = '%2'", "cd ":@FM:x$V962S0), "@DeniedPkeyFile")
+   End
+   If (x$V962S0 <> 0) Then
+      err$source = "DeniedPkeyFile"; err$number = 1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0044\\Unhandled failure (%1) encountered executing command %2", x$V962S0:@FM:"cd ")
+      msg$id = "@DeniedPkeyFile"; GoTo L$ERROR
+   End
+   x$masked$cmd = "cd "
+   x$masked$output = ''
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+   If b$InErrorRef Or (x$V962S0 <> 0) Then Goto L$V962S0$SKIPPED
+   cp$value = Lower(x$V962S0)
+   cp$value<2> = Lower(x$V962S0$output)
+   dummy$ = DSCheckPointSetValue(DSJ.ME, x$V962S0$cp, cp$value)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0027\\Checkpointed execution of command '%1'", x$masked$cmd), "@DeniedPkeyFile")
+**************************************************
+L$V962S0$SKIPPED:
+   GoTo L$V963S0$START
+L$V962S0$RETURN$1:
+   GoTo L$V0S677$RETURN$1
+**************************************************
+L$V963S0$START:
+*** Activity "DeniedLoadile": Execute command
+   x$V963S0$cp = "x$V963S0"
+   If DSCheckPointGetValue(DSJ.ME, x$V963S0$cp, cp$value) = DSJE.NOERROR Then
+   x$masked$cmd = "cd "
+   x$masked$output = ''
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0023\\Skipped execution of command '%1' on restart", x$masked$cmd), "@DeniedLoadile")
+      x$V963S0 = Raise(cp$value<1>)
+      x$V963S0$output = Raise(cp$value<2>)
+      IdV963S0%%Result1%%18 = x$V963S0
+      IdV963S0%%Name%%19 = "cd "
+      IdV963S0%%Result2%%20 = x$V963S0$output
+      summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0062\\%1 (COMMAND %2) skipped", "DeniedLoadile":@FM:"cd "))
+      Goto L$V963S0$SKIPPED
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0059\\%1 (COMMAND %2) started", "DeniedLoadile":@FM:"cd "))
+   p$V963S0$1 = ($FilePath:"/load/; mv -f MBR_PDX_DENIED_TRANS.":SrcSysCd:".":RunID:".dat processed/; compress -f   processed/MBR_PDX_DENIED_TRANS.":SrcSysCd:".":RunID:".dat")
+   x$cmd = "cd ":" ":p$V963S0$1
+   x$type = (If System(91) = 1 Then "NT" Else "UNIX")
+   Call DSExecute(x$type, x$cmd, x$V963S0$output, x$V963S0)
+   x$masked$cmd = x$cmd
+   x$masked$output = x$V963S0$output
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0007\\Executed: %1<L>Reply=%2<L>Output from command ====><L>%3", x$masked$cmd:@FM:x$V963S0:@FM:Lower(x$masked$output)), "@DeniedLoadile")
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0064\\%1 finished, reply=%2", "DeniedLoadile":@FM:x$V963S0))
+   IdV963S0%%Result1%%18 = x$V963S0
+   IdV963S0%%Name%%19 = "cd "
+   IdV963S0%%Result2%%20 = x$V963S0$output
+   If x$V963S0 <> 0 Then
+      Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0043\\Command %1 did not finish OK, reply = '%2'", "cd ":@FM:x$V963S0), "@DeniedLoadile")
+   End
+   If (x$V963S0 <> 0) Then
+      err$source = "DeniedLoadile"; err$number = 1
+      msg$ = DSMakeMsg("DSTAGE_JSG_M_0044\\Unhandled failure (%1) encountered executing command %2", x$V963S0:@FM:"cd ")
+      msg$id = "@DeniedLoadile"; GoTo L$ERROR
+   End
+   x$masked$cmd = "cd "
+   x$masked$output = ''
+   Call DSMaskExecArgs(x$masked$cmd, x$masked$output)
+   If b$InErrorRef Or (x$V963S0 <> 0) Then Goto L$V963S0$SKIPPED
+   cp$value = Lower(x$V963S0)
+   cp$value<2> = Lower(x$V963S0$output)
+   dummy$ = DSCheckPointSetValue(DSJ.ME, x$V963S0$cp, cp$value)
+   Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0027\\Checkpointed execution of command '%1'", x$masked$cmd), "@DeniedLoadile")
+**************************************************
+L$V963S0$SKIPPED:
+   GoTo L$V962S0$RETURN$1
+**************************************************
+L$WAITFORJOB:
+   If handle$list = "" Then GoTo L$FINISH
+   handle$ = DSWaitForJob(handle$list)
+   If handle$ = 0 Then handle$ = handle$list<1>
+   Locate handle$ In handle$list Setting index$ Then
+      id$ = id$list<index$>
+      Del id$list<index$>; Del handle$list<index$>
+      b$Abandoning = abort$list<index$>; Del abort$list<index$>
+      Begin Case
+      Case id$ = "V952S0"
+         GoTo L$V952S0$FINISHED
+      Case id$ = "V952S1"
+         GoTo L$V952S1$FINISHED
+      Case id$ = "V952S2"
+         GoTo L$V952S2$FINISHED
+      Case id$ = "V953S3"
+         GoTo L$V953S3$FINISHED
+      End Case
+   End
+* Error if fall though
+   handle$list = ""
+   err$source = "@Coordinator"; err$number = -1
+   msg$ = DSMakeMsg("DSTAGE_JSG_M_0008\\Error calling DSWaitForJob(), code=%1[E]", handle$)
+   msg$id = "@Coordinator"; GoTo L$ERROR
+**************************************************
+L$ERROR:
+   Call DSLogWarn(DSMakeMsg("DSTAGE_JSG_M_0009\\Controller problem: %1", msg$), msg$id)
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0052\\Exception raised: %1", msg$id:", ":msg$))
+   If Not(b$InErrorRef) Then
+      dummy$ = DSCheckPointSetValue(DSJ.ME, "!", DSMakeMsg("DSTAGE_JSG_M_0031\\Failed at: %1, Reason=%2", err$source:@FM:msg$))
+   End
+   abort$list = Ifs(handle$list, Str(1:@FM, DCount(handle$list, @FM)), "")
+   b$Abandoning = @True
+   GoTo L$WAITFORJOB
+L$ABORT:
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0055\\Sequence failed (restartable)", ""))
+   x$masked$summary = summary$
+   Call DSMaskExecArgs(x$masked$summary, '')
+   Call DSLogInfo(x$masked$summary, "@Coordinator")
+   Call DSLogFatal(DSMakeMsg("DSTAGE_JSG_M_0014\\Sequence job (restartable) will abort due to previous unrecoverable errors", ""), "@Coordinator")
+**************************************************
+L$FINISH:
+   If b$Abandoning Then GoTo L$ABORT
+*** At successful exit remove checkpoint record
+   If Not(b$InErrorRef) And DSCheckPointExists(DSJ.ME, cp$dtm) Then
+      dummy$ = DSCheckPointDelete(DSJ.ME)
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0018\\Removed checkpoint record at successful completion of sequence", ""), "@Coordinator")
+   End
+   If (seq$V952S4$status = 1) Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0072\\Note: Sequencer '%1' was entered, but never exited", "Or_1B"), "@Coordinator")
+   End
+   If (seq$V952S6$status = 1) Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0072\\Note: Sequencer '%1' was entered, but never exited", "Or_1A"), "@Coordinator")
+   End
+   If (seq$V952S7$status = 1) Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0072\\Note: Sequencer '%1' was entered, but never exited", "Or_1C"), "@Coordinator")
+   End
+   If (seq$V953S0$status = 1) Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0072\\Note: Sequencer '%1' was entered, but never exited", "Or_1D"), "@Coordinator")
+   End
+   If (seq$V0S675$status = 1) Then
+      Call DSLogInfo(DSMakeMsg("DSTAGE_JSG_M_0072\\Note: Sequencer '%1' was entered, but never exited", "Sequencer_675"), "@Coordinator")
+   End
+   summary$<1,-1> = Time$$:Convert(@VM, " ", DSMakeMsg("DSTAGE_JSG_M_0054\\Sequence finished OK", ""))
+   x$masked$summary = summary$
+   Call DSMaskExecArgs(x$masked$summary, '')
+   Call DSLogInfo(x$masked$summary, "@Coordinator")
+   L$EXIT: Return To L$EXIT
+ 
+
+=+=+=+=
+      ControlAfterSubr "0"
+      Parameters "CParameters"
+      BEGIN DSSUBRECORD
+         Name "$APT_CONFIG_FILE"
+         Prompt "Configuration file"
+         Default "$PROJDEF"
+         HelpTxt "The Parallel job configuration file."
+         ParamType "4"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSInstance"
+         Prompt "IDS Instance"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDSN"
+         Prompt "IDS ODBC DSN"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSAcct"
+         Prompt "IDS Account"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB"
+         Prompt "IDS Database"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSPW"
+         Prompt "IDS Password"
+         ParamType "1"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSOwner"
+         Prompt "IDS Owner"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$FilePath"
+         Prompt "File Path"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SrcSysCd"
+         Prompt "SrcSysCd"
+         Default "OPTUMRX"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RunID"
+         Prompt "RunID"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "IDSRunCycle"
+         Prompt "IDSRunCycle"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2ArraySize"
+         Prompt "IDS DB2 Array Size for Load"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2RecordCount"
+         Prompt "IDS DB2 Record Count for Load"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ExclusionList"
+         Prompt "ExclusionList"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "PrefixFkeyFailedFileName"
+         Prompt "PrefixFkeyFailedFileName"
+         Default "PrefixFkeyFailedFileName"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "CurrDate"
+         Prompt "CurrDate"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      MetaBag "CMetaProperty"
+      BEGIN DSSUBRECORD
+         Owner "APT"
+         Name "AdvancedRuntimeOptions"
+         Value "#DSProjectARTOptions#"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Owner "APT"
+         Name "SequenceUseGridProperties"
+         Value "0"
+      END DSSUBRECORD
+      NULLIndicatorPosition "0"
+      Dependencies "CJobDepend"
+      BEGIN DSSUBRECORD
+         Name "IdsMbrPdxDeniedClmFkey"
+         Type "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "IdsMbrPdxDeniedClmPkey"
+         Type "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "OptumIdsMbrPdxDeniedClmXfm"
+         Type "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "IdsMbrPdxDeniedClmLoad"
+         Type "0"
+      END DSSUBRECORD
+      IsTemplate "0"
+      NLSLocale ",,,,"
+      JobType "2"
+      Category "\\Jobs\\DataWarehouse\\Claim\\Seq"
+      CenturyBreakYear "30"
+      NextAliasID "2"
+      ParameterFileDDName "DD00001"
+      ReservedWordCheck "1"
+      TransactionSize "0"
+      ValidationStatus "0"
+      Uploadable "0"
+      PgmCustomizationFlag "0"
+      JobReportFlag "0"
+      AllowMultipleInvocations "0"
+      JobSeqCodeGenOpts "checkpoints,logjobreports,handleaborts,logjoberrors"
+      Act2ActOverideDefaults "0"
+      Act2ActEnableRowBuffer "0"
+      Act2ActUseIPC "0"
+      Act2ActBufferSize "0"
+      Act2ActIPCTimeout "0"
+      ExpressionSemanticCheckFlag "0"
+      TraceOption "0"
+      EnableCacheSharing "0"
+      RuntimeColumnPropagation "0"
+      RelStagesInJobStatus "-1"
+      WebServiceEnabled "0"
+      MFProcessMetaData "0"
+      MFProcessMetaDataXMLFileExchangeMethod "0"
+      IMSProgType "0"
+      CopyLibPrefix "ARDT"
+      RecordPerformanceResults "0"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0"
+      OLEType "CContainerView"
+      Readonly "0"
+      Name "Job"
+      NextID "1"
+      IsTopLevel "0"
+      StageList "V0A44|V949A0|V952S0|V952S1|V952S2|V952S3|V952S4|V952S5|V952S6|V952S7|V952S8|V953S0|V953S1|V953S3|V0S675|V0S677|V962S0|V963S0|V0A681"
+      StageXPos "394|391|930|578|210|820|703|449|335|1058|95|1474|1183|1318|1472|1269|1047|825|863"
+      StageYPos "15|220|370|368|367|326|324|326|324|323|321|326|324|373|551|540|540|539|461"
+      StageTypes "ID_PALETTEANNOTATION|ID_PALETTEANNOTATION|CJSJobActivity|CJSJobActivity|CJSJobActivity|CJSCondition|CJSSequencer|CJSCondition|CJSSequencer|CJSSequencer|CJSCondition|CJSSequencer|CJSCondition|CJSJobActivity|CJSSequencer|CJSExecCmdActivity|CJSExecCmdActivity|CJSExecCmdActivity|ID_PALETTEANNOTATION"
+      NextStageID "682"
+      SnapToGrid "2"
+      GridLines "0"
+      ZoomValue "80"
+      StageXSize "602|570|48|48|48|45|46|41|45|45|45|45|46|48|48|42|51|51|551"
+      StageYSize "159|45|48|48|48|90|94|89|90|99|95|100|98|48|48|68|68|68|63"
+      ContainerViewSizing "-1030 0330 0262 0874 0000 0001 0000 0000"
+      StageNames " | |IdsMbrPdxDeniedClaimsFkey|IdsMbrPdxDeniedClmPkey|OptumIdsMbrPdxDeniedClmXfm|If_1C|Or_1B|If_1B|Or_1A|Or_1C|If_1A|Or_1D|If_1D|IdsMbrPdxDeniedClmLoad|Sequencer_675|DeniedClaimsLandingFile|DeniedPkeyFile|DeniedLoadile| "
+      StageTypeIDs " | |CJobActivity|CJobActivity|CJobActivity|CCondition|CSequencer|CCondition|CSequencer|CSequencer|CCondition|CSequencer|CCondition|CJobActivity|CSequencer|CExecCommandActivity|CExecCommandActivity|CExecCommandActivity| "
+      LinkNames " | |OK|OK|OK|Run,Skip|Next|Skip,Run|Next|Next|Run,Skip|to_mv_files|Run,Skip|OK|mvLandingfile|mvPkeyfile|mvLoadfile| | "
+      LinkHasMetaDatas " | |False|False|False|False,False|False|False,False|False|False|False,False|False|False,False|False|False|False|False| | "
+      LinkTypes " | |1|1|1|1,1|1|1,1|1|1|1,1|1|1,1|1|1|1|1| | "
+      LinkNamePositionXs " | |993|633|274|865,976|751|619,505|386|1130|142,274|1496|1253,1329|1394|1389|1155|967| | "
+      LinkNamePositionYs " | |380|378|391|379,348|371|348,392|355|358|391,331|486|397,335|384|561|574|560| | "
+      TargetStageIDs " | |V952S7|V952S4|V952S6|V952S0,V952S7|V952S3|V952S4,V952S1|V952S5|V953S1|V952S2,V952S6|V0S675|V953S3,V953S0|V953S0|V0S677|V962S0|V963S0| | "
+      SourceStageEffectiveExecutionModes " | |0|0|0|0,0|0|0,0|0|0|0,0|0|0,0|0|0|0|0| | "
+      SourceStageRuntimeExecutionModes " | |0|0|0|0,0|0|0,0|0|0|0,0|0|0,0|0|0|0|0| | "
+      TargetStageEffectiveExecutionModes " | |0|0|0|0,0|0|0,0|0|0|0,0|0|0,0|0|0|0|0| | "
+      TargetStageRuntimeExecutionModes " | |0|0|0|0,0|0|0,0|0|0|0,0|0|0,0|0|0|0|0| | "
+      LinkIsSingleOperatorLookup " | |False|False|False|False,False|False|False,False|False|False|False,False|False|False,False|False|False|False|False| | "
+      LinkIsSortSequential " | |False|False|False|False,False|False|False,False|False|False|False,False|False|False,False|False|False|False|False| | "
+      LinkSortMode " | |0|0|0|0,0|0|0,0|0|0|0,0|0|0,0|0|0|0|0| | "
+      LinkPartColMode " | |0|0|0|0,0|0|0,0|0|0|0,0|0|0,0|0|0|0|0| | "
+      LinkSourcePinIDs " | |V952S0P2|V952S1P2|V952S2P2|V952S3P2,V952S3P3|V952S4P3|V952S5P2,V952S5P3|V952S6P3|V952S7P4|V952S8P1,V952S8P2|V953S0P6|V953S1P2,V953S1P3|V953S3P2|V0S675P2|V0S677P2|V962S0P2| | "
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0A44"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V0A44"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText =+=+=+=
+OPTUM MBR PDX DENIED PROCESSING
+Project: 6131 - PBM REPLACEMENT
+Extract OptumRX  data from file and load IDS tables.
+=+=+=+=
+      TextFont "Arial\\16\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "16777088"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0A681"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V0A681"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText "Moved the Denied .dat files to /processed directory and compress the files"
+      TextFont "MS Shell Dlg\\10\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "12713983"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S675"
+      OLEType "CJSSequencer"
+      Readonly "0"
+      Name "Sequencer_675"
+      NextID "3"
+      InputPins "V0S675P1"
+      OutputPins "V0S675P2"
+      SequencerType "0"
+      StageType "CSequencer"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S675P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "to_mv_files"
+      Partner "V953S0|V953S0P6"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S675P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "mvLandingfile"
+      Partner "V0S677|V0S677P1"
+      ConditionType "0"
+      LeftTextPos "1389"
+      TopTextPos "561"
+      SourceID "V0S675"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S677"
+      OLEType "CJSExecCmdActivity"
+      Readonly "0"
+      Name "DeniedClaimsLandingFile"
+      NextID "3"
+      InputPins "V0S677P1"
+      OutputPins "V0S677P2"
+      CmdType "0"
+      Path "cd "
+      Parameters "#$FilePath#/verified; mv -f #SrcSysCd#_DeniedClaims_Landing.dat.#RunID#   processed/;    compress -f   processed/#SrcSysCd#_DeniedClaims_Landing.dat.#RunID# "
+      CheckPoint "0"
+      StageType "CExecCommandActivity"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S677P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "mvLandingfile"
+      Partner "V0S675|V0S675P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S677P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "mvPkeyfile"
+      Partner "V962S0|V962S0P1"
+      ConditionType "0"
+      LeftTextPos "1155"
+      TopTextPos "574"
+      SourceID "V0S675"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V949A0"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V949A0"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText "Transform and load OptumRX data"
+      TextFont "Microsoft Sans Serif\\10\\0\\0\\0\\700\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "12713983"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S0"
+      OLEType "CJSJobActivity"
+      Readonly "0"
+      Name "IdsMbrPdxDeniedClaimsFkey"
+      NextID "3"
+      InputPins "V952S0P1"
+      OutputPins "V952S0P2"
+      JobType "0"
+      ExecutionType "1"
+      Jobname "IdsMbrPdxDeniedClmFkey"
+      ParameterValues "CParamValues"
+      BEGIN DSSUBRECORD
+         Name "$FilePath"
+         Description "$FilePath"
+         ValueType "4"
+         DisplayValue "$FilePath"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$APT_CONFIG_FILE"
+         Description "$APT_CONFIG_FILE"
+         ValueType "4"
+         DisplayValue "$APT_CONFIG_FILE"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SrcSysCd"
+         Description "SrcSysCd"
+         ValueType "4"
+         DisplayValue "SrcSysCd"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "IDSRunCycle"
+         Description "IDSRunCycle"
+         ValueType "4"
+         DisplayValue "IDSRunCycle"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB"
+         Description "$IDSDB"
+         ValueType "4"
+         DisplayValue "$IDSDB"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSAcct"
+         Description "$IDSAcct"
+         ValueType "4"
+         DisplayValue "$IDSAcct"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSOwner"
+         Description "$IDSOwner"
+         ValueType "4"
+         DisplayValue "$IDSOwner"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSPW"
+         Description "$IDSPW"
+         ValueType "4"
+         DisplayValue "$IDSPW"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RunID"
+         Description "RunID"
+         ValueType "4"
+         DisplayValue "RunID"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "PrefixFkeyFailedFileName"
+         Description "PrefixFkeyFailedFileName"
+         ValueType "4"
+         DisplayValue "PrefixFkeyFailedFileName"
+      END DSSUBRECORD
+      CheckPoint "0"
+      StageType "CJobActivity"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S0P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Run"
+      Partner "V952S3|V952S3P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S0P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "OK"
+      Partner "V952S7|V952S7P1"
+      ConditionType "0"
+      LeftTextPos "993"
+      TopTextPos "380"
+      SourceID "V0S323"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S1"
+      OLEType "CJSJobActivity"
+      Readonly "0"
+      Name "IdsMbrPdxDeniedClmPkey"
+      NextID "3"
+      InputPins "V952S1P1"
+      OutputPins "V952S1P2"
+      JobType "0"
+      ExecutionType "1"
+      Jobname "IdsMbrPdxDeniedClmPkey"
+      ParameterValues "CParamValues"
+      BEGIN DSSUBRECORD
+         Name "$FilePath"
+         Description "$FilePath"
+         ValueType "4"
+         DisplayValue "$FilePath"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$APT_CONFIG_FILE"
+         Description "$APT_CONFIG_FILE"
+         ValueType "4"
+         DisplayValue "$APT_CONFIG_FILE"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB"
+         Description "$IDSDB"
+         ValueType "4"
+         DisplayValue "$IDSDB"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSOwner"
+         Description "$IDSOwner"
+         ValueType "4"
+         DisplayValue "$IDSOwner"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSAcct"
+         Description "$IDSAcct"
+         ValueType "4"
+         DisplayValue "$IDSAcct"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSPW"
+         Description "$IDSPW"
+         ValueType "4"
+         DisplayValue "$IDSPW"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "IDSRunCycle"
+         Description "IDSRunCycle"
+         ValueType "4"
+         DisplayValue "IDSRunCycle"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SrcSysCd"
+         Description "SrcSysCd"
+         ValueType "4"
+         DisplayValue "SrcSysCd"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2ArraySize"
+         Description "$IDSDB2ArraySize"
+         ValueType "4"
+         DisplayValue "$IDSDB2ArraySize"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2RecordCount"
+         Description "$IDSDB2RecordCount"
+         ValueType "4"
+         DisplayValue "$IDSDB2RecordCount"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RunID"
+         Description "RunID"
+         ValueType "4"
+         DisplayValue "RunID"
+      END DSSUBRECORD
+      CheckPoint "0"
+      StageType "CJobActivity"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S1P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Run"
+      Partner "V952S5|V952S5P3"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S1P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "OK"
+      Partner "V952S4|V952S4P2"
+      ConditionType "0"
+      LeftTextPos "633"
+      TopTextPos "378"
+      SourceID "V0S320"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S2"
+      OLEType "CJSJobActivity"
+      Readonly "0"
+      Name "OptumIdsMbrPdxDeniedClmXfm"
+      NextID "3"
+      InputPins "V952S2P1"
+      OutputPins "V952S2P2"
+      JobType "0"
+      ExecutionType "1"
+      Jobname "OptumIdsMbrPdxDeniedClmXfm"
+      ParameterValues "CParamValues"
+      BEGIN DSSUBRECORD
+         Name "$IDSAcct"
+         Description "$IDSAcct"
+         ValueType "4"
+         DisplayValue "$IDSAcct"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB"
+         Description "$IDSDB"
+         ValueType "4"
+         DisplayValue "$IDSDB"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSPW"
+         Description "$IDSPW"
+         ValueType "4"
+         DisplayValue "$IDSPW"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$APT_CONFIG_FILE"
+         Description "$APT_CONFIG_FILE"
+         ValueType "4"
+         DisplayValue "$APT_CONFIG_FILE"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$FilePath"
+         Description "$FilePath"
+         ValueType "4"
+         DisplayValue "$FilePath"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSOwner"
+         Description "$IDSOwner"
+         ValueType "4"
+         DisplayValue "$IDSOwner"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2ArraySize"
+         Description "$IDSDB2ArraySize"
+         ValueType "4"
+         DisplayValue "$IDSDB2ArraySize"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2RecordCount"
+         Description "$IDSDB2RecordCount"
+         ValueType "4"
+         DisplayValue "$IDSDB2RecordCount"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "IDSRunCycle"
+         Description "IDSRunCycle"
+         ValueType "4"
+         DisplayValue "IDSRunCycle"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SrcSysCd"
+         Description "SrcSysCd"
+         ValueType "4"
+         DisplayValue "SrcSysCd"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RunID"
+         Description "RunID"
+         ValueType "4"
+         DisplayValue "RunID"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "CurrDate"
+         Description "CurrDate"
+         ValueType "4"
+         DisplayValue "CurrDate"
+      END DSSUBRECORD
+      CheckPoint "0"
+      StageType "CJobActivity"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S2P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Run"
+      Partner "V952S8|V952S8P1"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S2P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "OK"
+      Partner "V952S6|V952S6P1"
+      ConditionType "0"
+      TriggerExpression "N/A"
+      LeftTextPos "274"
+      TopTextPos "391"
+      SourceID "V0S0"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S3"
+      OLEType "CJSCondition"
+      Readonly "0"
+      Name "If_1C"
+      NextID "4"
+      InputPins "V952S3P1"
+      OutputPins "V952S3P2|V952S3P3"
+      ConditionType "0"
+      StageType "CCondition"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S3P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Next"
+      Partner "V952S4|V952S4P3"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S3P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Run"
+      Partner "V952S0|V952S0P1"
+      ConditionType "6"
+      TriggerExpression "Count (ExclusionList, \";\": \"IdsMbrPdxDeniedTransFkey\" :\";\") = 0"
+      LeftTextPos "865"
+      TopTextPos "379"
+      SourceID "V0S320"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S3P3"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V952S7|V952S7P2"
+      ConditionType "1"
+      TriggerExpression "N/A"
+      LeftTextPos "976"
+      TopTextPos "348"
+      SourceID "V0S375"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S4"
+      OLEType "CJSSequencer"
+      Readonly "0"
+      Name "Or_1B"
+      NextID "4"
+      InputPins "V952S4P1|V952S4P2"
+      OutputPins "V952S4P3"
+      SequencerType "1"
+      StageType "CSequencer"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S4P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V952S5|V952S5P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S4P2"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "OK"
+      Partner "V952S1|V952S1P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S4P3"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Next"
+      Partner "V952S3|V952S3P1"
+      ConditionType "0"
+      LeftTextPos "751"
+      TopTextPos "371"
+      SourceID "V0S369"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S5"
+      OLEType "CJSCondition"
+      Readonly "0"
+      Name "If_1B"
+      NextID "4"
+      InputPins "V952S5P1"
+      OutputPins "V952S5P2|V952S5P3"
+      ConditionType "0"
+      StageType "CCondition"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S5P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Next"
+      Partner "V952S6|V952S6P3"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S5P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V952S4|V952S4P1"
+      ConditionType "1"
+      TriggerExpression "N/A"
+      LeftTextPos "619"
+      TopTextPos "348"
+      SourceID "V0S367"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S5P3"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Run"
+      Partner "V952S1|V952S1P1"
+      ConditionType "6"
+      TriggerExpression "Count (ExclusionList, \";\": \"IdsMbrPdxDeniedTransPkey\" :\";\") = 0"
+      LeftTextPos "505"
+      TopTextPos "392"
+      SourceID "V0S367"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S6"
+      OLEType "CJSSequencer"
+      Readonly "0"
+      Name "Or_1A"
+      NextID "4"
+      InputPins "V952S6P1|V952S6P2"
+      OutputPins "V952S6P3"
+      SequencerType "1"
+      StageType "CSequencer"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S6P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "OK"
+      Partner "V952S2|V952S2P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S6P2"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V952S8|V952S8P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S6P3"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Next"
+      Partner "V952S5|V952S5P1"
+      ConditionType "0"
+      LeftTextPos "386"
+      TopTextPos "355"
+      SourceID "V0S366"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S7"
+      OLEType "CJSSequencer"
+      Readonly "0"
+      Name "Or_1C"
+      NextID "5"
+      InputPins "V952S7P1|V952S7P2"
+      OutputPins "V952S7P4"
+      SequencerType "1"
+      StageType "CSequencer"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S7P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "OK"
+      Partner "V952S0|V952S0P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S7P2"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V952S3|V952S3P3"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S7P4"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Next"
+      Partner "V953S1|V953S1P1"
+      ConditionType "0"
+      LeftTextPos "1130"
+      TopTextPos "358"
+      SourceID "V0S369"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S8"
+      OLEType "CJSCondition"
+      Readonly "0"
+      Name "If_1A"
+      NextID "3"
+      OutputPins "V952S8P1|V952S8P2"
+      ConditionType "0"
+      StageType "CCondition"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S8P1"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Run"
+      Partner "V952S2|V952S2P1"
+      ConditionType "6"
+      TriggerExpression "Count (ExclusionList, \";\": \"OptumIdsMbrPdxDeniedClmXfm\" :\";\") = 0"
+      LeftTextPos "142"
+      TopTextPos "391"
+      SourceID "V0S92"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V952S8P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V952S6|V952S6P2"
+      ConditionType "1"
+      TriggerExpression "N/A"
+      LeftTextPos "274"
+      TopTextPos "331"
+      SourceID "V0S92"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S0"
+      OLEType "CJSSequencer"
+      Readonly "0"
+      Name "Or_1D"
+      NextID "7"
+      InputPins "V953S0P1|V953S0P2"
+      OutputPins "V953S0P6"
+      SequencerType "1"
+      StageType "CSequencer"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S0P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "OK"
+      Partner "V953S3|V953S3P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S0P2"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V953S1|V953S1P3"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S0P6"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "to_mv_files"
+      Partner "V0S675|V0S675P1"
+      ConditionType "0"
+      LeftTextPos "1496"
+      TopTextPos "486"
+      SourceID "V953S0"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S1"
+      OLEType "CJSCondition"
+      Readonly "0"
+      Name "If_1D"
+      NextID "4"
+      InputPins "V953S1P1"
+      OutputPins "V953S1P2|V953S1P3"
+      ConditionType "0"
+      StageType "CCondition"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S1P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Next"
+      Partner "V952S7|V952S7P4"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S1P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Run"
+      Partner "V953S3|V953S3P1"
+      ConditionType "6"
+      TriggerExpression "Count (ExclusionList, \";\": \"IdsMbrPdxDeniedTransLoad\" :\";\") = 0"
+      LeftTextPos "1253"
+      TopTextPos "397"
+      SourceID "V0S320"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S1P3"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "Skip"
+      Partner "V953S0|V953S0P2"
+      ConditionType "1"
+      TriggerExpression "N/A"
+      LeftTextPos "1329"
+      TopTextPos "335"
+      SourceID "V0S375"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S3"
+      OLEType "CJSJobActivity"
+      Readonly "0"
+      Name "IdsMbrPdxDeniedClmLoad"
+      NextID "3"
+      InputPins "V953S3P1"
+      OutputPins "V953S3P2"
+      JobType "0"
+      ExecutionType "1"
+      Jobname "IdsMbrPdxDeniedClmLoad"
+      ParameterValues "CParamValues"
+      BEGIN DSSUBRECORD
+         Name "$FilePath"
+         Description "$FilePath"
+         ValueType "4"
+         DisplayValue "$FilePath"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSInstance"
+         Description "$IDSInstance"
+         ValueType "4"
+         DisplayValue "$IDSInstance"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSAcct"
+         Description "$IDSAcct"
+         ValueType "4"
+         DisplayValue "$IDSAcct"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSPW"
+         Description "$IDSPW"
+         ValueType "4"
+         DisplayValue "$IDSPW"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB"
+         Description "$IDSDB"
+         ValueType "4"
+         DisplayValue "$IDSDB"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSOwner"
+         Description "$IDSOwner"
+         ValueType "4"
+         DisplayValue "$IDSOwner"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2ArraySize"
+         Description "$IDSDB2ArraySize"
+         ValueType "4"
+         DisplayValue "$IDSDB2ArraySize"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB2RecordCount"
+         Description "$IDSDB2RecordCount"
+         ValueType "4"
+         DisplayValue "$IDSDB2RecordCount"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SrcSysCd"
+         Description "SrcSysCd"
+         ValueType "4"
+         DisplayValue "SrcSysCd"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RunID"
+         Description "RunID"
+         ValueType "4"
+         DisplayValue "RunID"
+      END DSSUBRECORD
+      CheckPoint "0"
+      StageType "CJobActivity"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S3P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "Run"
+      Partner "V953S1|V953S1P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V953S3P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "OK"
+      Partner "V953S0|V953S0P1"
+      ConditionType "0"
+      LeftTextPos "1394"
+      TopTextPos "384"
+      SourceID "V0S323"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V962S0"
+      OLEType "CJSExecCmdActivity"
+      Readonly "0"
+      Name "DeniedPkeyFile"
+      NextID "3"
+      InputPins "V962S0P1"
+      OutputPins "V962S0P2"
+      CmdType "0"
+      Path "cd "
+      Parameters "#$FilePath#/key/; mv -f MBR_PDX_DENIED_TRANS.#SrcSysCd#.pkey.#RunID#.dat processed/; compress -f   processed/MBR_PDX_DENIED_TRANS.#SrcSysCd#.pkey.#RunID#.dat"
+      CheckPoint "0"
+      StageType "CExecCommandActivity"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V962S0P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "mvPkeyfile"
+      Partner "V0S677|V0S677P2"
+      LinkType "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V962S0P2"
+      OLEType "CJSActivityOutput"
+      Readonly "0"
+      Name "mvLoadfile"
+      Partner "V963S0|V963S0P1"
+      ConditionType "0"
+      LeftTextPos "967"
+      TopTextPos "560"
+      SourceID "V0S675"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V963S0"
+      OLEType "CJSExecCmdActivity"
+      Readonly "0"
+      Name "DeniedLoadile"
+      NextID "2"
+      InputPins "V963S0P1"
+      CmdType "0"
+      Path "cd "
+      Parameters "#$FilePath#/load/; mv -f MBR_PDX_DENIED_TRANS.#SrcSysCd#.#RunID#.dat processed/; compress -f   processed/MBR_PDX_DENIED_TRANS.#SrcSysCd#.#RunID#.dat"
+      CheckPoint "0"
+      StageType "CExecCommandActivity"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V963S0P1"
+      OLEType "CJSActivityInput"
+      Readonly "0"
+      Name "mvLoadfile"
+      Partner "V962S0|V962S0P2"
+      LinkType "1"
+   END DSRECORD
+END DSJOB

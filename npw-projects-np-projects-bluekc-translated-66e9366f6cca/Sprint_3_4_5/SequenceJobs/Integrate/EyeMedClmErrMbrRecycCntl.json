@@ -1,0 +1,1404 @@
+{
+  "name": "EyeMedClmErrMbrRecycCntl",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim"
+    },
+    "parameters": {
+      "Environment": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EmailNotify": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "GroupName": {
+        "type": "String",
+        "defaultValue": "IDS_EYEMED_CLM"
+      },
+      "Source": {
+        "type": "String",
+        "defaultValue": "EYEMED"
+      },
+      "Target": {
+        "type": "String",
+        "defaultValue": "IDS"
+      },
+      "Subject": {
+        "type": "String",
+        "defaultValue": "CLAIM"
+      },
+      "Frequency": {
+        "type": "String",
+        "defaultValue": "MONTHLY"
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Logging": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunCycleDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ErrorCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FTPFilePath": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Set_Initial_JobName",
+        "type": "SetVariable",
+        "dependsOn": [],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "JobName",
+          "value": {
+            "value": "@pipeline().Pipeline",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "ProcessCheckExtr",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "Set_Initial_JobName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH db2_data AS (\n    select SUBJ_CD, TRGT_SYS_CD, SRC_SYS_CD\n    from @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC\n    where CYC_STTUS_CD = 'RUNNING'\n       and SUBJ_CD = '@{variables('Subject')}'\n       and TRGT_SYS_CD = '@{variables('Target')}'\n    UNION\n    select SUBJ_CD, TRGT_SYS_CD, SRC_SYS_CD\n    from @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC\n    where CYC_STTUS_CD = 'RUNNING'\n       and SUBJ_CD = '@{variables('Subject')}'\n       and SRC_SYS_CD <> '@{variables('Source')}'\n       and TRGT_SYS_CD = '@{variables('Target')}'\n    UNION\n    select SUBJ_CD, TRGT_SYS_CD, SRC_SYS_CD\n    from @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC\n    where CYC_STTUS_CD = 'RUNNING'\n       and SUBJ_CD = '@{variables('Subject')}'\n       and SRC_SYS_CD = '@{variables('Source')}'\n),\ntransformed_data AS (\n    SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD\n    FROM db2_data\n)\nSELECT COUNT(*) as link_count FROM transformed_data",
+              "type": "Expression"
+            },
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "dataset": {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "param_table": "P_RUN_CYC"
+            }
+          }
+        }
+      },
+      {
+        "name": "LinkCount_SetVar",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "ProcessCheckExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "LinkCount",
+          "value": {
+            "value": "@string(activity('ProcessCheckExtr').output.firstRow.link_count)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "CountChk",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "LinkCount_SetVar",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(equals(variables('LinkCount'),'0'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email_DAT",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "subject": "EyeMed Claim Member Recycle Abort due to another Claims processing",
+                  "body": "The EyeMed Claim Member Recycle processing can not run while IDS claim is being updated or extracted from.\n\nSource = 'EYEMED'\nTarget = 'IDS'\nSubject = 'CLAIM'",
+                  "blobFilenames": " ",
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": " "
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "Run_Cycle_OpenRunCycle",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/OpenRunCycle')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "DBOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@variables('Source')",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@variables('Target')",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@variables('Subject')",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@variables('Frequency')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Run_Cycle",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Run_Cycle_OpenRunCycle",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "RunCycle",
+                "value": {
+                  "value": "@string(activity('Run_Cycle_OpenRunCycle').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "ExclusionListExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Run_Cycle",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/JobSequencer/CommonComponents/ExclusionListExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "ids_owner_schema": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@variables('JobName')",
+                    "type": "Expression"
+                  },
+                  "ids_staging_schema": {
+                    "value": "@pipeline().globalParameters.gbl_param_ids_staging",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "WriteRunID_WriteRunID",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "ExclusionListExtr",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/WriteRunID')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "entry_name": {
+                    "value": "@concat(variables('JobName'),':RunID')",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Set_RunID",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Variables_GetRunInfo",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "RunID",
+                "value": {
+                  "value": "@string(activity('Variables_GetRunInfo').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Variables_GetExclusionList",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_RunID",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetExclusionList')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Subject": {
+                    "value": "@variables('JobName')",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "DBOwner": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Variables_GetRunInfo",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "WriteRunID_WriteRunID",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetRunInfo')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "job_name": {
+                    "value": "@concat(variables('JobName'),':RunID')",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Set_ExclusionList",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Variables_GetExclusionList",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "ExclusionList",
+                "value": {
+                  "value": "@string(activity('Variables_GetExclusionList').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_Logging",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_ExclusionList",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "Logging",
+                "value": {
+                  "value": "N",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_RunCycleDate_GetRunCycleDate",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_Logging",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetRunCycleDate')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "DBOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@variables('Subject')",
+                    "type": "Expression"
+                  },
+                  "SourceSystem": {
+                    "value": "@variables('Source')",
+                    "type": "Expression"
+                  },
+                  "TargetSystem": {
+                    "value": "@variables('Target')",
+                    "type": "Expression"
+                  },
+                  "RunCycle": {
+                    "value": "@variables('RunCycle')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Set_RunCycleDate",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_RunCycleDate_GetRunCycleDate",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "RunCycleDate",
+                "value": {
+                  "value": "@string(activity('Set_RunCycleDate_GetRunCycleDate').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "ExclusionListDelete",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_RunCycleDate",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/JobSequencer/CommonComponents/ExclusionListDelete')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "ids_owner_schema": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "subject": {
+                    "value": "@variables('JobName')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "CountChk",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'EyeMedPClmMbrErrExtr'), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EyeMedPClmMbrErrExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/claim/EyeMed/EyeMedPClmMbrErrExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "SrcSysCdErr": {
+                    "value": "@variables('Source')",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@variables('RunID')",
+                    "type": "Expression"
+                  },
+                  "LandFileNm": "EyeMedErrClm_ClaimsLanding.dat",
+                  "ErrUpdFileNm": "P_CLM_MBRSH_ERR_RECYC.dat",
+                  "ErrRptFileNm": "EyeMed_MbrMatch_Clm_ErrorFile_Recycle.dat"
+                }
+              }
+            },
+            {
+              "name": "LoadW_DRUG_ENR",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "EyeMedPClmMbrErrExtr",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "W_DRUG_ENR",
+                  "action": "REPLACE",
+                  "file_name": "W_DRUG_ENR.dat",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "UpdatePClmErr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "LoadW_DRUG_ENR",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "P_CLM_MBRSH_ERR_RECYC",
+                  "action": "UPDATE",
+                  "file_name": "P_CLM_MBRSH_ERR_RECYC.dat",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'EyeMedErrClmMbrUpd'), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EyeMedErrClmMbrUpd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/claim/EyeMed/EyeMedErrClmMbrUpd')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "SrcSysCd": {
+                    "value": "@variables('Source')",
+                    "type": "Expression"
+                  },
+                  "RunCycle": {
+                    "value": "@variables('RunCycle')",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@variables('RunID')",
+                    "type": "Expression"
+                  },
+                  "Logging": {
+                    "value": "@variables('Logging')",
+                    "type": "Expression"
+                  },
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "RunDate": {
+                    "value": "@variables('RunCycleDate')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'EyeMedPClmMbrErrMtchDel'), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EyeMedPClmMbrErrMtchDel",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/claim/EyeMed/EyeMedPClmMbrErrMtchDel')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "RunID": {
+                    "value": "@variables('RunID')",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "FileName": "EyeMedPClmMbrErrRecyc_Delete.dat",
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "RowCount_UnixFileRecCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_1C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/UnixFileRecCnt')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "UnixFileRecCnt_a1": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_FilePath,'/external')",
+              "type": "Expression"
+            },
+            "UnixFileRecCnt_a2": "EyeMed_MbrMatch_Clm_ErrorFile_Recycle.dat",
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FileName": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Set_ErrorCount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "RowCount_UnixFileRecCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "ErrorCount",
+          "value": {
+            "value": "@string(activity('RowCount_UnixFileRecCnt').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Set_FTPFilePath",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Set_ErrorCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "FTPFilePath",
+          "value": {
+            "value": "@if(equals(pipeline().parameters.Environment,'P'),'/library/library/IAD/PHI11/Shared/Output_IDS/EyeMed','/library/library/IAD/PHI11/Shared/Output_IDS/EyeMed/Test')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "If_4B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Set_FTPFilePath",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(int(variables('ErrorCount')),1)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FTPErrMbr_Med",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTP_a1": "o_lib",
+                  "FTP_a2": "put",
+                  "FTP_a3": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath,'/external')",
+                    "type": "Expression"
+                  },
+                  "FTP_a4": "EyeMed_MbrMatch_Clm_ErrorFile_Recycle.dat",
+                  "FTP_a5": {
+                    "value": "@variables('FTPFilePath')",
+                    "type": "Expression"
+                  },
+                  "FTP_a6": {
+                    "value": "@concat('EyeMed_MbrMatch_Clm_ErrorFile_Recycle_', variables('RunID'), '.csv')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Email",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "FTPErrMbr_Med",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().parameters.EmailNotify",
+                    "type": "Expression"
+                  },
+                  "subject": "BCBSKC Recycled EyeMed Claims File @variables('RunCycleDate')",
+                  "body": "BCBSKC has recycled the EyeMed Claims file for this Month but there were members on the file not found on our Warehouse. The unmatched Members file is placed in the below folder.\n\nO:\\\\library\\\\IAD\\\\PHI11\\\\Shared\\\\Output_IDS\\\\EyeMed",
+                  "blobFilenames": " ",
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": " "
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "MvMedErrFile",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_4B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/MvMedErrFile')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "MvErrClmRecyc_Med",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "MvMedErrFile",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/MvErrClmRecyc_Med')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "CloseRunCycle",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "MvErrClmRecyc_Med",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/CloseRunCycle')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "CloseRunCycle_a1": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "CloseRunCycle_a2": {
+              "value": "@variables('Source')",
+              "type": "Expression"
+            },
+            "CloseRunCycle_a3": {
+              "value": "@variables('Target')",
+              "type": "Expression"
+            },
+            "CloseRunCycle_a4": {
+              "value": "@variables('Subject')",
+              "type": "Expression"
+            },
+            "CloseRunCycle_a5": {
+              "value": "@variables('Frequency')",
+              "type": "Expression"
+            },
+            "CloseRunCycle_a6": {
+              "value": "@variables('RunCycle')",
+              "type": "Expression"
+            },
+            "DBOwner": {
+              "value": "",
+              "type": "Expression"
+            },
+            "SrcSystem": {
+              "value": "",
+              "type": "Expression"
+            },
+            "TrgtSystem": {
+              "value": "",
+              "type": "Expression"
+            },
+            "SubjCode": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FreqCode": {
+              "value": "",
+              "type": "Expression"
+            },
+            "RunCycle": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "If_4C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "CloseRunCycle",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'BalClmRunCycUpd'), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "BalClmRunCycUpd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/Balancing/BalClmRunCycUpd')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "BeginCycle": {
+                    "value": "@variables('RunCycle')",
+                    "type": "Expression"
+                  },
+                  "SrcSys": {
+                    "value": "@variables('Source')",
+                    "type": "Expression"
+                  },
+                  "TrgtSys": {
+                    "value": "@variables('Target')",
+                    "type": "Expression"
+                  },
+                  "SubjCd": {
+                    "value": "@variables('Subject')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

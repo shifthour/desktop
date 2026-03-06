@@ -1,0 +1,98 @@
+{
+  "name": "FctsCaseMgtContactExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_FctsCaseMgtContactExtr_to_file",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_CMCS_CONTACT AS (SELECT DISTINCT CMCM_ID, CMCT_SEQ_NO, CMCT_FIRST_NAME, CMCT_LAST_NAME, CMCT_MID_INIT, CMCT_TITLE, CMCT_ADDR1, CMCT_ADDR2, CMCT_ADDR3, CMCT_CITY, CMCT_ZIP, CMCT_COUNTY, CMCT_FAX, CMCT_FAX_EXT, CMCT_PHONE, CMCT_PHONE_EXT, CMCT_EMAIL, CMCT_CTRY_CD, CMCT_STATE, CMCT_MCTR_LANG FROM @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_CMCT_CONTACT), cte_StripField AS (SELECT STRIP.FIELD.EE(CMCM_ID) + ';' + CAST(CMCT_SEQ_NO AS VARCHAR(10)) + ';' + dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS PRI_NAT_KEY_STRING, @{pipeline().parameters.RunIDTimeStamp} AS FIRST_RECYC_TS, CMCT_SEQ_NO AS CNTCT_SEQ_NO, STRIP.FIELD.EE(CMCM_ID) AS CASE_MGT_ID, dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS SRC_SYS_CD, dbo.trim_default(CMCT_FIRST_NAME) AS CNTCT_FIRST_NM, dbo.trim_default(CMCT_LAST_NAME) AS CNTCT_LAST_NM, dbo.trim_default(CMCT_MID_INIT) AS CNTCT_MIDINIT, dbo.trim_default(CMCT_TITLE) AS CNTCT_TTL_NM, dbo.trim_default(CMCT_ADDR1) AS CNTCT_ADDR_LN_1, dbo.trim_default(CMCT_ADDR2) AS CNTCT_ADDR_LN_2, dbo.trim_default(CMCT_ADDR3) AS CNTCT_ADDR_LN_3, dbo.trim_default(CMCT_CITY) AS CMCT_CITY, dbo.trim_default(CMCT_ZIP) AS CMCT_ZIP, dbo.trim_default(CMCT_COUNTY) AS CNTCT_CNTY_NM, dbo.trim_default(CMCT_FAX) AS CNTCT_FAX_NO, dbo.trim_default(CMCT_FAX_EXT) AS CNTCT_FAX_EXT_NO, dbo.trim_default(CMCT_PHONE) AS CNTCT_PHN_NO, dbo.trim_default(CMCT_PHONE_EXT) AS CNTCT_PHN_EXT_NO, dbo.trim_default(CMCT_EMAIL) AS CNTCT_EMAIL_ADDR, CASE WHEN LTRIM(RTRIM(CMCT_CTRY_CD)) IN ('USA','US') THEN 'USA' ELSE 'NA' END AS CMCT_CTRY_CD, dbo.trim_default(CMCT_STATE) AS CMCT_STATE, dbo.trim_default(CMCT_MCTR_LANG) AS CMCT_MCTR_LANG FROM cte_CMCS_CONTACT) SELECT * FROM cte_StripField",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "facets",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_facets",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_FacetsOwner}",
+              "param_table": "CMC_CMCT_CONTACT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/MedMgt/MedMgt/CMContact')",
+              "param_filename": "@concat('CASE_MGT_CONTACT.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "RunIDTimeStamp": {
+        "type": "string"
+      }
+    },
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/MedMgt/MedMgt/CMContact"
+    },
+    "pipelineCategory": "Integrate"
+  },
+  "Description": "Called By: FctsMedMgtCntl\n\n\nProcess : Extract Case Mgt Status data from Facets to DataSet which is processed and loaded to CASE_MGT_CNTCT table\n\n\nModifications:                        \n                                             \t\t  Project/                                                                                                    \tCode                  Date\nDeveloper         \tDate             \t Altiris #     \tChange Description                                                   \tReviewer            Reviewed\n-----------------------  \t-------------------   \t-------------   \t-----------------------------------------------------------------------------   \t-------------------------  -------------------\nAkash Parsha       2019-09-12                 US140167                Extract Case Mgt Contact data from Facets to DataSet        Jaideep Mankala   10/09/2019    \nPrabhu ES            2022-03-07              S2S Remediation         MSSQL ODBC conn params added - IntegrateDev5         Manasa Andru          2022-06-14\n\nAnnotations:\nJobName: FctsCaseMgtContactExtr\n\n\nExtract data from CMC_CMCS_CONTACTfacets\ntable to load into IDS"
+}

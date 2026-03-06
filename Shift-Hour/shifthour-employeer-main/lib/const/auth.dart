@@ -1,0 +1,163 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:shifthour_employeer/const/Bottom_Navigation.dart';
+import 'package:shifthour_employeer/main.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class AuthWrapper extends StatefulWidget {
+  final Widget child;
+
+  const AuthWrapper({Key? key, required this.child}) : super(key: key);
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
+  late StreamSubscription<AuthState> _authSubscription;
+  bool _isAuthenticating = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkAndRestoreAuth();
+    _setupAuthListener();
+  }
+
+  Future<void> _checkAndRestoreAuth() async {
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+
+      if (session != null && !session.isExpired) {
+        // Valid session exists
+        setState(() => _isAuthenticating = false);
+      } else if (session != null && session.refreshToken != null) {
+        // Try to refresh the session using refresh token
+        try {
+          final response = await Supabase.instance.client.auth.refreshSession();
+
+          if (response.session != null) {
+            setState(() => _isAuthenticating = false);
+          } else {
+            // No valid session
+            if (mounted) {
+              Get.offAllNamed('/login');
+            }
+          }
+        } catch (e) {
+          print('Failed to refresh session: $e');
+          if (mounted) {
+            Get.offAllNamed('/login');
+          }
+        }
+      } else {
+        // No session at all
+        if (mounted) {
+          Get.offAllNamed('/login');
+        }
+      }
+    } catch (e) {
+      print('Auth restoration error: $e');
+      if (mounted) {
+        Get.offAllNamed('/login');
+      }
+    }
+  }
+
+  void _setupAuthListener() {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+
+      if (event == AuthChangeEvent.signedOut) {
+        _clearLocalSession();
+        Get.offAllNamed('/login');
+      } else if (event == AuthChangeEvent.tokenRefreshed) {
+        // Session has been refreshed
+        print('Session refreshed');
+      } else if (event == AuthChangeEvent.signedIn && session != null) {
+        _checkUserProfile();
+      }
+    });
+  }
+
+  Future<void> _checkUserProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null || user.email == null) {
+      Get.offAllNamed('/login');
+      return;
+    }
+
+    try {
+      final employerData =
+          await Supabase.instance.client
+              .from('employers')
+              .select('id, contact_email')
+              .eq('contact_email', user.email!)
+              .maybeSingle();
+
+      if (employerData == null) {
+        await registerDeviceForUser(user.id);
+        Get.offAllNamed('/profile_setup');
+      } else {
+        // Check if we're already on the dashboard or inside the app
+        final currentRoute = Get.currentRoute;
+        if (currentRoute == '/login' ||
+            currentRoute == '/splash' ||
+            currentRoute == '/') {
+          Get.offAllNamed('/employer_dashboard');
+        }
+      }
+    } catch (e) {
+      print('Error checking profile: $e');
+    }
+  }
+
+  Future<void> _clearLocalSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('supabase_session');
+    } catch (e) {
+      print('Error clearing session: $e');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAndRestoreAuth();
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isAuthenticating) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return widget.child;
+  }
+
+  static Future<void> logout() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('supabase_session');
+      Get.offAllNamed('/login');
+    } catch (e) {
+      print('Logout error: $e');
+      Get.offAllNamed('/login');
+    }
+  }
+}

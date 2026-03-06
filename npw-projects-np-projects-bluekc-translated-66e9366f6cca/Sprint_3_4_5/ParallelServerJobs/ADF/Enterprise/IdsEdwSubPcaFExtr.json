@@ -1,0 +1,88 @@
+{
+  "name": "IdsEdwSubPcaFExtr",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "parameters": {
+      "IDSRunCycle": {
+        "type": "int"
+      },
+      "EDWRunCycle": {
+        "type": "int"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwSubPcaFExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT sub_pca.SUB_PCA_SK, COALESCE(cd_src.TRGT_CD, 'UNK') AS SRC_SYS_CD, sub_pca.SUB_UNIQ_KEY, sub_pca.SUB_PCA_ACCUM_PFX_ID, sub_pca.PLN_YR_BEG_DT_SK AS SUB_PCA_PLN_YR_BEG_DT_SK, sub_pca.EFF_DT_SK AS SUB_PCA_EFF_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, cls.CLS_SK, cls.CLS_ID, grp.GRP_SK, grp.GRP_ID, CASE WHEN LEN(dbo.trim_default(CASE WHEN grp.GRP_NM IS NOT NULL THEN grp.GRP_NM ELSE ' ' END))=0 THEN 'NA' ELSE grp.GRP_NM END AS GRP_NM, subgrp.SUBGRP_SK, subgrp.SUBGRP_ID, sub_pca.SUB_SK, COALESCE(cd_carovrcalc.TRGT_CD, 'UNK') AS SUB_PCA_CAROVR_CALC_RULE_CD, COALESCE(cd_carovrcalc.TRGT_CD_NM, 'UNKNOWN') AS SUB_PCA_CAROVR_CALC_RULE_NM, sub_pca.ALLOC_AMT AS SUB_PCA_ALLOC_AMT, sub_pca.BAL_AMT AS SUB_PCA_BAL_AMT, sub_pca.CAROVR_AMT AS SUB_PCA_CAROVR_AMT, sub_pca.MAX_CAROVR_AMT AS SUB_PCA_MAX_CAROVR_AMT, sub_pca.PD_AMT AS SUB_PCA_PD_AMT, sub_pca.TERM_DT_SK AS SUB_PCA_TERM_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, sub_pca.SUB_PCA_CAROVR_CALC_RULE_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.SUB_PCA sub_pca JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR mbr ON sub_pca.SUB_SK=mbr.SUB_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.GRP grp ON sub_pca.GRP_SK=grp.GRP_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CLS cls ON mbr.CLS_SK=cls.CLS_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.SUBGRP subgrp ON mbr.SUBGRP_SK=subgrp.SUBGRP_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cd_mppng ON mbr.MBR_RELSHP_CD_SK=cd_mppng.CD_MPPNG_SK AND cd_mppng.TRGT_CD='SUB' LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cd_src ON sub_pca.SRC_SYS_CD_SK=cd_src.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cd_carovrcalc ON sub_pca.SUB_PCA_CAROVR_CALC_RULE_CD_SK=cd_carovrcalc.CD_MPPNG_SK WHERE sub_pca.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle}",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "UnusedPlaceholderForSource"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "SUB_PCA_F.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/SubPcaF"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2006, 2008 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    *\n\nProcessing:\n                    IDS-to-EDW extract\n\nControl Job Rerun Information: \n                    Previous Run Successful:    Restart, no other steps necessary\n                    Previous Run Aborted:         Restart, no other steps necessary\n\nModifications:   \n\n                     \nDeveloper                             Date                   Project/Altiris #                                     Change Description                                                                             Code   Reviewer          Date  Reviewed\n-----------------                            ---------                   ------------------                                           -------------------------------------------------------------------------------------                        ----------------------                  -------------------   \nParikshith Chada                   2006-11-07                                                                      Originally Programmed\nHugh Sisson                          2008-09-24         TTR-374                                              Added 2 new columns, including 1 in the natural key                            Steph Goddard           09/29/2008\n                                \nNagesh Bandi                        2103-07-12        5114-Enterprise Efficiencies                 Move ids to edw for SUB_PCA_F\n\nAnnotations:\nThis is Source extract data from an IDS table and apply Code denormalization, create a load ready file.\n\nJob Name:\nIdsEdwSubPcaFExtr\n\nTable:\nSUB_PCA_F\nRead from source table SUB_PCA from IDS. Apply Run Cycle filters to get just the needed rows forward\nThis is a load ready file conforms to the target table structure.\n\nWrite SUB_PCA_F Data into a Sequential file for Load Job.\nCode SK lookups for Denormalization\n\nLookup Keys: \nCD_MPPNG_SK\nAdd Defaults and Null Handling"
+}

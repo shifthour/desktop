@@ -1,0 +1,229 @@
+{
+  "name": "NfmIdsMdlDocLoad",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Cpy_NfmIdsMdlDocLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "MDL_DOC_SK"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "MDL_DOC_SK",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "MDL_DOC_ID",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "MDL_DOC_EFF_DT",
+                  "type": "DateTime",
+                  "physicalType": "date"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "MDL_DOC_TERM_DT",
+                  "type": "DateTime",
+                  "physicalType": "date"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "MDL_DOC_NM",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Product/GBS/MdlDoc/load')",
+              "param_filename": "@concat('MDL_DOC.', pipeline().parameters.SrcSysCd, '.pkey.', pipeline().parameters.RunID, '.dat')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "MDL_DOC"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Cpy_NfmIdsMdlDocLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB2StatsSubroutine')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "@concat('load')",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "@concat('MDL_DOC.', pipeline().parameters.SrcSysCd, '.pkey.', pipeline().parameters.RunID, '.dat')",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Product/GBS/MdlDoc"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\n\n\nDinakarS               2018-05-25              5205                            Original Programming                                                                             IntegrateWrhsDevl     Kalyan Neelam              2018-07-03\n\nAnnotations:\nRead Load File created in the PKEY job\nCopy Stage for buffer\nLoad rejects are redirected into a Reject file\nUpdate and Insert MDL_DOC table"
+}

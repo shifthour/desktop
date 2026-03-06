@@ -1,0 +1,268 @@
+{
+  "name": "IdsCmnPrctLangLoad",
+  "properties": {
+    "annotations": [],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "SrcSysCdSk": {
+        "type": "string"
+      },
+      "RunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "copyFileToCmnPrctLang",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "SRC_SYS_CD_SK",
+                "CMN_PRCT_ID",
+                "LANG_SEQ_NO"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "CMN_PRCT_LANG_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "CMN_PRCT_ID",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "LANG_SEQ_NO",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "CMN_PRCT_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "LANG_DESC",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'Jobs/DataWarehouse/Provider/CmnPrctLang/load')",
+              "param_filename": "@concat('CMN_PRCT_LANG.', pipeline().parameters.SrcSysCd, '.', pipeline().parameters.RunID, '.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "CMN_PRCT_LANG"
+            }
+          }
+        ]
+      },
+      {
+        "name": "scriptAfterSql",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "copyFileToCmnPrctLang",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DELETE FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CMN_PRCT_LANG WHERE SRC_SYS_CD_SK = '@{pipeline().parameters.SrcSysCdSk}' AND LAST_UPDT_RUN_CYC_EXCTN_SK <> '@{pipeline().parameters.RunCycle}'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "scriptAfterSql",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "@concat('CMN_PRCT_LANG.', pipeline().parameters.SrcSysCd, '.', pipeline().parameters.RunID, '.dat')",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/CmnPrctLang"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\n\n\nArchana Palivela      2014-07-12            5345                             Original Programming                                                                             IntegrateWrhsDevl     Kalyan Neelam           2014-12-31\n\nDeepika C                2024-01-29            US 609429               Updated load type to \"Update then Insert\"                                                IntegrateDev1            Jeyaprasanna            2024-02-02\n                                                                                                in DB2_CMN_PRCT_LANG stage\n\nKshema H K            2025-01-31            US 640167       Updated the table load type from 'Delete then Insert' to 'Update then Insert'       IntegrateDev2           Jeyaprasanna             2025-02-04\n                                                                                       and added After SQL command to delete the records which are not updated\n                                                                                       for the current source system code in  DB2_CMN_PRCT_LANG stage.\n                                                                                       Added new parameters SrcSysCdSk and RunCycle in the job and updated \n                                                                                       LANG_SEQ_NO as key column.\n\nAnnotations:\nRead Load File created in the FKEY job\nCopy Stage for buffer\nSince there is only one load job to load FACETS and DOMINION and loads are locking up due to two queries running at the same time (delete/upserts), Updated the table load type from 'Delete the Insert' to 'Update then Insert'  in CMN_PRCT_LANG table and added After SQL to delete the records which are not updated for the current Source System Code.\nLoad rejects are redirected into a Reject file"
+}

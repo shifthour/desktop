@@ -1,0 +1,53 @@
+{
+  "name": "EdwDrugClmPriceFRecon2AmountExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Scr_EdwDrugClmPriceFRecon2AmountExtr",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          },
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_main AS (SELECT DF.CLM_SK, CLM_F.CLM_ACTL_PD_AMT,((DF.INVC_TOT_DUE_AMT)+((DF.SPREAD_INGR_CST_AMT)+(DF.SPREAD_DISPNS_FEE_AMT)+(DF.SPREAD_SLS_TAX_AMT)+(DF.SELL_INCNTV_FEE_AMT-DF.BUY_INCNTV_FEE_AMT)+(DF.SELL_OTHR_AMT-DF.BUY_TOT_OTHR_AMT))) AS CAL_CLM_ACTL_PD_AMT FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.CLM_F CLM_F JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.DRUG_CLM_PRICE_F DF ON CLM_F.CLM_SK=DF.CLM_SK WHERE CLM_F.SRC_SYS_CD='OPTUMRX' AND CLM_F.CLM_PD_DT_SK BETWEEN '@{pipeline().parameters.BeginDate}' AND '@{pipeline().parameters.EndDate}'), cte_transform AS (SELECT CLM_SK,CASE WHEN CLM_ACTL_PD_AMT=CAL_CLM_ACTL_PD_AMT THEN 'Y' ELSE 'N' END AS RECON_IN FROM cte_main) MERGE @{pipeline().globalParameters.gbl_param_EDWOwner}.DRUG_CLM_PRICE_F AS T USING cte_transform AS S ON (T.CLM_SK=S.CLM_SK) WHEN MATCHED THEN UPDATE SET T.RECON_IN=S.RECON_IN WHEN NOT MATCHED THEN INSERT (CLM_SK,RECON_IN) VALUES (S.CLM_SK,S.RECON_IN)",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": {
+      "BeginDate": {
+        "defaultValue": "2019-12-01",
+        "type": "String"
+      },
+      "EndDate": {
+        "defaultValue": "2019-12-15",
+        "type": "String"
+      },
+      "EDWRunCycleDate": {
+        "defaultValue": "2019-11-15",
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Claims/DrugClmPrice"
+    }
+  },
+  "description": "MODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                                    ----------------------------------   ---------------------------------    -------------------------   \nSri Nannpaneni               2019-11-25            6131                          Initial Programming                                                                 EnterpriseDev2             Kalyan Neelam             2020-01-02\n\nRekha Radhakrishna      2020-02-05            6131                      Chaged calculation logic for CAL_CLM_ACTL_PD_AMT           EnterpriseDev2            Kalyan Neelam             2020-02-06\n                                                                                                     in source query\n\nAnnotations:\ncount validation \nCLM_F. COUNT(Claim SK) = DRUG_CLM_PRICE_F COUNT( DRUG_CLM_SK)\nThis parallel job is called in EdwDrugClmPriceFReconCntl sequence"
+}

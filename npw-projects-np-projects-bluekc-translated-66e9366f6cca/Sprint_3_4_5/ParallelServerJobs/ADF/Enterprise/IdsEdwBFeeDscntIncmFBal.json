@@ -1,0 +1,201 @@
+{
+  "name": "IdsEdwBFeeDscntIncmFBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "Script_IdsEdwBFeeDscntIncmFBal",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.X1_TMP_IdsEdwBFeeDscntIncmFBal; SELECT FEE_DSCNT_INCM_F.SRC_SYS_CD, FEE_DSCNT_INCM_F.BILL_INVC_ID, FEE_DSCNT_INCM_F.FEE_DSCNT_ID, FEE_DSCNT_INCM_F.INVC_FEE_DSCNT_BILL_DISP_CD, FEE_DSCNT_INCM_F.INVC_FEE_DSCNT_SRC_CD, FEE_DSCNT_INCM_F.GRP_ID, FEE_DSCNT_INCM_F.SUBGRP_ID, FEE_DSCNT_INCM_F.CLS_ID, FEE_DSCNT_INCM_F.CLS_PLN_ID, FEE_DSCNT_INCM_F.PROD_ID, FEE_DSCNT_INCM_F.FEE_DSCNT_AMT INTO @{pipeline().globalParameters.gbl_param_edw_staging}.X1_TMP_IdsEdwBFeeDscntIncmFBal FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.FEE_DSCNT_INCM_F FEE_DSCNT_INCM_F FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.B_FEE_DSCNT_INCM_F B_FEE_DSCNT_INCM_F ON FEE_DSCNT_INCM_F.SRC_SYS_CD = B_FEE_DSCNT_INCM_F.SRC_SYS_CD AND FEE_DSCNT_INCM_F.BILL_INVC_ID = B_FEE_DSCNT_INCM_F.BILL_INVC_ID AND FEE_DSCNT_INCM_F.FEE_DSCNT_ID = B_FEE_DSCNT_INCM_F.FEE_DSCNT_ID AND FEE_DSCNT_INCM_F.INVC_FEE_DSCNT_BILL_DISP_CD = B_FEE_DSCNT_INCM_F.INVC_FEE_DSCNT_BILL_DISP_CD AND FEE_DSCNT_INCM_F.INVC_FEE_DSCNT_SRC_CD = B_FEE_DSCNT_INCM_F.INVC_FEE_DSCNT_SRC_CD AND FEE_DSCNT_INCM_F.GRP_ID = B_FEE_DSCNT_INCM_F.GRP_ID AND FEE_DSCNT_INCM_F.SUBGRP_ID = B_FEE_DSCNT_INCM_F.SUBGRP_ID AND FEE_DSCNT_INCM_F.CLS_ID = B_FEE_DSCNT_INCM_F.CLS_ID AND FEE_DSCNT_INCM_F.CLS_PLN_ID = B_FEE_DSCNT_INCM_F.CLS_PLN_ID AND FEE_DSCNT_INCM_F.PROD_ID = B_FEE_DSCNT_INCM_F.PROD_ID WHERE FEE_DSCNT_INCM_F.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND FEE_DSCNT_INCM_F.FEE_DSCNT_AMT <> B_FEE_DSCNT_INCM_F.FEE_DSCNT_AMT; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.X2_TMP_IdsEdwBFeeDscntIncmFBal_NOTIFY; WITH cte AS ( SELECT COUNT(*) AS cnt FROM @{pipeline().globalParameters.gbl_param_edw_staging}.X1_TMP_IdsEdwBFeeDscntIncmFBal ) SELECT 'COLUMN SUM BALANCING IDS - EDW FEE DSCNT INCM F OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_edw_staging}.X2_TMP_IdsEdwBFeeDscntIncmFBal_NOTIFY FROM cte WHERE cte.cnt >= 1",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_ErrorRows_FeeDscntIncmF",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsEdwBFeeDscntIncmFBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "X1_TMP_IdsEdwBFeeDscntIncmFBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/research')",
+              "param_filename": "@concat('IdsEdwFeeDscntIncmFColumnSumResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_NotifyRow_FeeDscntIncmF",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsEdwBFeeDscntIncmFBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "X2_TMP_IdsEdwBFeeDscntIncmFBal_NOTIFY"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/notify')",
+              "param_filename": "IncomeBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Income/EdwLoads/FeeDscntIncmF/Balancing"
+    }
+  },
+  "Description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:          IdsEdwFeeDscntIncmFBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target tables are compared on the specified column to see if there are any discrepancies\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/26/2007          3264                              Originally Programmed                           devlEDW10              Steph Goddard             10/26/2007                  \n \n\nSrikanth Mettpalli               12/18/2013         5114                              Originally Programmed                         EnterpriseWrhsDevl   Peter Marshall               12/26/2013  \n                                                                                                            (Server to Parallel Conversion)\n\nAnnotations:\nJob Name: IdsEdwBFeeDscntIncmFBal\nCopy stage used to remove duplicates and create one record for the Notification file.\nFile checked later for rows and email to on-call\nDetail file for on-call to research errors\nRows with Failed Comparison on Specified columns\nPull all the Missing Records from FEE_DSCNT_INCM_F and B_FEE_DSCNT_INCM_F Table.\nIDS - EDW Fee Discount Income Facts Column Sum Comparisons"
+}

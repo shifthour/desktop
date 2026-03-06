@@ -1,0 +1,1062 @@
+{
+  "name": "MedtrakClmLoadSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim/SeqMedtrak"
+    },
+    "parameters": {
+      "Logging": {
+        "type": "String",
+        "defaultValue": "X"
+      },
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": "\"\""
+      },
+      "SrcSysCd": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcSysCdSk": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_3A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'ConcatClmProvDrug'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatClmProvDrug",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                "baseParameters": {
+                  "FILEPATH": {
+                    "value": "'key'",
+                    "type": "Expression"
+                  },
+                  "pattern": "*.DrugClmProv",
+                  "outputFile": "IdsClmProvDrugExtr.DrugClmProv",
+                  "sortParam1": "'-k9,9 -k5,5r'",
+                  "sortParam2": "'-k9,9'",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "ConcatClmProvDrug",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'IdsClmProvFkey'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsClmProvFkey",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/provider/claim/IdsClmProvFkey')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Logging": "@pipeline().parameters.Logging",
+                  "Source": "@pipeline().parameters.SrcSysCd",
+                  "InFile": "IdsClmProvDrugExtr.DrugClmProv.uniq"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsClmProvFkey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'RmClmProv'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "RmClmProv",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/key/IdsClmProvDrugExtr.DrugClmProv.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "integrate"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "RmClmProv",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'LoadClmProv'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadClmProv",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/sequencer_routines/DB.LOAD')",
+                "baseParameters": {
+                  "table": "CLM_PROV",
+                  "action": "UPDATE",
+                  "file_name": {
+                    "value": "@concat('CLM_PROV.', pipeline().parameters.SrcSysCd, '.dat')",
+                    "type": "Expression"
+                  },
+                  "run_stat": "N",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3D_2",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "RmClmProv",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'K_CLM_PROV'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "K_CLM_PROV",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/sequencer_routines/DB.LOAD')",
+                "baseParameters": {
+                  "table": "K_CLM_PROV",
+                  "action": "UPDATE",
+                  "file_name": "K_CLM_PROV.dat",
+                  "run_stat": "N",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_4A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'ConcatClmRemitHistDrug'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatClmRemitHistDrug",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                "baseParameters": {
+                  "FILEPATH": {
+                    "value": "'key'",
+                    "type": "Expression"
+                  },
+                  "pattern": "*.DrugClmRemitHist",
+                  "outputFile": "IdsClmRemitHistDrugExtr.DrugClmRemitHist",
+                  "sortParam1": "'-k9,9 -k5,5r'",
+                  "sortParam2": "'-k9,9'",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_4B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_4A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "ConcatClmRemitHistDrug",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'IdsClmRemitHistFkey'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsClmRemitHistFkey",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/RemitHist/IdsClmRemitHistFkey')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Source": "@pipeline().parameters.SrcSysCd",
+                  "SrcSysCdSk": "@pipeline().parameters.SrcSysCdSk",
+                  "InFile": "IdsClmRemitHistDrugExtr.DrugClmRemitHist.uniq",
+                  "Logging": "@pipeline().parameters.Logging"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_4C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_4B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsClmRemitHistFkey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'RmClmRemitHist'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "RmClmRemitHist",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/key/IdsClmRemitHistDrugExtr.DrugClmRemitHist.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "integrate"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_4D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_4C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "RmClmRemitHist",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'LoadClmRemitHist'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadClmRemitHist",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/sequencer_routines/DB.LOAD')",
+                "baseParameters": {
+                  "table": "CLM_REMIT_HIST",
+                  "action": "UPDATE",
+                  "file_name": {
+                    "value": "@concat('CLM_REMIT_HIST.', pipeline().parameters.SrcSysCd, '.dat')",
+                    "type": "Expression"
+                  },
+                  "run_stat": "N",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'ConcatClmLnDrug'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatClmLnDrug",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                "baseParameters": {
+                  "FILEPATH": {
+                    "value": "'key'",
+                    "type": "Expression"
+                  },
+                  "pattern": "*.DrugClmLn",
+                  "outputFile": "IdsClmLnDrugExtr.DrugClmLn",
+                  "sortParam1": "'-k9,9 -k5,5r'",
+                  "sortParam2": "'-k9,9'",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "ConcatClmLnDrug",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'IdsClmLnFkey'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsClmLnFkey",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/ClaimLine/ClmLn/IdsClmLnFkey')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "RunCycle": "@pipeline().parameters.RunCycle",
+                  "Logging": "@pipeline().parameters.Logging",
+                  "Source": "@pipeline().parameters.SrcSysCd",
+                  "InFile": "IdsClmLnDrugExtr.DrugClmLn.uniq"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsClmLnFkey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'RmClmLn'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "RmClmLn",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/key/IdsClmLnDrugExtr.DrugClmLn.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "integrate"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "RmClmLn",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'LoadClmLn'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadClmLn",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/sequencer_routines/DB.LOAD')",
+                "baseParameters": {
+                  "table": "CLM_LN",
+                  "action": "UPDATE",
+                  "file_name": {
+                    "value": "@concat('CLM_LN.', pipeline().parameters.SrcSysCd, '.dat')",
+                    "type": "Expression"
+                  },
+                  "run_stat": "N",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'ConcatClmDrug'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatClmDrug",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                "baseParameters": {
+                  "FILEPATH": {
+                    "value": "'key'",
+                    "type": "Expression"
+                  },
+                  "pattern": "*.DrugClm",
+                  "outputFile": "IdsClmDrugExtr.DrugClm",
+                  "sortParam1": "'-k9,9 -k5,5r'",
+                  "sortParam2": "'-k9,9'",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "ConcatClmDrug",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'IdsClmFkey'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsClmFkey",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/claim/IdsClmFkey')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Source": "@pipeline().parameters.SrcSysCd",
+                  "SrcSysCdSk": "@pipeline().parameters.SrcSysCdSk",
+                  "InFile": "IdsClmDrugExtr.DrugClm.uniq",
+                  "Logging": "@pipeline().parameters.Logging",
+                  "RunCycle": "@pipeline().parameters.RunCycle",
+                  "RunID": "@pipeline().parameters.RunID",
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsClmFkey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'RmClm'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "RmClm",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/key/IdsClmDrugExtr.DrugClm.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "integrate"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "RmClm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'LoadClm'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadClm",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts,'/sequencer_routines/DB.LOAD')",
+                "baseParameters": {
+                  "table": "CLM",
+                  "action": "UPDATE",
+                  "file_name": {
+                    "value": "@concat('CLM.', pipeline().parameters.SrcSysCd, '.dat')",
+                    "type": "Expression"
+                  },
+                  "run_stat": "N",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

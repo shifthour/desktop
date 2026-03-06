@@ -1,0 +1,248 @@
+{
+  "name": "FctsIdsPrmRateXfrm",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "SrcSysCdSk": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyToTempFctsIdsPrmRateXfrm",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "ParquetReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP1_FctsIdsPrmRateXfrm",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "'@concat(pipeline().globalParameters.gbl_param_environment, '/ds')'",
+              "param_filename": "PRM_RATE.@{pipeline().parameters.SrcSysCd}.extr.@{pipeline().parameters.RunID}.ds"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP1_FctsIdsPrmRateXfrm"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTempFctsIdsPrmRateXfrm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "type": "Expression",
+                "value": "WITH cte1 AS (\n    SELECT\n        PDRT_CK,\n        RTRIM(LTRIM(PDRT_WHOS_AGE_IND)) AS PDRT_WHOS_AGE_IND,\n        RTRIM(LTRIM(PDRT_TYPE)) AS PDRT_TYPE,\n        PDRT_EFF_DT,\n        PDRT_TERM_DT,\n        RTRIM(LTRIM(PDRT_PFX)) AS PDRT_PFX,\n        RTRIM(LTRIM(PDRT_DESC)) AS PDRT_DESC,\n        RTRIM(LTRIM(PDRT_MODIFIER)) AS PDRT_MODIFIER,\n        PDRT_MAX_CHILD,\n        PDRT_BASIS,\n        PDRT_KEY_STRUCT,\n        RTRIM(LTRIM(PDRT_METH)) AS PDRT_METH,\n        RTRIM(LTRIM(PDRT_COL_STRUCT)) AS PDRT_COL_STRUCT,\n        RTRIM(LTRIM(PDRT_MOD_TYPE)) AS PDRT_MOD_TYPE,\n        PDRT_AGE_FROM,\n        PDRT_AGE_THRU\n    FROM @{pipeline().globalParameters.gbl_param_ids_staging}.TMP1_FctsIdsPrmRateXfrm\n),\ncte2 AS (\n    SELECT\n        cte1.*,\n        CONVERT(CHAR(10), cte1.PDRT_EFF_DT, 23) AS EffDt,\n        CONVERT(CHAR(10), cte1.PDRT_TERM_DT, 23) AS TermDt\n    FROM cte1\n),\ncte3 AS (\n    SELECT\n        (@{pipeline().parameters.SrcSysCd} + ';' + CAST(cte2.PDRT_CK AS VARCHAR(10))) AS PRI_NAT_KEY_STRING,\n        @{pipeline().parameters.RunIDTimeStamp} AS FIRST_RECYC_TS,\n        @{pipeline().parameters.SrcSysCd} AS SRC_SYS_CD,\n        cte2.PDRT_CK AS PRM_RATE_UNIQ_KEY,\n        0 AS CRT_RUN_CYC_EXCTN_SK,\n        0 AS LAST_UPDT_RUN_CYC_EXCTN_SK,\n        @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK,\n        CASE WHEN cte2.PDRT_WHOS_AGE_IND IS NULL OR LEN(RTRIM(LTRIM(cte2.PDRT_WHOS_AGE_IND))) = 0 THEN 'NA' ELSE cte2.PDRT_WHOS_AGE_IND END AS PRM_RATE_AGE_ENTY_CD,\n        CASE WHEN cte2.PDRT_TYPE IS NULL OR LEN(RTRIM(LTRIM(cte2.PDRT_TYPE))) = 0 THEN 'NA' ELSE cte2.PDRT_TYPE END AS PRM_RATE_PRM_TYP_CD,\n        cte2.EffDt AS EFF_DT,\n        cte2.TermDt AS TERM_DT,\n        RTRIM(LTRIM(cte2.PDRT_PFX)) AS PRM_RATE_PFX,\n        CASE WHEN cte2.PDRT_DESC IS NULL OR LEN(RTRIM(LTRIM(cte2.PDRT_DESC))) = 0 THEN 'NA' ELSE cte2.PDRT_DESC END AS PRM_RATE_DESC,\n        RTRIM(LTRIM(cte2.PDRT_MODIFIER)) AS PRM_RATE_MOD_ID,\n        CASE WHEN cte2.PDRT_MAX_CHILD IS NULL THEN 99 ELSE cte2.PDRT_MAX_CHILD END AS MAX_CHLDRN_RATED_NO,\n        CASE WHEN cte2.PDRT_BASIS IS NULL THEN 0 ELSE cte2.PDRT_BASIS END AS PRM_RATE_BSS_NO,\n        CASE WHEN cte2.PDRT_KEY_STRUCT IS NULL THEN 0 ELSE cte2.PDRT_KEY_STRUCT END AS PRM_RATE_KEY_STRCT_NO,\n        RTRIM(LTRIM(cte2.PDRT_METH)) AS PRM_RATE_METH,\n        RTRIM(LTRIM(cte2.PDRT_COL_STRUCT)) AS PRM_RATE_COL_STRUCT,\n        RTRIM(LTRIM(cte2.PDRT_MOD_TYPE)) AS PRM_RATE_MOD_TYPE,\n        CASE WHEN cte2.PDRT_AGE_FROM IS NULL THEN 0 ELSE cte2.PDRT_AGE_FROM END AS TIER_AGE_BAND_FROM_NO,\n        CASE WHEN cte2.PDRT_AGE_THRU IS NULL THEN 120 ELSE cte2.PDRT_AGE_THRU END AS TIER_AGE_BAND_THRU_NO\n    FROM cte2\n),\ncte4 AS (\n    SELECT\n        @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK,\n        cte2.PDRT_CK AS PRM_RATE_UNIQ_KEY\n    FROM cte2\n)\n\nDROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP2_FctsIdsPrmRateXfrm\nSELECT *\nINTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP2_FctsIdsPrmRateXfrm\nFROM cte3\n\nDROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP3_FctsIdsPrmRateXfrm\nSELECT *\nINTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP3_FctsIdsPrmRateXfrm\nFROM cte4"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyToPrmRateXfrm",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP2_FctsIdsPrmRateXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "'@concat(pipeline().globalParameters.gbl_param_environment, '/ds')'",
+              "param_filename": "PRM_RATE.@{pipeline().parameters.SrcSysCd}.xfrm.@{pipeline().parameters.RunID}.ds",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyToBPrmRate",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP3_FctsIdsPrmRateXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "'@concat(pipeline().globalParameters.gbl_param_environment, '/load')'",
+              "param_filename": "B_PRM_RATE.@{pipeline().parameters.SrcSysCd}.dat",
+              "param_col_delimiter": "','",
+              "param_row_delimiter": "@null",
+              "param_quote": "'^'",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/PremiumRating/PrmRate"
+    }
+  },
+  "Description": "COPYRIGHT 2005, 2006, 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nJob Name :  FctsIdsPrmRateXfm\n\n                           \nPROCESSING:\n    Applies Strip Field and Transformation rules for Premium Rating infromation \n\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                    ----------------------------------   ---------------------------------    -------------------------   \n\nBhoomi Dasari                   2014-04-09       #5345                            Parallel rewrite from Server job                            IntegrateWrhsDevl       Sharon Andrew       2014-10-21\n\nAnnotations:\nJobName: FctsIdsPrmRateXfrm\n\nStrip field function and Transformation rules are applied on the data Extracted from Facets\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns.\nStrip Field function is applied here on all the TEXT fields"
+}

@@ -1,0 +1,200 @@
+{
+  "name": "EdgeRiskAsmntCmsMbrEnrPerdHistExtr",
+  "properties": {
+    "parameters": {
+      "CurrDate": {
+        "type": "String"
+      },
+      "State": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_FileToTempTable",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.[EFFTMP1_EdgeRiskAsmntCmsMbrEnrPerdHistExtr]",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/EdgeServer/EnrollmentRA/CmsMbrEnrPerdHist')",
+              "param_filename": "Edge_RA_Enrollment_Hist_@{pipeline().parameters.State}_final.txt",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "EFFTMP1_EdgeRiskAsmntCmsMbrEnrPerdHistExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform_And_Dedup",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_FileToTempTable",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.[EFFTMP2_EdgeRiskAsmntCmsMbrEnrPerdHistExtr];WITH SourceData AS (SELECT fileIdentifier, executionZoneCode, interfaceControlReleaseNumber, generationDateTime, submissionTypeCode, insuredMemberTotalQuantity, insuredMemberProfileTotalQuantity, EnrollmentIssuerrecordIdentifier, EnrollmentIssuerissuerIdentifier, issuerInsuredMemberTotalQuantity, issuerInsuredMemberProfileTotalQuantity, CAST(includedinsuredMemberrecordIdentifier AS INT) AS includedinsuredMemberrecordIdentifier, insuredMemberIdentifier, insuredMemberBirthDate, insuredMemberGenderCode, CAST(includedinsuredMemberProfilerecordIdentifier AS INT) AS includedinsuredMemberProfilerecordIdentifier, subscriberIndicator, subscriberIdentifier, insurancePlanIdentifier, coverageStartDate, coverageEndDate, enrollmentMaintenanceTypeCode, insurancePlanPremiumAmount, rateAreaIdentifier, MBR_UNIQ_KEY, RISK_ADJ_YR, SUB_UNIQ_KEY, MBR_RELSHP_CD, insuredMemberRace, insuredMemberEthnicity, zipCode, federalAPTC, statePremiumSubsidy, stateCSRtext, ICHRA_QSEHRA, QSEHRA_Spousal, QSEHRA_Medical FROM @{pipeline().globalParameters.gbl_param_edw_staging}.[EFFTMP1_EdgeRiskAsmntCmsMbrEnrPerdHistExtr]),RemoveDuplicates AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY EnrollmentIssuerissuerIdentifier, fileIdentifier, includedinsuredMemberrecordIdentifier, includedinsuredMemberProfilerecordIdentifier ORDER BY EnrollmentIssuerissuerIdentifier, fileIdentifier, includedinsuredMemberrecordIdentifier, includedinsuredMemberProfilerecordIdentifier) AS row_num FROM SourceData),Deduplicated AS (SELECT * FROM RemoveDuplicates WHERE row_num = 1),BusinessLogic AS (SELECT CAST(Deduplicated.EnrollmentIssuerissuerIdentifier AS CHAR(50)) AS ISSUER_ID, CAST(Deduplicated.fileIdentifier AS CHAR(50)) AS FILE_ID, Deduplicated.includedinsuredMemberrecordIdentifier AS MBR_RCRD_ID, Deduplicated.includedinsuredMemberProfilerecordIdentifier AS MBR_ENR_PERD_RCRD_ID, CAST(Deduplicated.subscriberIndicator AS CHAR(1)) AS SUB_IN, Deduplicated.SUB_UNIQ_KEY AS SUB_MBR_UNIQ_KEY, Deduplicated.insurancePlanIdentifier AS QHP_ID, CASE WHEN Deduplicated.coverageStartDate = '' THEN NULL ELSE CAST(Deduplicated.coverageStartDate AS DATETIME) END AS MBR_ENR_EFF_DT_SK, CASE WHEN Deduplicated.coverageEndDate = '' THEN NULL ELSE CAST(Deduplicated.coverageEndDate AS DATETIME) END AS MBR_ENR_TERM_DT_SK, Deduplicated.enrollmentMaintenanceTypeCode AS ENR_MNTN_TYP_CD, CASE WHEN Deduplicated.insurancePlanPremiumAmount = '' THEN NULL ELSE CAST(Deduplicated.insurancePlanPremiumAmount AS DECIMAL(18,2)) END AS PRM_AMT, Deduplicated.rateAreaIdentifier AS RATE_AREA_ID, 'U' AS MBR_ENR_PERD_PRCS_STTUS_CD, CASE WHEN Deduplicated.generationDateTime = '' THEN NULL ELSE CAST(Deduplicated.generationDateTime AS DATETIME) END AS GNRTN_DTM, GETDATE() AS LAST_UPDT_DTM, 'SYSTEM' AS LAST_UPDT_USER_ID, CASE WHEN Deduplicated.subscriberIdentifier = '' THEN NULL ELSE CAST(Deduplicated.subscriberIdentifier AS DECIMAL(18,0)) END AS SUB_INDV_BE_KEY, Deduplicated.RISK_ADJ_YR, Deduplicated.MBR_RELSHP_CD, Deduplicated.zipCode AS SUB_ZIP_CD_5, Deduplicated.federalAPTC AS FED_APTC_CD, Deduplicated.statePremiumSubsidy AS ST_PRM_SBSDY_CD, Deduplicated.stateCSRtext AS ST_CSR_CD, Deduplicated.ICHRA_QSEHRA AS HRA_TYP_CD, Deduplicated.QSEHRA_Spousal AS QLFD_SM_EMPLR_HRA_SPOUSAL_CD, Deduplicated.QSEHRA_Medical AS QLFD_SM_EMPLR_HRA_MED_CD FROM Deduplicated) SELECT * INTO @{pipeline().globalParameters.gbl_param_edw_staging}.[EFFTMP2_EdgeRiskAsmntCmsMbrEnrPerdHistExtr] FROM BusinessLogic",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_TempTableToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_And_Dedup",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "EFFTMP2_EdgeRiskAsmntCmsMbrEnrPerdHistExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/EdgeServer/EnrollmentRA/CmsMbrEnrPerdHist')",
+              "param_filename": "CMS_MBR_ENR_PERD_HIST.@{pipeline().parameters.RunID}.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/EdgeServer/EnrollmentRA/CmsMbrEnrPerdHist"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2014 Blue Cross and Blue Shield of Kansas City\n\nJOB NAME:  EdgeEdgeRiskAsmtCmsMbrEnrPerdHistExtr\nCALLED BY: EdgeRiskAsmntEnrSbmsnRAExtrSeq\n\nDESCRIPTION:  This job loads  CMS Pharmacy Claim  History data to CMS_MBR_ENR_PERD_HIST table \n\nMODIFICATIONS:\n=====================================================================================================================================================================\nDeveloper\\(9)Date\\(9)\\(9)Project/Ticket/UserStory#\\(9)Change Description\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)Development Project\\(9)Code Reviewer\\(9)Date Reviewed||\n=====================================================================================================================================================================\nPooja Sunkara\\(9)2015-02-11\\(9)5125 Risk Adjustment\\(9)Original Programming\\(9)\\(9)\\(9)\\(9)\\(9)EnterpriseNewDevl\\(9)\\(9)Kalyan Neelam\\(9)2015-03-03\n\nPooja Sunkara\\(9)2015-04-09\\(9)5125 Risk Adjustment\\(9)Corrected logic to  update STTUS_CD\\(9)\\(9)\\(9)\\(9)EnterpriseNewDevl\\(9)\\(9)Kalyan Neelam\\(9)2015-04-10\n\nRaja Gummadi\\(9)2015-07-30\\(9)5125\\(9)\\(9)\\(9)Added MBR_INDV_BE_KEY,                                      \\(9)\\(9)EnterpriseDev2\\(9)\\(9)Bhoomi Dasari\\(9)07/30/2015\\(9)\\(9)\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)RISK_ADJ_YR and SUB_INDV_BE_KEY columns \nJaideep Mankala\\(9)2017-04-05\\(9)5605\\(9)\\(9)\\(9)Remove Status update to CLSD on RADB step from Job \\(9)\\(9)EnterpriseDev2\\(9)\\(9)Kalyan Neelam\\(9)2017-04-06 \nHarsha Ravuri\\(9)2018-12-27\\(9)5873 Risk Adjustment\\(9)Updates source file name and added column MBR_RELSHP_CD    \\(9)EnterpriseDev2\\(9)\\(9)Kalyan Neelam\\(9)2019-01-30\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)to file\nHarsha Ravuri\\(9)2023-10-03\\(9)US#597589\\(9)\\(9)Added below 9 new fields to source files\\(9)\\(9)\\(9)\\(9)EnterpriseDev2                       Jeyaprasanna           2023-10-08\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)insuredMemberRace, insuredMemberEthnicity, zipCode, federalAPTC, statePremiumSubsidy, stateCSR, ICHRA_QSEHRA, \n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)QSEHRA_Spousal, QSEHRA_Medical\n\nAnnotations:\nThis Job reads Flat file created in EdwCmsMbrEnrHistExtr_KS job and loads  it into target table CMS_MBR_ENR_PERD_HIST\nThis Source file is created in EdwCmsMbrEnrHistExtr_KS job\nJob Name: EdgeEdgeRiskAsmtCmsMbrEnrPerdHistExtr"
+}

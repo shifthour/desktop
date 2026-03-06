@@ -1,0 +1,136 @@
+{
+  "name": "IdsRcvdIncmSbsdyDtlLoad",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "activities": [
+      {
+        "name": "ac_CopyIdsRcvdIncmSbsdyDtlLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "RCVD_INCM_SBSDY_DTL_SK"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "'@concat(pipeline().globalParameters.gbl_param_environment, '/', 'Jobs/Finance/RcvdIncmSbsdyDtl/load')'",
+              "param_filename": "'RCVD_INCM_SBSDY_DTL_@{pipeline().parameters.RunId}.dat'",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "RCVD_INCM_SBSDY_DTL"
+            }
+          }
+        ]
+      },
+      {
+        "name": "nbk_DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "ac_CopyIdsRcvdIncmSbsdyDtlLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "@concat('RCVD_INCM_SBSDY_DTL_',pipeline().parameters.RunId,'.dat')",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "RunId": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/Finance/RcvdIncmSbsdyDtl"
+    }
+  },
+  "Description": "CALLED BY: IdsMaMMRRcvdIncmSbsdyDtlCntl\n\nPROCESSING:\n                  As a part of the MA/ACA in-sourcing, this process will load the Monthly Membership (MMR) file from CMS.  This file contains monthly subsidy data at the beneficiary/member level.  Data needs to be loaded to IDS table, RCVD_INCM_SUBSDY_DTL to be included in the in the GL process for reconciliation and finanical reporting. \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nSai Madhu Yelakkayala   11/02/2020         US-243707                     Originally Programmed                           ids_dev2                    Jeyaprasanna               2020-12-15\n\nAnnotations:\nJob Name: IdsProvLocLoad\nRead Load File created in the FKEY job\nCopy Stage for buffer\nUpdate then Insert RCVD_INCM_SBSDY_DTL table\nLoad rejects are redirected into a Reject file"
+}

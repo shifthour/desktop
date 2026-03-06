@@ -1,0 +1,93 @@
+{
+  "name": "IdsEdwClsPlnDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "String"
+      },
+      "EDWRunCycleDate": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "copy_IdsEdwClsPlnD",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_ClsPln AS (\n    SELECT CLS_PLN.CLS_PLN_SK,\n           CLS_PLN.CLS_PLN_ID,\n           CLS_PLN.BUY_UP_IN,\n           CLS_PLN.CLS_PLN_DESC,\n           CLS_PLN.CLS_PLN_METRO_RURAL_CD_SK,\n           CLS_PLN.PCMH_IN,\n           COALESCE(CD_SRC.TRGT_CD, 'UNK') AS SRC_SYS_CD\n      FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CLS_PLN CLS_PLN\n      LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD_SRC\n             ON CLS_PLN.SRC_SYS_CD_SK = CD_SRC.CD_MPPNG_SK\n),\ncte_ClsPln2 AS (\n    SELECT c.CLS_PLN_SK,\n           c.SRC_SYS_CD,\n           c.CLS_PLN_ID,\n           c.BUY_UP_IN,\n           c.CLS_PLN_DESC,\n           c.CLS_PLN_METRO_RURAL_CD_SK,\n           c.PCMH_IN,\n           COALESCE(CD_MTR_TRGT.TRGT_CD,'UNK') AS MTR_CD,\n           COALESCE(CD_MTR_TRGT.TRGT_CD_NM,'UNK') AS MTR_CD_NM\n      FROM cte_ClsPln c\n      LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD_MTR_TRGT\n             ON c.CLS_PLN_METRO_RURAL_CD_SK = CD_MTR_TRGT.CD_MPPNG_SK\n),\ncte_Final AS (\n    SELECT c.CLS_PLN_SK,\n           c.SRC_SYS_CD,\n           c.CLS_PLN_ID,\n           @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK,\n           @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,\n           c.BUY_UP_IN AS CLS_PLN_BUY_UP_IN,\n           c.CLS_PLN_DESC,\n           CASE WHEN dbo.trim_default(c.MTR_CD) = '' THEN 'UNK' ELSE c.MTR_CD END AS CLS_PLN_METRO_RURAL_CD,\n           CASE WHEN dbo.trim_default(c.MTR_CD_NM) = '' THEN 'UNK' ELSE c.MTR_CD_NM END AS CLS_PLN_METRO_RURAL_NM,\n           @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK,\n           @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK,\n           c.CLS_PLN_METRO_RURAL_CD_SK,\n           c.PCMH_IN AS CLS_PLN_PCMH_IN\n      FROM cte_ClsPln2 c\n)\nSELECT * FROM cte_Final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "CLS_PLN"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "CLS_PLN_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/ClsPlnD"
+    }
+  },
+  "Description": "MODIFICATIONS:\nDeveloper                Date                 Project/Altiris #      Change Description                                                                                                           Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------                                                                   --------------------------------       -------------------------------   ----------------------------       \n\nSharonAndrew        2009-07-06       TTR346                Added field ClsPlnMetroRuralCdSK to ODBC call and                                                            devlEDW\n                                                                                      Added 3 fields to EDW table  ClsPlnMetroRuralCdSK, ClsPlnMetroRuralCd and ClsPlnMetroRuralNm\nKalyan Neelam        2012-12-07       4963                    Added new column PCMH_IN on end                                                                                     EnterpriseNewDevl    Bhoomi Dasari            12/21/2012\n\nRama Kamjula         2013-06-24      5114                     Converted from Server to Parallel Job                                                                                     EnterpriseWrhsDevl\n\nAnnotations:\nExtracting Class Plan data from CLS_PLN_D in IDS\nCLS_PLN data is loaded to Seq file\nJobName: IdsEdwClsPlnDExtr\n\nThis job extracts Class plan data from CLS_PLN_D table in IDS.\nNull handling"
+}

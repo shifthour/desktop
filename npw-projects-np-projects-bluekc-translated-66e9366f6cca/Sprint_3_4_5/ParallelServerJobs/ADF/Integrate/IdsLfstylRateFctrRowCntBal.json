@@ -1,0 +1,242 @@
+{
+  "name": "IdsLfstylRateFctrRowCntBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_ExtractData",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH stg AS (SELECT SRC.LFSTYL_RATE_FCTR_ID AS SRC_LFSTYL_RATE_FCTR_ID, SRC.MBR_LFSTYL_BNF_CD AS SRC_MBR_LFSTYL_BNF_CD, SRC.LFSTYL_RATE_FCTR_EFF_DT AS SRC_LFSTYL_RATE_FCTR_EFF_DT, SRC.SRC_SYS_CD AS SRC_SRC_SYS_CD, TRGT.LFSTYL_RATE_FCTR_ID AS TRGT_LFSTYL_RATE_FCTR_ID, TRGT.MBR_LFSTYL_BNF_CD AS TRGT_MBR_LFSTYL_BNF_CD, TRGT.LFSTYL_RATE_FCTR_EFF_DT AS TRGT_LFSTYL_RATE_FCTR_EFF_DT, TRGT.SRC_SYS_CD AS TRGT_SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_LFSTYL_RATE_FCTR AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.LFSTYL_RATE_FCTR AS TRGT ON SRC.LFSTYL_RATE_FCTR_ID = TRGT.LFSTYL_RATE_FCTR_ID AND SRC.MBR_LFSTYL_BNF_CD = TRGT.MBR_LFSTYL_BNF_CD AND SRC.LFSTYL_RATE_FCTR_EFF_DT = TRGT.LFSTYL_RATE_FCTR_EFF_DT AND SRC.SRC_SYS_CD = TRGT.SRC_SYS_CD WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle}) SELECT stg.* FROM stg",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.STG_TMP_IdsLfstylRateFctrRowCntBal",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@null",
+              "param_table": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "STG_TMP_IdsLfstylRateFctrRowCntBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_TransformLogic",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_ExtractData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RSH_TMP_IdsLfstylRateFctrRowCntBal; SELECT SRC_LFSTYL_RATE_FCTR_ID, SRC_MBR_LFSTYL_BNF_CD, SRC_LFSTYL_RATE_FCTR_EFF_DT, SRC_SRC_SYS_CD, TRGT_LFSTYL_RATE_FCTR_ID, TRGT_MBR_LFSTYL_BNF_CD, TRGT_LFSTYL_RATE_FCTR_EFF_DT, TRGT_SRC_SYS_CD INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RSH_TMP_IdsLfstylRateFctrRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.STG_TMP_IdsLfstylRateFctrRowCntBal WHERE SRC_LFSTYL_RATE_FCTR_ID IS NULL OR SRC_MBR_LFSTYL_BNF_CD IS NULL OR SRC_LFSTYL_RATE_FCTR_EFF_DT IS NULL OR SRC_SRC_SYS_CD IS NULL OR TRGT_LFSTYL_RATE_FCTR_ID IS NULL OR TRGT_MBR_LFSTYL_BNF_CD IS NULL OR TRGT_LFSTYL_RATE_FCTR_EFF_DT IS NULL OR TRGT_SRC_SYS_CD IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.NTFY_TMP_IdsLfstylRateFctrRowCntBal; SELECT TOP 1 'ROW COUNT BALANCING FACETS - IDS LFSTYL_RATE_FCTR IS OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.NTFY_TMP_IdsLfstylRateFctrRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.STG_TMP_IdsLfstylRateFctrRowCntBal WHERE '@{pipeline().parameters.ToleranceCd}'='OUT'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_ResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_TransformLogic",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "RSH_TMP_IdsLfstylRateFctrRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/research')",
+              "param_filename": "IdsLfstylRateFctrResearch.dat.@{pipeline().parameters.RunID}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_NotifyFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_TransformLogic",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "NTFY_TMP_IdsLfstylRateFctrRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/notify')",
+              "param_filename": "LfstylRateFctrBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ToleranceCd": {
+        "type": "string"
+      },
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Capitation/LfstylRateFctr/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on LFSTYL_RATE_FCTR and B_LFSTYL_RATE_FCTR tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                  DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                       DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nManasa ANdru           2018-08-15       60037                              Initial Programming                                                                                  IntegrateDev2         Abhiram Dasarathy      2018-08-24\n                                                            Capitation/Attribution\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - LFSTYL_RATE_FCTR"
+}

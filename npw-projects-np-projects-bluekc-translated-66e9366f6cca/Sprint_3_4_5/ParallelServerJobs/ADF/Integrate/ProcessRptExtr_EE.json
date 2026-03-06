@@ -1,0 +1,101 @@
+{
+  "name": "ProcessRptExtr_EE",
+  "properties": {
+    "parameters": {
+      "RunCycle": {
+        "type": "string"
+      },
+      "Subject": {
+        "type": "string"
+      },
+      "SourceSys": {
+        "type": "string"
+      },
+      "TargetSys": {
+        "type": "string"
+      },
+      "RowCount": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyProcessRptExtrEE",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_main AS (SELECT r.SUBJ_CD, r.SRC_SYS_CD, r.TRGT_SYS_CD, r.STRT_DTM, r.END_DTM, c.DAY_OF_WK_FULL_NM, CONVERT(DECIMAL(18,6), DATEDIFF(SECOND, r.STRT_DTM, r.END_DTM))/86400 AS DURATION, ROW_NUMBER() OVER(ORDER BY r.STRT_DTM) AS NUMBERROW FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC r JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.P_BTCH_CYC b ON r.BTCH_CYC_SK=b.BTCH_CYC_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CLNDR_DT c ON b.BTCH_CYC_DESC=c.CLNDR_DT_SK WHERE r.SUBJ_CD='@{pipeline().parameters.Subject}' AND r.TRGT_SYS_CD='@{pipeline().parameters.TargetSys}' AND r.SRC_SYS_CD='@{pipeline().parameters.SourceSys}' AND r.RUN_CYC_NO=@{pipeline().parameters.RunCycle} ORDER BY r.STRT_DTM), cte_value AS (SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, NUMBERROW, LTRIM(RTRIM(CAST(DURATION AS VARCHAR(50)))) AS DUR_STRING FROM cte_main), cte_string AS (SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, NUMBERROW, '000000'+DUR_STRING AS Value FROM cte_value), cte_pos AS (SELECT *, CHARINDEX('.', Value) AS PerPos FROM cte_string), cte_substring AS (SELECT *, SUBSTRING(Value, PerPos-2, 2) AS DurationSec, SUBSTRING(Value, PerPos-4, 2) AS DurationMin, SUBSTRING(Value, PerPos-6, 2) AS DurationHrs FROM cte_pos), cte_formatted AS (SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, NUMBERROW, CASE WHEN DurationHrs='00' THEN '' WHEN LEFT(DurationHrs,1)='0' THEN RIGHT(DurationHrs,1) ELSE DurationHrs END AS StringDurationHrs, DurationMin FROM cte_substring), cte_final AS (SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, NUMBERROW, CASE WHEN LEN(LTRIM(RTRIM(StringDurationHrs)))=0 THEN '00' WHEN LEN(LTRIM(RTRIM(StringDurationHrs)))=1 THEN '0'+LTRIM(RTRIM(StringDurationHrs)) ELSE LTRIM(RTRIM(StringDurationHrs)) END AS StringDurationHrsFormatted, CASE WHEN DurationMin='00' THEN '' WHEN LEFT(DurationMin,1)='0' THEN RIGHT(DurationMin,1) ELSE DurationMin END AS StringDurationMin FROM cte_formatted), cte_final2 AS (SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, NUMBERROW, StringDurationHrsFormatted, CASE WHEN LEN(LTRIM(RTRIM(StringDurationMin)))=0 THEN '00' WHEN LEN(LTRIM(RTRIM(StringDurationMin)))=1 THEN '0'+LTRIM(RTRIM(StringDurationMin)) ELSE LTRIM(RTRIM(StringDurationMin)) END AS StringDurationMinFormatted FROM cte_final), cte_final3 AS (SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, NUMBERROW, StringDurationHrsFormatted+':'+StringDurationMinFormatted AS TIME_DURATION FROM cte_final2) SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD, STRT_DTM, END_DTM, DAY_OF_WK_FULL_NM, TIME_DURATION, @{pipeline().parameters.RowCount} AS ROW_COUNT FROM cte_final3 ORDER BY STRT_DTM",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "P_RUN_CYC"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/scripts/log')",
+              "param_filename": "processing_rpt.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/JobSequencer/CommonComponents"
+    }
+  },
+  "Description": "MODIFICATIONS:\nDeveloper                Date                 Project/Altiris #      Change Description                                                                     Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------                             --------------------------------       -------------------------------   ----------------------------       \nBrent Leland            2008-02-14       IAD Prod. Supp     Original Programming.                                                                   devlIDScur                     Steph Goddard          02/22/2008\nlee moore                 2013-07-01      5114                        rewrite  in parallel                                                                          Enterprisewh\n\nAnnotations:\nAdd Defaults and Null Handling\nWrite out processing statistics to file\n\nJob Name:\nIdsEdwProcessRptExtr\nSelect data from P_RUN_CYC table based on job parameters\nRecords are appended to file\n/ids/prod/scripts/log/processing_rpt.dat"
+}

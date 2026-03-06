@@ -1,0 +1,85 @@
+{
+  "name": "IdsEdwSubRateDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "Int"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwSubRateDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte1 AS (SELECT SR.SUB_RATE_SK, COALESCE(CD.TRGT_CD,'UNK') AS PRE_SRC_SYS_CD, SR.SUB_UNIQ_KEY, SR.EFF_DT_SK, SR.CRT_RUN_CYC_EXCTN_SK, SR.LAST_UPDT_RUN_CYC_EXCTN_SK, SR.SUB_SK, SR.TERM_DT_SK, SR.RATE_CLS_ID, SR.RISK_CLS_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.SUB_RATE SR LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON SR.SRC_SYS_CD_SK = CD.CD_MPPNG_SK) SELECT SUB_RATE_SK, CASE WHEN LTRIM(RTRIM(PRE_SRC_SYS_CD)) = '' THEN 'UNK' ELSE PRE_SRC_SYS_CD END AS SRC_SYS_CD, SUB_UNIQ_KEY, EFF_DT_SK AS SUB_RATE_EFF_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, SUB_SK, RATE_CLS_ID AS SUB_RATE_RATE_CLS_ID, RISK_CLS_ID AS SUB_RATE_RISK_CLS_ID, TERM_DT_SK AS SUB_RATE_TERM_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte1",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "SUB_RATE"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "SUB_RATE_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/SubRateD"
+    }
+  },
+  "Description": "JOB NAME:\n                               EdwSubRateExtr\n\nDESCRIPTION:  \n                               Pulls data from IDS and codes hash file, combines and loads data into the EDW\n\nINPUTS:\n                               IDS:  SUB_RATE\n  \nHASH FILES:\n                               hf_cdma_codes - Load the CDMA codes to get cd from cd_sk\n\n\nTRANSFORMS:  \n                               TRIM all the fields that are extracted or used in lookups\n                           \nPROCESSING:\n                               IDS - read from source, lookup all code SK values and get the natural codes\n\nOUTPUTS: \n                               SUB_RATE_D sequential file\n\nMODIFICATIONS:\n                               Hugh Sisson - 12/23/2005 - Original Program\n                               Suzanne Saylor  04/12/2006 - added RunCycle parameter, set LAST_RUN_CYC_EXCTN_SK to RunCycle\n                               Pooja Sunkara    06/28/2013    Converted job from server to parallel version. Renamed CurrentDate to EDWRunCycleDate and  Renamed job to IdsEdwSubRateDExtr\n\nAnnotations:\nAdd CRT_RUN_CYC_EXCTN_DT_SK and LAST_UPDT_RUN_CYC_EXCTN_DT_SK\nJob name:\nIdsEdwSubRateDExtr\nSubscriber Rate Extract - Pulls from IDS SUB_RATE to load to EDW SUB_RATE_D\nWrite SUB_RATE_D Data into a Sequential file for Load Ready Job.\nRead data from source table SUB_RATE, Pull SRC_SYS_CD column from CD_MPPNG table by joining tables SUB_RATE and CD_MPPNG"
+}

@@ -1,0 +1,206 @@
+{
+  "name": "BCBSClmLnRemitCleanupSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim/SeqClmLnRemit"
+    },
+    "parameters": {
+      "SourceSystem": {
+        "type": "String",
+        "defaultValue": "FACETS"
+      },
+      "SourceSystemSK": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "IDSRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DriverTable": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": "\\\" \\\""
+      },
+      "CntlJobName": {
+        "type": "String",
+        "defaultValue": "BCBSClmLnRemitCntl"
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TableTimeStamp": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_DelRec",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'IdsBcbsClmLineRemitDelete'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsBcbsClmLineRemitDelete",
+              "type": "DatabricksNotebook",
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/claim/delete/ClaimLineRemit/IdsBcbsClmLineRemitDelete')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Source": {
+                    "value": "@pipeline().parameters.SourceSystem",
+                    "type": "Expression"
+                  },
+                  "SourceSK": {
+                    "value": "@pipeline().parameters.SourceSystemSK",
+                    "type": "Expression"
+                  },
+                  "RunCycle": {
+                    "value": "@pipeline().parameters.IDSRunCycle",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_DropTbl",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_DelRec",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(pipeline().globalParameters.gbl_param_DBUG,'N')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "drp_tmp_claim_remit",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "waitOnCompletion": true,
+                "parameters": {
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  },
+                  "Command1": "DROP TABLE IF EXISTS tempdb..TMP_IDS_CLAIM_REMIT",
+                  "Command2": "DROP TABLE IF EXISTS tempdb..TMP_ADJ_FROM_REMIT"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "StartLoop",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "If_DropTbl",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "items": [
+            "K_CLM_LN_TEMP",
+            "K_CLM_LN_REMIT_DSALW_TEMP"
+          ],
+          "activities": [
+            {
+              "name": "Truncate_Table",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB.TRUNCATE')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "owner_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "DBTable": {
+                    "value": "@item()",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "name": "IdsEdwProdDsgnSumFExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String",
+        "defaultValue": "2018-03-22"
+      },
+      "EDWRunCycle": {
+        "type": "String",
+        "defaultValue": "100"
+      }
+    },
+    "activities": [
+      {
+        "name": "cp_IdsEdwProdDsgnSumFExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cteLeft AS ( SELECT DISTINCT PROD.PROD_SK, dbo.trim_default(PROD.PROD_ID) AS PROD_ID, COALESCE(CD1.TRGT_CD,'UNK') AS SRC_SYS_CD, '1920-01-01' AS PROD_CMPNT_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROD PROD JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON PROD.SRC_SYS_CD_SK = CD1.CD_MPPNG_SK WHERE PROD.PROD_SK NOT IN (0,1) UNION SELECT DISTINCT 0 AS PROD_SK,'UNK' AS PROD_ID,'UNK' AS SRC_SYS_CD,'1753-01-01' AS PROD_CMPNT_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROD PROD UNION SELECT DISTINCT 1 AS PROD_SK,'NA' AS PROD_ID,'NA' AS SRC_SYS_CD,'1753-01-01' AS PROD_CMPNT_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROD PROD ), cteRight AS ( SELECT DISTINCT PROD_SK, MIN(PROD_CMPNT_TERM_DT_SK) AS PROD_CMPNT_TERM_DT_SK FROM ( SELECT DISTINCT PROD_CMPNT.PROD_SK, PROD_CMPNT.PROD_ID, COALESCE(CD1.TRGT_CD,'UNK') AS SRC_SYS_CD, MIN(PROD_CMPNT.PROD_CMPNT_EFF_DT_SK) AS PROD_CMPNT_TERM_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROD_CMPNT PROD_CMPNT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON PROD_CMPNT.SRC_SYS_CD_SK=CD1.CD_MPPNG_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.BNF_SUM_DTL BNF ON BNF.PROD_CMPNT_PFX_ID=PROD_CMPNT.PROD_CMPNT_PFX_ID JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CM1 ON CM1.CD_MPPNG_SK=PROD_CMPNT.PROD_CMPNT_TYP_CD_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CM2 ON CM2.CD_MPPNG_SK=BNF.BNF_SUM_DTL_TYP_CD_SK GROUP BY PROD_CMPNT.PROD_ID, PROD_CMPNT.PROD_SK, CD1.TRGT_CD, CM1.TRGT_CD, CM2.TRGT_CD HAVING CM1.TRGT_CD='BSBS' AND CM2.TRGT_CD='CLNC' UNION SELECT DISTINCT PROD_CMPNT.PROD_SK, PROD_CMPNT.PROD_ID, COALESCE(CD1.TRGT_CD,'UNK') AS SRC_SYS_CD, MIN(PROD_CMPNT.PROD_CMPNT_EFF_DT_SK) AS PROD_CMPNT_TERM_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROD_CMPNT PROD_CMPNT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON PROD_CMPNT.SRC_SYS_CD_SK=CD1.CD_MPPNG_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CM1 ON CM1.CD_MPPNG_SK=PROD_CMPNT.PROD_CMPNT_TYP_CD_SK GROUP BY PROD_CMPNT.PROD_ID, PROD_CMPNT.PROD_SK, CD1.TRGT_CD, CM1.TRGT_CD HAVING CM1.TRGT_CD='UPP' ) X GROUP BY PROD_SK, PROD_ID, SRC_SYS_CD ), cteJoin AS ( SELECT L.PROD_SK, L.PROD_ID, L.SRC_SYS_CD, L.PROD_CMPNT_EFF_DT_SK, R.PROD_CMPNT_TERM_DT_SK FROM cteLeft L LEFT JOIN cteRight R ON L.PROD_SK = R.PROD_SK ), cteXfm1 AS ( SELECT cteJoin.*, CASE WHEN dbo.trim_default( CASE WHEN cteJoin.PROD_CMPNT_TERM_DT_SK IS NOT NULL THEN cteJoin.PROD_CMPNT_TERM_DT_SK ELSE '' END ) <> '' THEN DATEADD(DAY, -1, CAST(cteJoin.PROD_CMPNT_TERM_DT_SK AS DATE)) ELSE '9999-12-31' END AS svPreviousDt FROM cteJoin ), cteXfm2 AS ( SELECT PROD_SK, PROD_ID, SRC_SYS_CD, PROD_CMPNT_EFF_DT_SK, CASE WHEN CAST(PROD_CMPNT_EFF_DT_SK AS DATE) <> '1753-01-01' THEN svPreviousDt ELSE '1753-01-01' END AS svProdCmpntTermDt FROM cteXfm1 ) SELECT cteXfm2.PROD_SK, cteXfm2.PROD_ID, cteXfm2.PROD_CMPNT_EFF_DT_SK, cteXfm2.svProdCmpntTermDt AS PROD_CMPNT_TERM_DT_SK, 'NA' AS SPIRA_BNF_ID, 'NA' AS UPP_XREF_ID, cteXfm2.SRC_SYS_CD FROM cteXfm2",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PROD"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','verified')",
+              "param_filename": "PROD_DSGN_SUM_F_Extr.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/ProdDsgnSumF"
+    }
+  },
+  "Description": "MODIFICATIONS:\n\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:          \n\nPROCESSING:\n                  This is an extract from Product table into intermediate file  \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                                    Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                              ----------------------------------   ---------------------------------    -------------------------            \n\nAnitha Perumal                  2019-03-05           5832-Spira Care             Originally Programmed                                               EnterpriseDev1             Kalyan Neelam            2019-03-12\n\n\nAnitha Perumal                  2019-03-26           5832-Spira Care           Replaced SPIRA_BNF_ID from N to NA                    EnterpriseDev1         Kalyan Neelam            2019-03-26\n                                                                                                            in the transformer\n\nAnnotations:\nAll product extract from prod and prod_cmpnt table\nThis file contains the default inserts for all products and will be funneled with Spira and Upp extract in job IdsEdwProdDsgnSumFXfm\nJob:\nIdsEdwProdDsgnSumFExtr\nTable:\n PROD_DSGN_SUM_F      \nPull the matched set of products from IDS and move to EDW."
+}

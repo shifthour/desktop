@@ -1,0 +1,635 @@
+{
+  "name": "RedCardEobExtrCntl2",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Outbound/Jobs/Zelis/EOB"
+    },
+    "parameters": {
+      "CLMPDDT": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Environment": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FTPFiles": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Source": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Target": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Subject": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Frequency": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Variables_ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Variables_RunDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "OpenRunCycle_RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Variables_RunID": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1K",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.Variables_ExclusionList), ';'), 'ClmRmarkCdDescExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ClmRmarkCdDescExtr",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/Zelis/EOB/ClmRmarkCdDescExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  },
+                  "CLMPDDT": {
+                    "value": "@pipeline().parameters.CLMPDDT",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1L",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1K",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.Variables_ExclusionList), ';'), 'EobMasterDelivryUpdt'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EobMasterDelivryUpdt",
+              "type": "ExecutePipeline",
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "EobMasterDelivryUpdt",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Execute_Command_24",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_1L",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/Zelis_EOBMasterRecord00.dat",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/01.txt",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "outbound"
+          }
+        }
+      },
+      {
+        "name": "If_1Z",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Execute_Command_24",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(pipeline().parameters.FTPFiles,'Y')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FTP_DAT_FILE",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTPCMD": "put",
+                  "LOCALPATH": "/external",
+                  "LOCALFILENAME": {
+                    "value": "@concat(pipeline().parameters.Environment, '1.RC.EOB.8510001FA', pipeline().parameters.Variables_RunDate, '01.txt')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/",
+                  "REMOTEFILENAME": {
+                    "value": "@concat(pipeline().parameters.Environment, '1.RC.EOB.8510001FA', pipeline().parameters.Variables_RunDate, '01.txt')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1Zz",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1Z",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(pipeline().parameters.FTPFiles,'Y')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FTP_LAN",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "MACHINE": "o_lib",
+                  "FTPCMD": "put",
+                  "LOCALPATH": "/external",
+                  "LOCALFILENAME": {
+                    "value": "@concat(pipeline().parameters.Environment, '1.RC.EOB.8510001FA', pipeline().parameters.Variables_RunDate, '01.txt')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/library/library/IS/PHI09/Shared/PrintVendorFileRecon/",
+                  "REMOTEFILENAME": {
+                    "value": "@concat(pipeline().parameters.Environment, '1.RC.EOB.8510001FA', pipeline().parameters.Variables_RunDate, '01.txt')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1Aa",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1Zz",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.Variables_ExclusionList), ';'), 'EdwGapsInCareDtlExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwGapsInCareDtlExtr",
+              "type": "ExecutePipeline",
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "EdwGapsInCareDtlExtr",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "CLMPDDT": {
+                    "value": "@pipeline().parameters.CLMPDDT",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Add_header_trailer",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_1Aa",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/Zelis_GapsInCareHdr.dat",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/R01E7BCD11.txt",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "outbound"
+          }
+        }
+      },
+      {
+        "name": "If_1Ab",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Add_header_trailer",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(pipeline().parameters.FTPFiles,'Y')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FTP_GAPS_FILE",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTPCMD": "put",
+                  "LOCALPATH": "/external",
+                  "LOCALFILENAME": {
+                    "value": "@concat(pipeline().parameters.Environment, '1.REDCARD.8510FA', pipeline().parameters.Variables_RunDate, 'R01E7BCD11.txt')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/",
+                  "REMOTEFILENAME": {
+                    "value": "@concat(pipeline().parameters.Environment, '1.REDCARD.8510FA', pipeline().parameters.Variables_RunDate, 'R01E7BCD11.txt')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Mv_to_processed",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_1Ab",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/R01E7BCD11.txt",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/.txt",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "outbound"
+          }
+        }
+      },
+      {
+        "name": "Mv_to_processed_original",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Mv_to_processed",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/01.txt",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/.txt",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "outbound"
+          }
+        }
+      },
+      {
+        "name": "Remove_Files",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Mv_to_processed_original",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external",
+              "type": "Expression"
+            },
+            "command": "delete",
+            "project": "outbound"
+          }
+        }
+      },
+      {
+        "name": "CloseRunCycle",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Remove_Files",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/CloseRunCycle')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "DBOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "SrcSystem": {
+              "value": "@pipeline().parameters.Initial_Source",
+              "type": "Expression"
+            },
+            "TrgtSystem": {
+              "value": "@pipeline().parameters.Initial_Target",
+              "type": "Expression"
+            },
+            "SubjCode": {
+              "value": "@pipeline().parameters.Initial_Subject",
+              "type": "Expression"
+            },
+            "FreqCode": {
+              "value": "@pipeline().parameters.Initial_Frequency",
+              "type": "Expression"
+            },
+            "RunCycle": {
+              "value": "@pipeline().parameters.OpenRunCycle_RunCycle",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,220 @@
+{
+  "name": "IdsEdwPCaeMbrDrvrLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_P_CAE_MBR_DRVR_to_EDW",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_EDWOwner}.P_CAE_MBR_DRVR",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "MBR_SK",
+                  "type": "Int64",
+                  "physicalType": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "CAE_UNIQ_KEY",
+                  "type": "Int64",
+                  "physicalType": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "INDV_BE_KEY",
+                  "type": "Decimal",
+                  "physicalType": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "PRI_IN",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "GRP_SK",
+                  "type": "Int64",
+                  "physicalType": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "MBR_BRTH_DT",
+                  "type": "DateTime",
+                  "physicalType": "DateTime"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "MBR_GNDR_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "LAST_UPDT_DT",
+                  "type": "DateTime",
+                  "physicalType": "DateTime"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "P_CAE_MBR_DRVR.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "P_CAE_MBR_DRVR"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Copy_P_CAE_MBR_DRVR_to_EDW",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Collect_Stats')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "P_CAE_MBR_DRVR.dat",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {},
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/PCaeMbrPrmcy"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nPOOJA SUNKARA     07/29/2013        5114                           Developed Datastage Load job based on Routine                                EnterpriseWrhsDevl\n\nAnnotations:\nLoad rejects are redirected into a Reject file\nJob name\nIdsEdwPCaeMbrDrvrLoad\nLoad Type: \nReplace(Truncate and Insert)\nRead Load File created in the IdsEdwPCaeMbrPrmcyExtr job\nCopy stage for buffer\nTruncate then Insert P_CAE_MBR_DRVR table\nLoad file from Seq_P_CAE_MBR_DRVR_csv_load file into EDW P_CAE_MBR_DRVR table"
+}

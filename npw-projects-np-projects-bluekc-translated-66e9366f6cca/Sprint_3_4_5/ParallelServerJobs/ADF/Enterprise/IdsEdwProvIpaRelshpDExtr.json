@@ -1,0 +1,92 @@
+{
+  "name": "IdsEdwProvIpaRelshpDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "string"
+      },
+      "EDWRunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwProvIpaRelshpDToFile",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH cte1 AS ( SELECT D.PROV_IPA_RELSHP_SK, D.PROV_ID, D.PROV_IPA_PROV_ID, D.EFF_DT_SK, D.PROV_SK, D.PROV_IPA_PROV_SK, D.PROV_IPA_RELSHP_TERM_RSN_CD_SK, D.TERM_DT_SK, COALESCE(CD1.TRGT_CD,'UNK') AS SRC_SYS_CD, COALESCE(CD2.TRGT_CD,'UNK') AS LKP_TRGT_CD, COALESCE(CD2.TRGT_CD_NM,'UNK') AS LKP_TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_IPA_RELSHP D LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON D.SRC_SYS_CD_SK = CD1.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD2 ON D.PROV_IPA_RELSHP_TERM_RSN_CD_SK = CD2.CD_MPPNG_SK ), cte2 AS ( SELECT PROV_IPA_RELSHP_SK, CASE WHEN dbo.trim_default(SRC_SYS_CD) = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, PROV_ID, PROV_IPA_PROV_ID, EFF_DT_SK AS PROV_IPA_RELSHP_EFF_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, PROV_SK, PROV_IPA_PROV_SK, TERM_DT_SK AS PROV_IPA_RELSHP_TERM_DT_SK, CASE WHEN dbo.trim_default(LKP_TRGT_CD) = '' THEN 'UNK' ELSE LKP_TRGT_CD END AS PROV_IPA_RELSHP_TERM_RSN_CD, CASE WHEN dbo.trim_default(LKP_TRGT_CD_NM) = '' THEN 'UNK' ELSE LKP_TRGT_CD_NM END AS PROV_IPA_RELSHP_TERM_RSN_NM, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, PROV_IPA_RELSHP_TERM_RSN_CD_SK FROM cte1 ) SELECT PROV_IPA_RELSHP_SK, SRC_SYS_CD, PROV_ID, PROV_IPA_PROV_ID, PROV_IPA_RELSHP_EFF_DT_SK, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, PROV_SK, PROV_IPA_PROV_SK, PROV_IPA_RELSHP_TERM_DT_SK, PROV_IPA_RELSHP_TERM_RSN_CD, PROV_IPA_RELSHP_TERM_RSN_NM, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, PROV_IPA_RELSHP_TERM_RSN_CD_SK FROM cte2",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PROV_IPA_RELSHP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Provider/EdwLoads/ProvIpaRelshpD/load')",
+              "param_filename": "PROV_IPA_RELSHP_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/ProvIpaRelshpD"
+    }
+  },
+  "Description": "COPYRIGHT 2005 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nINPUTS:\n\tIDS - PROV_IPA_RELSHP\n  \nHASH FILES:\n                hf_cdma_codes         - CDMA code table - resolve code lookups               \n\nTRANSFORMS:  \n                  TRIM all the fields that are extracted or used in lookups\n                           \nPROCESSING:\n                  IDS - read from source, lookup all code SK values and get the natural codes\n                \n\n\n\nModifications:                \nDeveloper                    Date              Project/Altiris #                     Change Description                             Code Reviewer            Date Reviewed        \n=================================================================================================================                                                                          \n=================================================================================================================\n\nRalph Tucker           09/14/2005                                              Originally Programmed\n\nSrikanth Mettpalli      06/17/2013        5114                              Original Programming                               Jag Yelavarthi               2013-08-23\n                                                                                                   (Server to Parallel Conversion)\n\nAnnotations:\nCode SK lookups for Denormalization\n\nLookup Keys:\nCD_MPPNG_SK\nProvIpaRelshpTermRsnCdSk\nWrite PROV_IPA_RELSHP Data into a Sequential file for Load Job IdsEdwProvIpaRelshpDLoad.\nRead all the Data from IDS PROV_IPA_RELSHP Table;\nAdd Defaults and Null Handling.\nJob Name: IdsEdwProvIpaRelshpDExtr"
+}

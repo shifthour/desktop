@@ -1,0 +1,337 @@
+{
+  "name": "EdwNextPageFTPSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/MADOR/Seq"
+    },
+    "parameters": {
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Env": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EnvNm": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EmailNotify": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LANLocation": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExtractTimeStamp": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TaxYr": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunDt": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SkipFTP": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'EdwNextPageMassAllExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwNextPageMassAllExtr",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "EdwNextPageMassAllExtr",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  },
+                  "Tax_Year": {
+                    "value": "@pipeline().parameters.TaxYr",
+                    "type": "Expression"
+                  },
+                  "ExtractTimestamp": {
+                    "value": "@pipeline().parameters.ExtractTimeStamp",
+                    "type": "Expression"
+                  },
+                  "LastUpdRunDt": {
+                    "value": "@pipeline().parameters.RunDt",
+                    "type": "Expression"
+                  },
+                  "NonDiscFltr": " "
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'EdwNextPageFtp'), false), equals(string(pipeline().parameters.SkipFTP), 'false'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwNextPageFtp",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "EdwNextPageMassAllFTP",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "NonDiscFltr": " ",
+                  "ExtractTimeStamp": {
+                    "value": "@pipeline().parameters.ExtractTimeStamp",
+                    "type": "Expression"
+                  },
+                  "Env": {
+                    "value": "@pipeline().parameters.Env",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'EdwToLAN'), false), equals(string(pipeline().parameters.SkipFTP), 'false'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwToLAN",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                "baseParameters": {
+                  "MACHINE": "o_lib",
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/external')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": "Mador1099_EdwToNextPage.csv",
+                  "REMOTEPATH": {
+                    "value": "@pipeline().parameters.LANLocation",
+                    "type": "Expression"
+                  },
+                  "REMOTEFILENAME": {
+                    "value": "@concat(pipeline().parameters.Env, '1.MAILPRINT.BCBSKC_MADOR.', pipeline().parameters.ExtractTimeStamp, '.csv')",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'EMAIL_EdwToNextPage'), false), equals(string(pipeline().parameters.SkipFTP), 'false'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EMAIL_EdwToNextPage",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().parameters.EmailNotify",
+                    "type": "Expression"
+                  },
+                  "subject": "MADOR - File to Print Letters",
+                  "body": "Hi Team, The attached file is sent to NEXTPAGE team for ptinting the MADOR-1099 Letters. \nThe same file is located in O:\\library\\IS\\PHI11\\Shared\\5839_MADOR\\Outbound_Files",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_environment, '/external/Mador1099_EdwToNextPage.csv')",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_published",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1E",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1D",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'MOVE_NextPage_File'), false), equals(string(pipeline().parameters.SkipFTP), 'false'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "MOVE_NextPage_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/external/Mador1099_EdwToNextPage.csv",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/external/processed/Mador1099_EdwToNextPage.csv.",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "enterprise"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

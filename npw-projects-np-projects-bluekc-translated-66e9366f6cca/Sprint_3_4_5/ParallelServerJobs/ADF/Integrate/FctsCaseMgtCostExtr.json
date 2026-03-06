@@ -1,0 +1,100 @@
+{
+  "name": "FctsCaseMgtCostExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "cp_FctsCaseMgtCostExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte AS (SELECT DISTINCT CMCM_ID, CMCS_SEQ_NO, CMCS_INPUT_DT, CMCS_FROM_DT, CMCS_TO_DT, CMCS_ACT_COST, CMCS_PROJ_COST, CMCS_INPUT_USID, CMCS_MCTR_COST FROM @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_CMCS_COST_LOG WHERE CMCS_INPUT_DT >= '@{pipeline().parameters.LastRunDt}') SELECT STRIP.FIELD.EE(cte.CMCM_ID) + ';' + CAST(cte.CMCS_SEQ_NO AS VARCHAR(20)) + ';' + dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS PRI_NAT_KEY_STRING, '@{pipeline().parameters.RunIDTimeStamp}' AS FIRST_RECYC_TS, STRIP.FIELD.EE(cte.CMCM_ID) AS CASE_MGT_ID, cte.CMCS_SEQ_NO AS CST_SEQ_NO, dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS SRC_SYS_CD, STRIP.FIELD.EE(dbo.trim_default(cte.CMCS_INPUT_USID)) AS CST_INPT_USER_ID, cte.CMCS_INPUT_DT AS CST_INPT_DT, cte.CMCS_FROM_DT AS FROM_DT, cte.CMCS_TO_DT AS TO_DT, cte.CMCS_ACT_COST AS ACTL_CST_AMT, cte.CMCS_PROJ_COST AS PROJ_CST_AMT, TrimLeadingTrailing(StripWhiteSpace(cte.CMCS_MCTR_COST)) AS CMCS_MCTR_COST FROM cte",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "facets",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_facets",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_FacetsOwner}",
+              "param_table": "CMC_CMCS_COST_LOG"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/ds')",
+              "param_filename": "@concat('CASE_MGT_COST.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "LastRunDt": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      }
+    },
+    "annotations": [],
+    "runConcurrently": true,
+    "folder": {
+      "name": "Integrate/Jobs/MedMgt/MedMgt/CMCost"
+    }
+  },
+  "Description": "Called By: FctsMedMgtCntl\n\n\nProcess : Extract Case Mgt Status data from Facets to DataSet which is processed and loaded to CASE_MGT_CST_LOG  table\n\n\nModifications:                        \n                                             \t\t  Project/                                                                                                    \tCode                  Date\nDeveloper         \tDate             \t Altiris #     \tChange Description                                                   \tReviewer            Reviewed\n-----------------------  \t-------------------   \t-------------   \t-----------------------------------------------------------------------------   \t-------------------------  -------------------\nSravya Gorla       2019-09-03                 US140167                Extract Case Mgt Cost data from Facets to DataSet              Jaideep Mankala   09/24/2019\nPrabhu ES          2022-03-07              S2S Remediation          MSSQL ODBC conn params added - IntegrateDev5\tHarsha Ravuri\t06-14-2022\n\nAnnotations:\nJobName: FctsCaseMgtCostExtr\n\n\nExtract data from CMC_CMCS_COST_LOG facets\ntable to load into IDS"
+}

@@ -1,0 +1,171 @@
+{
+  "name": "MpiBCBSFctsMbrDrvrAllExtr",
+  "properties": {
+    "parameters": {
+      "TmpTblRunID": {
+        "defaultValue": "01234567",
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "cpy_FACETS_to_hf_mpibcbs_indvbe_tmpdrvr_bld",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte AS (SELECT DISTINCT MEME.MEME_CK FROM @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_MEME_MEMBER MEME) SELECT cte.MEME_CK FROM cte",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".parquet"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_facets_primary",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_FacetsOwner}",
+              "param_table": "CMC_MEME_MEMBER"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/MPI/Driver')",
+              "param_filename": "hf_mpibcbs_indvbe_tmpdrvr_bld.parquet",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "cpy_tmpdrvr_bld_to_TMP_MPI_MBR_DRVR",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "cpy_FACETS_to_hf_mpibcbs_indvbe_tmpdrvr_bld",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "ParquetReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE tempdb..TMP_MPI_MBR_DRVR_@{pipeline().parameters.TmpTblRunID}",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "MEME_CK",
+                  "type": "Int32",
+                  "physicalType": "INT"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/MPI/Driver')",
+              "param_filename": "hf_mpibcbs_indvbe_tmpdrvr_bld.parquet"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_facets_tempdb",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "tempdb",
+              "param_table": "TMP_MPI_MBR_DRVR_@{pipeline().parameters.TmpTblRunID}"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/MPI/Driver"
+    }
+  },
+  "Description": "COPYRIGHT 2012 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n     \n                      \nPROCESSING:  Member Unique IDs in MBR_OUTP are used loaded to the facets temp table tmp...TMP_MPI_IDS_MBR_DRVR for efficiency \n                 \n  \n\nMODIFICATIONS:\nDeveloper                Date                 Project/Altiris #      Change Description                                                                                                                                   Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------                                                                                           --------------------------------       -------------------------------   ----------------------------       \nSharon Andrew      2012-10-15        4426 mpi                  created                                                                                                                                                         IntegrateNewDevl      Bhoomi Dasari           10/16/2012\nPrabhu ES             2022-03-30        S2S                          MSSQL ODBC conn params added                                                                                                             IntegrateDev5\n\nAnnotations:\nIDS Membership Driver Full Extract\nused in  MpiBcbsIndvBeExtr."
+}

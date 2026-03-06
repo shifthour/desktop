@@ -1,0 +1,125 @@
+{
+  "name": "CblTalnIdsClmLnHlthCstGrpExtr",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyFileToTempTbl",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.abc123_TMP_CblTalnIdsClmLnHlthCstGrpExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'Jobs/DataWarehouse/MemberRisk/HCG/ClmLnHlthCstGrp')",
+              "param_filename": "@{pipeline().parameters.FileName}",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "abc123_TMP_CblTalnIdsClmLnHlthCstGrpExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_CreateAndLoadFinal",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTempTbl",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().parameters.TempOwner}.BLUEKC_HCG_TEMP; CREATE TABLE @{pipeline().parameters.TempOwner}.BLUEKC_HCG_TEMP (SRC_SYS_CD VARCHAR(20) NOT NULL,CLNT_ID INTEGER,CLM_ID VARCHAR(20) NOT NULL,CLM_LN_SEQ_NO VARCHAR(20) NOT NULL,BTCH_ID SMALLINT,ROW_CRT_DT CHAR(10),SVC_YR_MO VARCHAR(6),PD_YR_MO VARCHAR(6),ST VARCHAR(2),METRO_STAT_AREA VARCHAR(5),EXCL_CD VARCHAR(2),PRTL_YR_GRP SMALLINT,MCARE_COV SMALLINT,HCG_IN VARCHAR(1),MBR_AGE_BAND VARCHAR(5),CNTR_AGE_BAND VARCHAR(5),HCG_AGE_BAND VARCHAR(5),DMGRPHC_GRP VARCHAR(11),STD_INDST_CD VARCHAR(6),PCP_ID VARCHAR(40),MNGD_POP VARCHAR(40),DRG VARCHAR(3),CMS_ERR_CD VARCHAR(2),CASE_ADM_ID VARCHAR(69),MR_LN VARCHAR(4),MR_LN_DTL VARCHAR(7),MR_LN_CASE VARCHAR(4),PLN_BNF_PCKG_LN VARCHAR(5) NOT NULL,MCARE_ADVNTG_LN VARCHAR(2),MCARE_ADVNTG_LN_DTL VARCHAR(4),SPEC_TYP VARCHAR(4),FCLTY_CASE_ID VARCHAR(69),MR_CASES_ADM INTEGER,MR_UNIT_DAYS DECIMAL(13),MR_PROC INTEGER,MR_CASES_ADM_PATN_PAY INTEGER,MR_UNIT_DAYS_PATN_PAY INTEGER,MR_PROC_PATN_PAY INTEGER,MR_BILL_AMT DECIMAL(13,2),MR_ALW_AMT DECIMAL(13,2),MR_PD_AMT DECIMAL(13,2),MR_COPAY_AMT DECIMAL(13,2),MR_COINS_AMT DECIMAL(13,2),MR_DEDCT_AMT DECIMAL(13,2),MR_PATN_PAY_AMT DECIMAL(13,2),PLN_BNF_PCKG_CASES_ADM INTEGER,PLN_BNF_PCKG_CASES_ADM_PATN_PAY INTEGER,PRIMARY KEY (CLM_ID, CLM_LN_SEQ_NO,SRC_SYS_CD)); WITH cte1 AS ( SELECT * FROM @{pipeline().globalParameters.gbl_param_ids_staging}.abc123_TMP_CblTalnIdsClmLnHlthCstGrpExtr ), cte2 AS ( SELECT * FROM cte1 WHERE CLM_ID IS NOT NULL AND LTRIM(RTRIM(CLM_ID)) <> '' ) INSERT INTO @{pipeline().parameters.TempOwner}.BLUEKC_HCG_TEMP (SRC_SYS_CD,CLNT_ID,CLM_ID,CLM_LN_SEQ_NO,BTCH_ID,ROW_CRT_DT,SVC_YR_MO,PD_YR_MO,ST,METRO_STAT_AREA,EXCL_CD,PRTL_YR_GRP,MCARE_COV,HCG_IN,MBR_AGE_BAND,CNTR_AGE_BAND,HCG_AGE_BAND,DMGRPHC_GRP,STD_INDST_CD,PCP_ID,MNGD_POP,DRG,CMS_ERR_CD,CASE_ADM_ID,MR_LN,MR_LN_DTL,MR_LN_CASE,PLN_BNF_PCKG_LN,MCARE_ADVNTG_LN,MCARE_ADVNTG_LN_DTL,SPEC_TYP,FCLTY_CASE_ID,MR_CASES_ADM,MR_UNIT_DAYS,MR_PROC,MR_CASES_ADM_PATN_PAY,MR_UNIT_DAYS_PATN_PAY,MR_PROC_PATN_PAY,MR_BILL_AMT,MR_ALW_AMT,MR_PD_AMT,MR_COPAY_AMT,MR_COINS_AMT,MR_DEDCT_AMT,MR_PATN_PAY_AMT,PLN_BNF_PCKG_CASES_ADM,PLN_BNF_PCKG_CASES_ADM_PATN_PAY) SELECT c2.SRC_SYS_CD, 1 AS CLNT_ID, c2.CLM_ID, c2.CLM_LN_SEQ_NO, c2.BTCH_ID, c2.ROW_CRT_DT, c2.SVC_YR_MO, c2.PD_YR_MO, c2.ST, c2.METRO_STAT_AREA, c2.EXCL_CD, c2.PRTL_YR_GRP, c2.MCARE_COV, c2.HCG_IN, c2.MBR_AGE_BAND, c2.CNTR_AGE_BAND, c2.HCG_AGE_BAND, c2.DMGRPHC_GRP, c2.STD_INDST_CD, c2.PCP_ID, c2.MNGD_POP, c2.DRG, c2.CMS_ERR_CD, c2.CASE_ADM_ID, c2.MR_LN, c2.MR_LN_DTL, c2.MR_LN_CASE, c2.PLN_BNF_PCKG_LN, c2.MCARE_ADVNTG_LN, c2.MCARE_ADVNTG_LN_DTL, c2.SPEC_TYP, c2.FCLTY_CASE_ID, c2.MR_CASES_ADM, c2.MR_UNIT_DAYS, c2.MR_PROC, c2.MR_CASES_ADM_PATN_PAY, c2.MR_UNIT_DAYS_PATN_PAY, c2.MR_PROC_PATN_PAY, c2.MR_BILL_AMT, c2.MR_ALW_AMT, c2.MR_PD_AMT, c2.MR_COPAY_AMT, c2.MR_COINS_AMT, c2.MR_DEDCT_AMT, c2.MR_PATN_PAY_AMT, c2.PLN_BNF_PCKG_CASES_ADM, c2.PLN_BNF_PCKG_CASES_ADM_PATN_PAY FROM cte2 c2; GRANT SELECT ON TABLE @{pipeline().parameters.TempOwner}.BLUEKC_HCG_TEMP TO @{pipeline().parameters.DbUserList};",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {},
+      "RunID": {},
+      "FileName": {},
+      "TempOwner": {},
+      "DbUserList": {}
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/HCG/ClmLnHlthCstGrp"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #               Change Description                             Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRaja Gummadi                 2015-04-22      5460                                Originally Programmed                            IntegrateNewDevl          Kalyan Neelam              2015-04-23\nRaja Gummadi                 2016-08-22      TFS-12593                      Added FCLTY_CASE_ID column           IntegrateDev1                Kalyan Neelam              2016-08-24\nKrishnakanth                   2017-09-25      30001                              Modified the job to load extracted data  IntegrateDev2                 Kalyan Neelam             2017-09-25\n  Manivannan                                                                                  into BLUEKC_HCG_TEMP\nKrishnakanth                   2017-12-12      30001                              Modified the metadata                            IntegrateDev2                Kalyan Neelam             2017-12-12\n  Manivannan                                                                                  for the column CLM_LN_SEQ_NO\n\nRazia                              2021-12-02             416687                   added CLNT_ID defaulted to 1                              Integratedev2        Goutham K           12/3/2021\n\nGoutham K                     2022-01-03          472468                      Chanegd Extract file format to read Unix EOL          IntegrateDev2     Reddy Sanam        01/04/2022\n                                                                                                     Change from DOS and dedup data\n\nAnnotations:\nThe extracted records will be loaded into the global temp table #TempOwner#.BLUEKC_HCG_TEMP created during runtime.\n\nKey Columns for the temp table: CLM_ID, CLM_LN_SEQ_NO,SRC_SYS_CD\n\nThe GRANT access is given the development team to debug in case if there is any issues (abort).\n\nThis temp table will be deleted after the records are loaded into the table #$IDSOwner#.CLM_LN_HLTH_CST_GRP in the job CblTalnIdsClmLnHlthCstGrpLoad.\nJob name: CblTalnIdsClmLnHlthCstGrpRsltExtr\nINPUT : MILLIMAN.BLUEKC_HCG_OUTPUT.<YearMo>.TXT\nOUTPUT: #TempOwner#.BLUEKC_HCG_TEMP\n\nExtracts the records from the file and load into the global temporary table BLUEKC_HCG_TEMP."
+}

@@ -1,0 +1,90 @@
+{
+  "name": "IdsDmProdBnfVndrExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsDmProdBnfVndrExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_BNF_VNDR AS ( SELECT BNF_VNDR.BNF_VNDR_ID, BNF_VNDR.BNF_VNDR_NM, BNF_VNDR.BNF_VNDR_PHN_NO, BNF_VNDR.BNF_VNDR_PHN_NO_EXT, BNF_VNDR.BNF_VNDR_TYP_CD_SK, BNF_VNDR.BNF_VNDR_SK, COALESCE(CD.TRGT_CD,'UNK') AS SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.BNF_VNDR BNF_VNDR LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON BNF_VNDR.SRC_SYS_CD_SK = CD.CD_MPPNG_SK WHERE BNF_VNDR.BNF_VNDR_SK NOT IN (0,1) ), cte_lookup AS ( SELECT cte_BNF_VNDR.*, COALESCE(CD2.TRGT_CD,'UNK') AS TRGT_CD, COALESCE(CD2.TRGT_CD_NM,'UNK') AS TRGT_CD_NM FROM cte_BNF_VNDR LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD2 ON cte_BNF_VNDR.BNF_VNDR_TYP_CD_SK = CD2.CD_MPPNG_SK ), cte_xfrm AS ( SELECT SRC_SYS_CD, BNF_VNDR_ID, BNF_VNDR_NM, BNF_VNDR_PHN_NO, CASE WHEN LTRIM(RTRIM(TRGT_CD)) = '' THEN 'UNK' ELSE TRGT_CD END AS BNF_VNDR_TYP_CD, CASE WHEN LTRIM(RTRIM(TRGT_CD_NM)) = '' THEN 'UNK' ELSE TRGT_CD_NM END AS BNF_VNDR_TYP_NM, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_NO, BNF_VNDR_PHN_NO_EXT FROM cte_lookup ) SELECT SRC_SYS_CD, BNF_VNDR_ID, BNF_VNDR_NM, BNF_VNDR_PHN_NO, BNF_VNDR_TYP_CD, BNF_VNDR_TYP_NM, LAST_UPDT_RUN_CYC_NO, BNF_VNDR_PHN_NO_EXT FROM cte_xfrm",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "BNF_VNDR"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'load')",
+              "param_filename": "PROD_DM_BNF_VNDR.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "int"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Product/ProdDmBnfVndr"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\n                           \nPROCESSING:\n                    Extracts from IDS and pulls to the Data Marts.  Perform no changes with the data.\n\n\n                                                                                                                                                                               DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\n\nBhoomi Dasari                2009-08-19             4113                         New Etl                                                                                            devlIDSnew                        Steph Goddard      09/22/2009     \n\nBalkarn Gill               06/07/2013        5114                      Create Load File for EDW Table PROD_DM_BNF_VNDR                         IntegrateWhseDevl          Pete Marshall             2013-08-08\n\nAnnotations:\nRead from source table ProdCmpnt from IDS.  Apply Run Cycle filters when applicable to get just the needed rows forward\nJob Name: IdsDmProdDmBnfVndrExtr\nReference Code Mapping Data for Code SK lookups\nCode SK lookups for Denormalization\n\nLookup Keys:\nBNF_VNDR_TYP_CD_SK\nAdd Defaults and Null Handling.\nWrite PROD_DM_BNF_VNDR Data into a Sequential file for Load Job IdsDmProdDmBnfVndrLoad."
+}

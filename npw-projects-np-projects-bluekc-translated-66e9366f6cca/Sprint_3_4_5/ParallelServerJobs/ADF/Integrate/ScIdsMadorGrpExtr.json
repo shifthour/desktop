@@ -1,0 +1,266 @@
+{
+  "name": "ScIdsMadorGrpExtr",
+  "properties": {
+    "parameters": {
+      "Tax_Year": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "AsOfDtm": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "copy_csv_to_temp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.scidsmadorgrpextr_TMP_csvIn",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/MADOR/Group')",
+              "param_filename": "NTNL_ALNCE_MADOR_GRP.csv",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "scidsmadorgrpextr_TMP_csvIn"
+            }
+          }
+        ]
+      },
+      {
+        "name": "copy_dbxref_to_temp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT CES_CLNT_ID,GRP_ID,GRP_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.P_MA_DOR_GRP_XREF P_MA_DOR_GRP_XREF",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.scidsmadorgrpextr_TMP_xref",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "P_MA_DOR_GRP_XREF"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "scidsmadorgrpextr_TMP_xref"
+            }
+          }
+        ]
+      },
+      {
+        "name": "script_transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "copy_csv_to_temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "copy_dbxref_to_temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.scidsmadorgrpextr_TMP_final;WITH cte_csv AS (SELECT ACCT_NM,CLNT_NO,GRP_LEADER,ADDR_1,ADDR_2,ADDR_1_CITY,ADDR_1_ST_PROVINCE,ADDR_1_ZIP_POSTAL_CD FROM @{pipeline().globalParameters.gbl_param_ids_staging}.scidsmadorgrpextr_TMP_csvIn),cte_stageVars AS (SELECT cte_csv.*,dbo.trim_default(CASE WHEN CHARINDEX(' ',GRP_LEADER)>0 THEN SUBSTRING(GRP_LEADER,1,CHARINDEX(' ',GRP_LEADER)-1) ELSE GRP_LEADER END) AS FNMStg,dbo.trim_default(CASE WHEN CHARINDEX(' ',GRP_LEADER)>0 THEN SUBSTRING(GRP_LEADER,CHARINDEX(' ',GRP_LEADER)+1,LEN(GRP_LEADER)-CHARINDEX(' ',GRP_LEADER)) ELSE '' END) AS LNMStg,REPLACE(ADDR_1_ZIP_POSTAL_CD,'-','') AS PostalStg FROM cte_csv),cte_transform AS (SELECT '@{pipeline().parameters.Tax_Year}' AS TAX_YR,'@{pipeline().parameters.SrcSysCd}' AS SRC_SYS_CD,'@{pipeline().parameters.AsOfDtm}' AS AS_OF_DTM,dbo.trim_default(cte_stageVars.CLNT_NO) AS CLNT_NO,UPPER(cte_stageVars.FNMStg) AS GRP_CNTCT_FIRST_NM,'' AS GRP_CNTCT_MIDINIT,UPPER(cte_stageVars.LNMStg) AS GRP_CNTCT_LAST_NM,dbo.trim_default(UPPER(cte_stageVars.ADDR_1)) AS GRP_ADDR_LN_1,CASE WHEN cte_stageVars.ADDR_2 IS NULL OR LEN(LTRIM(RTRIM(cte_stageVars.ADDR_2)))=0 THEN NULL ELSE dbo.trim_default(UPPER(cte_stageVars.ADDR_2)) END AS GRP_ADDR_LN_2,NULL AS GRP_ADDR_LN_3,dbo.trim_default(UPPER(cte_stageVars.ADDR_1_CITY)) AS GRP_ADDR_CITY_NM,SUBSTRING(cte_stageVars.ADDR_1_ZIP_POSTAL_CD,1,5) AS GRP_ADDR_ZIP_CD_5,CASE WHEN LEN(dbo.trim_default(cte_stageVars.PostalStg))>5 THEN dbo.trim_default(SUBSTRING(cte_stageVars.PostalStg,6,4)) ELSE NULL END AS GRP_ADDR_ZIP_CD_4,CASE WHEN cte_stageVars.ADDR_1_ST_PROVINCE IS NULL OR LEN(dbo.trim_default(cte_stageVars.ADDR_1_ST_PROVINCE))=0 THEN '0' ELSE dbo.trim_default(UPPER(cte_stageVars.ADDR_1_ST_PROVINCE)) END AS GRP_ST_CD FROM cte_stageVars),cte_join AS (SELECT x.GRP_ID,t.TAX_YR,t.SRC_SYS_CD,t.AS_OF_DTM,x.GRP_NM,t.GRP_CNTCT_FIRST_NM,t.GRP_CNTCT_MIDINIT,t.GRP_CNTCT_LAST_NM,t.GRP_ADDR_LN_1,t.GRP_ADDR_LN_2,t.GRP_ADDR_LN_3,t.GRP_ADDR_CITY_NM,t.GRP_ADDR_ZIP_CD_5,t.GRP_ADDR_ZIP_CD_4,t.GRP_ST_CD FROM cte_transform AS t LEFT JOIN @{pipeline().globalParameters.gbl_param_ids_staging}.scidsmadorgrpextr_TMP_xref AS x ON t.CLNT_NO=x.CES_CLNT_ID) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.scidsmadorgrpextr_TMP_final FROM cte_join",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "copy_temp_to_file",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "script_transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None",
+            "queryTimeout": "02:00:00"
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "ParquetWriteSettings"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "scidsmadorgrpextr_TMP_final"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/ds')",
+              "param_filename": "@concat('GRP_MA_DOR_.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/MADOR/Group"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2018 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY : ScIdsMadorXrefCovLoadSeq\n\nPROCESSING : The Job Extracts Group Data From South Carolina Group file\n\nMODIFICATIONS :\n\nDeveloper                                 Date                 \\(9)Project                                                Change Description                                               Development Project\\(9)          Code Reviewer          Date Reviewed       \n------------------                               --------------------     \\(9)------------------------                             -----------------------------------------------------------------------             ------------------------------\\(9)         -------------------------------   ----------------------------       \nSethuraman Rajendran           \\(9) 2018-03-30\\(9)5839 - MADOR                                    Original Programming\\(9)\\(9)\\(9)          IntegrateDev2                        Jaideep Mankala        04/13/2018 / Kalyan Neelam 2018-06-14\n\nVamsi Aripaka                          2024-12-12              US 630635                         Added P_MA_DOR_GRP_XREF table and applied               IntegrateDev1                       Jeyaprasanna              2024-12-18                    \n                                                                                                                           transformation logics in Tr_Format_Grp_Data stage. \n                                                                                                                           Removed unstructured file and added seq file as source."
+}

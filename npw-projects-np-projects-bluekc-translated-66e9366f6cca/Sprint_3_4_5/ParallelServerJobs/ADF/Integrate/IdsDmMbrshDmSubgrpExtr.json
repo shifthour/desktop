@@ -1,0 +1,170 @@
+{
+  "name": "IdsDmMbrshDmSubgrpExtr",
+  "properties": {
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "copy_mbrsh_dm_subgrp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_subgrp AS ( SELECT COALESCE(cd.TRGT_CD,'UNK') AS SRC_SYS_CD, subgrp.GRP_ID, subgrp.SUBGRP_ID, subgrp.LAST_UPDT_RUN_CYC_EXCTN_SK, subgrp.SUBGRP_UNIQ_KEY, subgrp.SUBGRP_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.SUBGRP subgrp LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cd ON subgrp.SRC_SYS_CD_SK = cd.CD_MPPNG_SK WHERE subgrp.SUBGRP_SK NOT IN (0,1) ), cte_hosted_grp AS ( SELECT DISTINCT G.GRP_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.GRP G JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.PRNT_GRP PG ON G.CLNT_SK = PG.CLNT_SK WHERE PG.CLNT_ID <> 'HS' AND G.GRP_ID NOT LIKE '900%' ) SELECT s.GRP_ID, s.SUBGRP_ID, s.SRC_SYS_CD, s.SUBGRP_NM, s.SUBGRP_UNIQ_KEY, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_NO, s.LAST_UPDT_RUN_CYC_EXCTN_SK AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_subgrp s JOIN cte_hosted_grp h ON s.GRP_ID = h.GRP_ID",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "GRP_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "SUBGRP_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "SUBGRP_NM",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "SUBGRP_UNIQ_KEY",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "LAST_UPDT_RUN_CYC_NO",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "IDS_LAST_UPDT_RUN_CYC_EXCTN_SK",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                }
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "dummyTable"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "MBRSH_DM_SUBGRP.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Member/MbrshDmSubGrp"
+    }
+  },
+  "Description": "COPYRIGHT 2010 BLUE CROSS/BLUE SHIELD OF KANSAS CITY        \n                           \nPROCESSING:\n                    Extracts from IDS SUBGRP and loads the DataMart table MBRSH_DM_SUBGRP\n\nMODIFICATIONS:\nDeveloper                Date                 Project/Altiris #       Change Description                                                  Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------           --------------------------------       -------------------------------   ----------------------------       \nKalyan Neelam        2010-10-28         3346                      Original Programming                                                IntegrateNewDevl          Steph Goddard          11/04/2010\n\n\n\nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nBalkarn Gill               06/19/2013        5114                            Create Load File for EDW Table MBRSH_DM_SUBGRP                      EnterpriseWhseDevl  Peter Marshall              10/18/2013\nKalyan Neelam          2015-11-04         5212                            Added Hosted_Grp_Lookup to drop Host group records                        IntegrateDev1           Bhoomi Dasari              11/5/2015\n\nAnnotations:\nDrop Hosted Groups\nRead from source table SUBGRP from IDS.\nJob Name: IdsDmMbrshDmSubgrpExtr\nAdd Defaults and Null Handling.\nWrite MBRSH_DM_SUBGRP Data into a Sequential file for Load Job IdsDmMbrshDmSubgrpLoad."
+}

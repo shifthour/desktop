@@ -1,0 +1,211 @@
+{
+  "name": "IdsDominionProvAddrRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExtrRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcSysCd": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "GenTmpTbl",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal_Research; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal_Notify; WITH mainQuery AS (SELECT PROV_ADDR.SRC_SYS_CD_SK as TRGT_SRC_SYS_CD_SK, PROV_ADDR.PROV_ADDR_ID as TRGT_PROV_ADDR_ID, PROV_ADDR.PROV_ADDR_TYP_CD_SK as TRGT_PROV_ADDR_TYP_CD_SK, PROV_ADDR.PROV_ADDR_EFF_DT_SK as TRGT_PROV_ADDR_EFF_DT_SK, B_PROV_ADDR.SRC_SYS_CD_SK as SRC_SYS_CD_SK, B_PROV_ADDR.PROV_ADDR_ID, B_PROV_ADDR.PROV_ADDR_TYP_CD_SK, B_PROV_ADDR.PROV_ADDR_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG MPPNG, @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_ADDR PROV_ADDR FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.B_PROV_ADDR B_PROV_ADDR ON PROV_ADDR.PROV_ADDR_ID = B_PROV_ADDR.PROV_ADDR_ID AND PROV_ADDR.PROV_ADDR_TYP_CD_SK = B_PROV_ADDR.PROV_ADDR_TYP_CD_SK AND PROV_ADDR.PROV_ADDR_EFF_DT_SK = B_PROV_ADDR.PROV_ADDR_EFF_DT_SK AND PROV_ADDR.SRC_SYS_CD_SK = B_PROV_ADDR.SRC_SYS_CD_SK WHERE PROV_ADDR.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND PROV_ADDR.SRC_SYS_CD_SK = MPPNG.CD_MPPNG_SK AND MPPNG.TRGT_CD = '@{pipeline().parameters.SrcSysCd}'), research AS (SELECT * FROM mainQuery WHERE TRGT_PROV_ADDR_ID IS NULL OR PROV_ADDR_ID IS NULL), notify AS (SELECT CASE WHEN '@{pipeline().parameters.ToleranceCd}' = 'OUT' THEN 'ROW COUNT BALANCING ' + @{pipeline().parameters.SrcSysCd} + ' - IDS PROV ADDR OUT OF TOLERANCE' END as NOTIFICATION) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal FROM mainQuery; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal_Research FROM research; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal_Notify FROM notify WHERE NOTIFICATION IS NOT NULL;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearch",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "GenTmpTbl",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT TRGT_SRC_SYS_CD_SK, TRGT_PROV_ADDR_ID, TRGT_PROV_ADDR_TYP_CD_SK, TRGT_PROV_ADDR_EFF_DT_SK, SRC_SYS_CD_SK, PROV_ADDR_ID, PROV_ADDR_TYP_CD_SK, PROV_ADDR_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal_Research",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "f6c2_TMP_IdsDominionProvAddrRowCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/research')",
+              "param_filename": "@concat(pipeline().parameters.SrcSysCd,'IdsProvAddrResearch.dat.',pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyNotify",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "GenTmpTbl",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT NOTIFICATION FROM @{pipeline().globalParameters.gbl_param_ids_staging}.f6c2_TMP_IdsDominionProvAddrRowCntBal_Notify",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "f6c2_TMP_IdsDominionProvAddrRowCntBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/notify')",
+              "param_filename": "@concat(pipeline().parameters.SrcSysCd,'ProvidersBalancingNotification.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/provider/Addr/Balancing"
+    }
+  },
+  "Description": "Calling Job: DominionIdsProvAddrBalSeq\n\nDescription: This job does a full outer join between PROV_ADDR table and B_PROV_ADDR and writes the missing data in either of those table to a file for research and sends a notification file.\n\n\nMODIFICATIONS:\n                                                                                                                                                                                                                        DATASTAGE               CODE                           DATE\nDEVELOPER                     DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------          ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nDeepika C                     2023-11-24           US 600544                     Initial Programming                                                                              IntegrateSITF             Jeyaprasanna               2024-01-18\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - PROV_ADDR                         \nJob Name: IdsDominionProvAddrCdRowCntBal"
+}

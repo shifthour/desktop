@@ -1,0 +1,286 @@
+{
+  "name": "CmsIdsNtnlProvExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyFileToTemp_CmsIdsNtnlProvExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.[CmsIdsNtnlProvExtr_TMP]",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Provider/NtnlProv/landing')",
+              "param_filename": "@{pipeline().parameters.CMS_ProvTxnmyFile}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "CmsIdsNtnlProvExtr_TMP"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform_CmsIdsNtnlProvExtr",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTemp_CmsIdsNtnlProvExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte0 AS (SELECT * FROM @{pipeline().globalParameters.gbl_param_ids_staging}.[CmsIdsNtnlProvExtr_TMP]), cte1 AS (SELECT CASE WHEN t.NPI IS NULL THEN 'N' WHEN LEN(dbo.trim_default(t.NPI))<10 THEN 'N' WHEN ISNUMERIC(t.NPI)=1 THEN 'Y' ELSE 'N' END AS svNPIChk, t.* FROM cte0 t), cte2 AS (SELECT CASE WHEN c1.NPI IS NULL THEN '' ELSE c1.NPI END AS NTNL_PROV_ID, @{pipeline().parameters.SrcSysCd} AS SRC_SYS_CD, CASE WHEN c1.ENTITY_TYPE_CODE IS NULL THEN ' ' ELSE c1.ENTITY_TYPE_CODE END AS ENTITY_TYPE_CODE, CASE WHEN c1.PROVIDER_GENDER_CODE IS NULL THEN ' ' ELSE c1.PROVIDER_GENDER_CODE END AS PROVIDER_GENDER_CODE, CASE WHEN c1.IS_SOLE_PROPRIETOR IS NULL THEN ' ' ELSE c1.IS_SOLE_PROPRIETOR END AS IS_SOLE_PROPRIETOR, CASE WHEN c1.NPI_DEACTIVATION_REASON_CODE IS NULL THEN ' ' ELSE c1.NPI_DEACTIVATION_REASON_CODE END AS NPI_DEACTIVATION_REASON_CODE, CASE WHEN c1.NPI_DEACTIVATION_DATE IS NULL THEN '2199-12-31' ELSE CONVERT(VARCHAR(10), TRY_CONVERT(DATE, c1.NPI_DEACTIVATION_DATE, 101), 23) END AS NTNL_PROV_DCTVTN_DT, CASE WHEN c1.PROV_ENUMERATION_DATE IS NULL THEN '1753-01-01' ELSE CONVERT(VARCHAR(10), TRY_CONVERT(DATE, c1.PROV_ENUMERATION_DATE, 101), 23) END AS NTNL_PROV_ENMRTN_DT, CASE WHEN c1.NPI_REACTIVATION_DATE IS NULL THEN '1753-01-01' ELSE CONVERT(VARCHAR(10), TRY_CONVERT(DATE, c1.NPI_REACTIVATION_DATE, 101), 23) END AS NTNL_PROV_RCTVTN_DT, CASE WHEN c1.LAST_UPDATE_DATE IS NULL THEN '1753-01-01' ELSE CONVERT(VARCHAR(10), TRY_CONVERT(DATE, c1.LAST_UPDATE_DATE, 101), 23) END AS NTNL_PROV_SRC_LAST_UPDT_DT, CASE WHEN c1.PROV_CREDENTIAL_TEXT IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_CREDENTIAL_TEXT)) END AS NTNL_PROV_CRDTL_TX, CASE WHEN c1.PROV_FIRST_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_FIRST_NAME)) END AS NTNL_PROV_FIRST_NM, CASE WHEN c1.PROV_LAST_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_LAST_NAME)) END AS NTNL_PROV_LAST_NM, CASE WHEN c1.PROV_MIDDLE_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_MIDDLE_NAME)) END AS NTNL_PROV_MID_NM, CASE WHEN c1.PROV_NAME_PREFIX_TEXT IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_NAME_PREFIX_TEXT)) END AS NTNL_PROV_NM_PFX_TX, CASE WHEN c1.PROV_NAME_SUFFIX_TEXT IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_NAME_SUFFIX_TEXT)) END AS NTNL_PROV_NM_SFX_TX, CASE WHEN c1.PROV_OTHER_CREDENTIAL_TEXT IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_OTHER_CREDENTIAL_TEXT)) END AS NTNL_PROV_OTHR_CRDTL_TX, CASE WHEN c1.PROV_OTHER_FIRST_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_OTHER_FIRST_NAME)) END AS NTNL_PROV_OTHR_FIRST_NM, CASE WHEN c1.PROV_OTHER_LAST_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_OTHER_LAST_NAME)) END AS NTNL_PROV_OTHR_LAST_NM, CASE WHEN c1.PROV_OTHER_MIDDLE_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_OTHER_MIDDLE_NAME)) END AS NTNL_PROV_OTHR_MID_NM, CASE WHEN c1.PROV_OTHER_NAME_PREFIX_TEXT IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_OTHER_NAME_PREFIX_TEXT)) END AS NTNL_PROV_OTHR_NM_PFX_TX, CASE WHEN c1.PROV_OTHER_NAME_SUFFIX_TEXT IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_OTHER_NAME_SUFFIX_TEXT)) END AS NTNL_PROV_OTHR_NM_SFX_TX, CASE WHEN c1.PROV_OTHER_LAST_NAME_TYPE_CODE IS NULL THEN ' ' ELSE c1.PROV_OTHER_LAST_NAME_TYPE_CODE END AS PROV_OTHER_LAST_NAME_TYPE_CODE, CASE WHEN c1.PROVIDER_ORGANIZATION_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROVIDER_ORGANIZATION_NAME)) END AS NTNL_PROV_ORG_LGL_BUS_NM, CASE WHEN c1.PROV_OTHER_ORGANIZATION_NAME IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PROV_OTHER_ORGANIZATION_NAME)) END AS NTNL_PROV_OTHR_ORG_NM, CASE WHEN c1.PROV_OTHER_ORGANIZATION_NAME_TYPE_CODE IS NULL THEN ' ' ELSE c1.PROV_OTHER_ORGANIZATION_NAME_TYPE_CODE END AS PROV_OTHER_ORGANIZATION_NAME_TYPE_CODE, CASE WHEN c1.IS_ORGANIZATION_SUBPART IS NULL THEN ' ' ELSE c1.IS_ORGANIZATION_SUBPART END AS IS_ORGANIZATION_SUBPART, CASE WHEN c1.PARENT_ORGANIZATION_LBN IS NULL THEN '' ELSE UPPER(dbo.trim_default(c1.PARENT_ORGANIZATION_LBN)) END AS NTNL_PROV_ORG_PRNT_LGL_BUS_NM, CASE WHEN c1.PARENT_ORGANIZATION_TIN IS NULL OR c1.PARENT_ORGANIZATION_TIN IN('UNAVAIL','<UNAVAIL>') THEN '' ELSE c1.PARENT_ORGANIZATION_TIN END AS NTNL_PROV_ORG_PRNT_TAX_ID, CASE WHEN c1.PROV_FIRST_LINE_BUSINESS_MAILING_ADDR IS NULL THEN '' ELSE UPPER(c1.PROV_FIRST_LINE_BUSINESS_MAILING_ADDR) END AS NTNL_PROV_MAIL_ADDR_LN_1, CASE WHEN c1.PROV_SECOND_LINE_BUSINESS_MAILING_ADDR IS NULL THEN '' ELSE UPPER(c1.PROV_SECOND_LINE_BUSINESS_MAILING_ADDR) END AS NTNL_PROV_MAIL_ADDR_LN_2, CASE WHEN c1.PROV_BUS_MAILING_ADDR_CITY_NAME IS NULL THEN '' ELSE UPPER(c1.PROV_BUS_MAILING_ADDR_CITY_NAME) END AS NTNL_PROV_MAIL_ADDR_CITY_NM, CASE WHEN c1.PROV_BUS_MAILING_ADDR_STATE_NAME IS NULL OR LEFT(dbo.trim_default(c1.PROV_BUS_MAILING_ADDR_COUNTRY_CODE),2) <> 'US' THEN '~' ELSE c1.PROV_BUS_MAILING_ADDR_STATE_NAME END AS PROV_BUS_MAILING_ADDR_STATE_NAME, CASE WHEN c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE IS NULL THEN NULL WHEN ISNUMERIC(LEFT(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,1))=1 THEN CASE WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''))<5 THEN NULL WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''))=5 THEN REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ','') WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''))>5 AND LEN(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''))<9 THEN LEFT(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''),5) WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''))=9 THEN REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ','') WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''))>9 THEN LEFT(REPLACE(REPLACE(c1.PROV_BUS_MAILING_ADDR_POSTAL_CODE,'-',''),' ',''),9) ELSE NULL END ELSE NULL END AS NTNL_PROV_MAIL_ADDR_POSTAL_CD, CASE WHEN c1.PROV_BUS_MAILING_ADDR_COUNTRY_CODE IS NULL THEN '~' ELSE c1.PROV_BUS_MAILING_ADDR_COUNTRY_CODE END AS PROV_BUS_MAILING_ADDR_COUNTRY_CODE, CASE WHEN c1.PROV_BUS_MAILING_ADDR_FAX_NUMBER IS NULL THEN '' ELSE c1.PROV_BUS_MAILING_ADDR_FAX_NUMBER END AS NTNL_PROV_MAIL_ADDR_FAX_NO, CASE WHEN c1.PROV_BUS_MAILING_ADDR_TELEPHONE_NUMBER IS NULL THEN '' WHEN ISNUMERIC(LEFT(c1.PROV_BUS_MAILING_ADDR_TELEPHONE_NUMBER,1))=1 THEN c1.PROV_BUS_MAILING_ADDR_TELEPHONE_NUMBER ELSE '' END AS NTNL_PROV_MAIL_ADDR_TEL_NO, CASE WHEN c1.PROV_FIRST_LINE_BUS_PRACTICE_LOCA_ADDR IS NULL THEN '' ELSE UPPER(c1.PROV_FIRST_LINE_BUS_PRACTICE_LOCA_ADDR) END AS NTNL_PROV_PRCTC_PRI_LOC_ADDR_LN_1, CASE WHEN c1.PROV_SECOND_LINE_BUS_PRACTICE_LOC_ADDR IS NULL THEN '' ELSE UPPER(c1.PROV_SECOND_LINE_BUS_PRACTICE_LOC_ADDR) END AS NTNL_PROV_PRCTC_PRI_LOC_ADDR_LN_2, CASE WHEN c1.PROV_BUS_PRACTICE_LOC_ADDR_CITY_NAME IS NULL THEN '' ELSE UPPER(c1.PROV_BUS_PRACTICE_LOC_ADDR_CITY_NAME) END AS NTNL_PROV_PRCTC_PRI_LOC_ADDR_CITY_NM, CASE WHEN c1.PROV_BUS_PRACTICE_LOC_ADDR_STATE_NAME IS NULL OR LEFT(dbo.trim_default(c1.PROV_BUS_PRACTICE_LOC_ADDR_COUNTRY_CODE),2) <> 'US' THEN '~' ELSE c1.PROV_BUS_PRACTICE_LOC_ADDR_STATE_NAME END AS PROV_BUS_PRACTICE_LOC_ADDR_STATE_NAME, CASE WHEN c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE IS NULL THEN NULL WHEN ISNUMERIC(LEFT(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,1))=1 THEN CASE WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''))<5 THEN NULL WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''))=5 THEN REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ','') WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''))>5 AND LEN(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''))<9 THEN LEFT(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''),5) WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''))=9 THEN REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ','') WHEN LEN(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''))>9 THEN LEFT(REPLACE(REPLACE(c1.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE,'-',''),' ',''),9) ELSE NULL END ELSE NULL END AS NTNL_PROV_PRCTC_PRI_LOC_ADDR_POSTAL_CD, CASE WHEN c1.PROV_BUS_PRACTICE_LOC_ADDR_COUNTRY_CODE IS NULL THEN '~' ELSE c1.PROV_BUS_PRACTICE_LOC_ADDR_COUNTRY_CODE END AS PROV_BUS_PRACTICE_LOC_ADDR_COUNTRY_CODE, CASE WHEN c1.PROV_BUS_PRACTICE_LOC_ADDR_FAX_NUMBER IS NULL THEN '' ELSE c1.PROV_BUS_PRACTICE_LOC_ADDR_FAX_NUMBER END AS NTNL_PROV_PRCTC_PRI_LOC_ADDR_FAX_NO, CASE WHEN c1.PROV_BUS_PRACTICE_LOC_ADDR_TEL_NUMBER IS NULL THEN '' WHEN ISNUMERIC(LEFT(c1.PROV_BUS_PRACTICE_LOC_ADDR_TEL_NUMBER,1))=1 THEN c1.PROV_BUS_PRACTICE_LOC_ADDR_TEL_NUMBER ELSE '' END AS NTNL_PROV_PRCTC_PRI_LOC_ADDR_TEL_NO, CASE WHEN c1.EMPLOYER_IDENTIFICATION_NUMBER IS NULL OR c1.EMPLOYER_IDENTIFICATION_NUMBER IN('UNAVAIL','<UNAVAIL>') THEN '' ELSE c1.EMPLOYER_IDENTIFICATION_NUMBER END AS NTNL_PROV_ORG_EMPLR_ID_NO, CASE WHEN c1.REPLACEMENT_NPI IS NULL THEN '' ELSE c1.REPLACEMENT_NPI END AS RPLMT_NTNL_PROV_ID FROM cte1 c1 WHERE c1.svNPIChk='Y'), cte3 AS (SELECT t.NPI, t.ENTITY_TYPE_CODE, t.REPLACEMENT_NPI, t.EMPLOYER_IDENTIFICATION_NUMBER, t.PROVIDER_ORGANIZATION_NAME, t.PROV_LAST_NAME, t.PROV_FIRST_NAME, t.PROV_MIDDLE_NAME, t.PROV_NAME_PREFIX_TEXT, t.PROV_NAME_SUFFIX_TEXT, t.PROV_CREDENTIAL_TEXT, t.PROV_OTHER_ORGANIZATION_NAME, t.PROV_OTHER_ORGANIZATION_NAME_TYPE_CODE, t.PROV_OTHER_LAST_NAME, t.PROV_OTHER_FIRST_NAME, t.PROV_OTHER_MIDDLE_NAME, t.PROV_OTHER_NAME_PREFIX_TEXT, t.PROV_OTHER_NAME_SUFFIX_TEXT, t.PROV_OTHER_CREDENTIAL_TEXT, t.PROV_OTHER_LAST_NAME_TYPE_CODE, t.PROV_FIRST_LINE_BUSINESS_MAILING_ADDR, t.PROV_SECOND_LINE_BUSINESS_MAILING_ADDR, t.PROV_BUS_MAILING_ADDR_CITY_NAME, t.PROV_BUS_MAILING_ADDR_STATE_NAME, t.PROV_BUS_MAILING_ADDR_POSTAL_CODE, t.PROV_BUS_MAILING_ADDR_COUNTRY_CODE, t.PROV_BUS_MAILING_ADDR_TELEPHONE_NUMBER, t.PROV_BUS_MAILING_ADDR_FAX_NUMBER, t.PROV_FIRST_LINE_BUS_PRACTICE_LOCA_ADDR, t.PROV_SECOND_LINE_BUS_PRACTICE_LOC_ADDR, t.PROV_BUS_PRACTICE_LOC_ADDR_CITY_NAME, t.PROV_BUS_PRACTICE_LOC_ADDR_STATE_NAME, t.PROV_BUS_PRACTICE_LOC_ADDR_POSTAL_CODE, t.PROV_BUS_PRACTICE_LOC_ADDR_COUNTRY_CODE, t.PROV_BUS_PRACTICE_LOC_ADDR_TEL_NUMBER, t.PROV_BUS_PRACTICE_LOC_ADDR_FAX_NUMBER, t.PROV_ENUMERATION_DATE, t.LAST_UPDATE_DATE, t.NPI_DEACTIVATION_REASON_CODE, t.NPI_DEACTIVATION_DATE, t.NPI_REACTIVATION_DATE, t.PROVIDER_GENDER_CODE, t.IS_SOLE_PROPRIETOR, t.IS_ORGANIZATION_SUBPART, t.PARENT_ORGANIZATION_LBN, t.PARENT_ORGANIZATION_TIN FROM cte1 t WHERE t.svNPIChk='N'); DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.[CMSNtnlProv_TMP_CmsIdsNtnlProvExtr]; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.[CMSNtnlProv_TMP_CmsIdsNtnlProvExtr] FROM cte2; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.[NPIRejectRec_TMP_CmsIdsNtnlProvExtr]; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.[NPIRejectRec_TMP_CmsIdsNtnlProvExtr] FROM cte3",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_CmsNtnlProv",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_CmsIdsNtnlProvExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "CMSNtnlProv_TMP_CmsIdsNtnlProvExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Provider/NtnlProv/ds')",
+              "param_filename": "@concat('NTNL_PROV.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_NPI_RejectRec",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_CmsIdsNtnlProvExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "NPIRejectRec_TMP_CmsIdsNtnlProvExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Provider/NtnlProv/landing')",
+              "param_filename": "@concat('CmsIdsNtnlProvExtr.', pipeline().parameters.SrcSysCd, '.', pipeline().parameters.RunID, '_Rej.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "CMS_ProvTxnmyFile": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/NtnlProv"
+    }
+  },
+  "Description": "COPYRIGHT 2005, 2006, 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nCalling Job Name :  CmsIdsProvTxnmyNtnlProvExtrSeq\n\n                           \n\nMODIFICATIONS:\n\nDeveloper                          Date                    Project/Altiris #                     Change Description                                                           Development Project               Code Reviewer               Date Reviewed\n----------------------------------      -------------------      -----------------------------------           ---------------------------------------------------------                                    ----------------------------------              ---------------------------------       -------------------------\nRavi Abburi                      2017-10-25            5781 HEDIS                       Initial Programming                                                                    IntegrateDev2                    Kalyan Neelam                2018-01-26\n\nAkash Parsha                  2017-02-26             201102                              Additional column has been added to the source file from        IntegarteDev1                   Jaideep Mankala              02/27/2020\n                                                                                                                  the NPI Cms weekly files that are sourced into the\n                                                                                                                  IDS -  - NTNL_PROV & NTNL_TXNMY and ENTY_RGSTRN\n\nAnnotations:\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns.\nJobName: CmsIdsNtnlProvExtr"
+}

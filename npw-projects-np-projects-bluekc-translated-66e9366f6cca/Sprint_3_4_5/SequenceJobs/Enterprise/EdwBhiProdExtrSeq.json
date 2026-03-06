@@ -1,0 +1,356 @@
+{
+  "name": "EdwBhiProdExtrSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/BHI/Seq"
+    },
+    "parameters": {
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ClientID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Vendor": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ProdIn": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "StartDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EndDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunDateTime": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "EdwBhiProdExtr",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/BHI/Product/EdwBhiProdExtr')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EDWOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+              "type": "Expression"
+            },
+            "edw_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+              "type": "Expression"
+            },
+            "StartDate": {
+              "value": "@pipeline().parameters.StartDate",
+              "type": "Expression"
+            },
+            "EndDate": {
+              "value": "@pipeline().parameters.EndDate",
+              "type": "Expression"
+            },
+            "CurrDate": {
+              "value": "@pipeline().parameters.CurrDate",
+              "type": "Expression"
+            },
+            "ProdIn": {
+              "value": "@pipeline().parameters.ProdIn",
+              "type": "Expression"
+            },
+            "MADataMartAsstOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_MADataMartAsstOwner",
+              "type": "Expression"
+            },
+            "madatamartasst_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_MADataMartAsstSecret",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "ProdExtrCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "EdwBhiProdExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/std_product",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "cut_column_index": "1",
+            "project": "enterprise"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "EmptyChk_ProdExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "ProdExtrCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(string(activity('ProdExtrCnt').output.runOutput), '0')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubCtrlEmptyExtr_ProdExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/BHI/Reference/EdwBhiSubCtrlEmptyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ExtrNm": "STD_PRODUCT"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "EdwBhiProdClntCntrExtr",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "EdwBhiSubCtrlEmptyExtr_ProdExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "EmptyChk_ProdExtr_NoPath",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/BHI/Product/EdwBhiProdClntCntrExtr')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EDWOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+              "type": "Expression"
+            },
+            "edw_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+              "type": "Expression"
+            },
+            "StartDate": {
+              "value": "@pipeline().parameters.StartDate",
+              "type": "Expression"
+            },
+            "EndDate": {
+              "value": "@pipeline().parameters.EndDate",
+              "type": "Expression"
+            },
+            "CurrDate": {
+              "value": "@pipeline().parameters.CurrDate",
+              "type": "Expression"
+            },
+            "ProdIn": {
+              "value": "@pipeline().parameters.ProdIn",
+              "type": "Expression"
+            },
+            "MADataMartAsstOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_MADataMartAsstOwner",
+              "type": "Expression"
+            },
+            "madatamartasst_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_MADataMartAsstSecret",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "ProdClntCntrExtrCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "EdwBhiProdClntCntrExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/std_product_client_contract",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "cut_column_index": "1",
+            "project": "enterprise"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "EmptyChk_ProdClntCntrExtr",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "ProdClntCntrExtrCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(string(activity('ProdClntCntrExtrCnt').output.runOutput), '0')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiSubCtrlEmptyExtr_ProdClntCntrExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/BHI/Reference/EdwBhiSubCtrlEmptyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "ExtrNm": "STD_PRODUCT_CLIENT_CONTRACT"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,196 @@
+{
+  "name": "IdsWorkCompCaseCntBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "Script_IdsWorkCompCaseCntBal",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "with base as (select bal.SUB_UNIQ_KEY, bal.SRC_SYS_CD, case.SRC_SYS_CD as TRGT_SRC_SYS_CD, case.SUB_UNIQ_KEY as TRGT_SUB_UNIQ_KEY from @{pipeline().globalParameters.gbl_param_WorkCompOwner}.WORK_COMPNSTN_CASE case full outer join @{pipeline().globalParameters.gbl_param_WorkCompOwner}.B_WORK_COMPNSTN_CASE bal on case.SRC_SYS_CD = bal.SRC_SYS_CD and case.SUB_UNIQ_KEY = bal.SUB_UNIQ_KEY where case.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle}), research as (select TRGT_SUB_UNIQ_KEY, TRGT_SRC_SYS_CD, SUB_UNIQ_KEY, SRC_SYS_CD from base where TRGT_SRC_SYS_CD is null or SRC_SYS_CD is null or SUB_UNIQ_KEY is null or TRGT_SUB_UNIQ_KEY is null), notification as (select top 1 'ROW COUNT BALANCING FACETS - IDS WORK COMP CASE OUT OF TOLERANCE' as NOTIFICATION from base where @{pipeline().parameters.ToleranceCd} = 'OUT'); DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.XfrmLogic_Research_TMP_IdsWorkCompCaseCntBal; SELECT TRGT_SUB_UNIQ_KEY, TRGT_SRC_SYS_CD, SUB_UNIQ_KEY, SRC_SYS_CD INTO @{pipeline().globalParameters.gbl_param_ids_staging}.XfrmLogic_Research_TMP_IdsWorkCompCaseCntBal FROM research; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.XfrmLogic_Notify_TMP_IdsWorkCompCaseCntBal; SELECT NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.XfrmLogic_Notify_TMP_IdsWorkCompCaseCntBal FROM notification;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearch_IdsWorkCompCaseCntBal",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsWorkCompCaseCntBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "XfrmLogic_Research_TMP_IdsWorkCompCaseCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/research')",
+              "param_filename": "FctsIdsWorkCompCaseResearch.dat.@{pipeline().parameters.RunID}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyNotify_IdsWorkCompCaseCntBal",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsWorkCompCaseCntBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "XfrmLogic_Notify_TMP_IdsWorkCompCaseCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/notify')",
+              "param_filename": "FctsIdsWorkCompMemberBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ToleranceCd": {
+        "type": "string"
+      },
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/WorkersComp/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:  FctsIdsWorkCompGrpCaseBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target files are compared to see if there are any discrepancies \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                   ----------------------------------   ---------------------------------    -------------------------   \nAkhila Manickavelu         12/28/2016          5628-Work Comp        Originally Programmed                                        IntegrateDev2              Kalyan Neelam             2017-01-09\n\nKailashnath J                    2017-03-22          5628-Work Comp        Updated Notification File Name                            IntegrateDev2            Kalyan Neelam             2017-03-28\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - WORK_COMPNSTN_CASE"
+}

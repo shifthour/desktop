@@ -1,0 +1,201 @@
+{
+  "name": "IdsEdwClmnSumRcvdIncmFBal",
+  "properties": {
+    "parameters": {
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "act_CreateTempTables",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.mismatches_TMP_IdsEdwClmnSumRcvdIncmFBal; SELECT RcvdIncmF.SRC_SYS_CD, RcvdIncmF.BILL_ENTY_UNIQ_KEY, RcvdIncmF.DUE_YR_MO_SK, RcvdIncmF.BILL_INCM_RCPT_BILL_CNTR_ID, RcvdIncmF.RCPT_YR_MO_SK, RcvdIncmF.BILL_INCM_RCPT_CRT_DTM, RcvdIncmF.BILL_INCM_RCPT_ERN_INCM_AMT INTO @{pipeline().globalParameters.gbl_param_edw_staging}.mismatches_TMP_IdsEdwClmnSumRcvdIncmFBal FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.RCVD_INCM_F RcvdIncmF FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.B_RCVD_INCM_F BRcvdIncm ON RcvdIncmF.SRC_SYS_CD = BRcvdIncm.SRC_SYS_CD AND RcvdIncmF.BILL_ENTY_UNIQ_KEY = BRcvdIncm.BILL_ENTY_UNIQ_KEY AND RcvdIncmF.DUE_YR_MO_SK = BRcvdIncm.DUE_YR_MO_SK AND RcvdIncmF.BILL_INCM_RCPT_BILL_CNTR_ID = BRcvdIncm.BILL_INCM_RCPT_BILL_CNTR_ID AND RcvdIncmF.RCPT_YR_MO_SK = BRcvdIncm.RCPT_YR_MO_SK AND RcvdIncmF.BILL_INCM_RCPT_CRT_DTM = BRcvdIncm.BILL_INCM_RCPT_CRT_DTM WHERE RcvdIncmF.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND RcvdIncmF.BILL_INCM_RCPT_ERN_INCM_AMT <> BRcvdIncm.BILL_INCM_RCPT_ERN_INCM_AMT; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.notify_TMP_IdsEdwClmnSumRcvdIncmFBal; SELECT TOP 1 'ROW TO ROW BALANCING IDS - EDW MBR D OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_edw_staging}.notify_TMP_IdsEdwClmnSumRcvdIncmFBal FROM @{pipeline().globalParameters.gbl_param_edw_staging}.mismatches_TMP_IdsEdwClmnSumRcvdIncmFBal;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "act_CopyMismatchToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "act_CreateTempTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "mismatches_TMP_IdsEdwClmnSumRcvdIncmFBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/research')",
+              "param_filename": "@concat('IdsEdwRcvdIncmFClmnSumResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "act_CopyNotificationToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "act_CreateTempTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "notify_TMP_IdsEdwClmnSumRcvdIncmFBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/notify')",
+              "param_filename": "IncomeBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Income/EdwLoads/RcvdIncmF/Balancing"
+    }
+  },
+  "description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:          IdsEdwClmnSumRcvdIncmFBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target tables are compared on the specified column to see if there are any discrepancies\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/26/2007          3264                              Originally Programmed                          devlEDW10               Steph Goddard            10/26/2007  \n\nSrikanth Mettpalli               10/05/2013         5114                              Originally Programmed                         EnterpriseWrhsDevl   Peter Marshall               12/12/2013   \n                                                                                                            (Server to Parallel Conversion)\n\nAnnotations:\nJob Name: IdsEdwClmnSumRcvdIncmFBal\nCopy stage used to remove duplicates and create one record for the Notification file.\nFile checked later for rows and email to on-call\nDetail file for on-call to research errors\nRows with Failed Comparison on Specified columns\nPull all the Missing Records from RCVD_INCM_F and B_RCVD_INCM_F Table.\nIDS - EDW Received Income Facts Column Sum Comparisons"
+}

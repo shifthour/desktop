@@ -1,0 +1,179 @@
+{
+  "name": "ScrcrdMembershipScrcrdWorkTypLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_Scrcrd_Work_Typ",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.SCRCRD_WORK_TYP_TMP_ScrcrdMembershipScrcrdWorkTypLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false,
+            "additionalColumns": [
+              {
+                "name": "ACTV_IN",
+                "value": "'Y'"
+              },
+              {
+                "name": "CRT_DTM",
+                "value": "@{pipeline().globalParameters.CurrentRunDtm}"
+              },
+              {
+                "name": "CRT_USER_ID",
+                "value": "'System'"
+              },
+              {
+                "name": "LAST_UPDT_DTM",
+                "value": "@{pipeline().globalParameters.CurrentRunDtm}"
+              },
+              {
+                "name": "LAST_UPDT_USER_ID",
+                "value": "'System'"
+              }
+            ]
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SCRCRD_WORK_TYP_ID",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "SCRCRD_WORK_TYP_DESC",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','Jobs/ScoreCard/Prod_Item')",
+              "param_filename": "SCRCRD_WORK_TYP.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "\\n",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "SCRCRD_WORK_TYP_TMP_ScrcrdMembershipScrcrdWorkTypLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Upsert_SCRCRD_WORK_TYP",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_Scrcrd_Work_Typ",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte AS (SELECT dbo.trim_default(SCRCRD_WORK_TYP_ID) AS SCRCRD_WORK_TYP_ID, dbo.trim_default(SCRCRD_WORK_TYP_DESC) AS SCRCRD_WORK_TYP_DESC, 'Y' AS ACTV_IN, CAST('@{pipeline().parameters.CurrentRunDtm}' AS DATETIME) AS CRT_DTM, 'System' AS CRT_USER_ID, CAST('@{pipeline().parameters.CurrentRunDtm}' AS DATETIME) AS LAST_UPDT_DTM, 'System' AS LAST_UPDT_USER_ID FROM @{pipeline().globalParameters.gbl_param_edw_staging}.SCRCRD_WORK_TYP_TMP_ScrcrdMembershipScrcrdWorkTypLoad) MERGE @{pipeline().globalParameters.gbl_param_ScoreCardOwner}.SCRCRD_WORK_TYP AS T USING cte ON T.SCRCRD_WORK_TYP_ID = cte.SCRCRD_WORK_TYP_ID WHEN MATCHED THEN UPDATE SET T.SCRCRD_WORK_TYP_DESC = cte.SCRCRD_WORK_TYP_DESC, T.ACTV_IN = cte.ACTV_IN, T.LAST_UPDT_DTM = cte.LAST_UPDT_DTM, T.LAST_UPDT_USER_ID = cte.LAST_UPDT_USER_ID WHEN NOT MATCHED THEN INSERT (SCRCRD_WORK_TYP_ID, SCRCRD_WORK_TYP_DESC, ACTV_IN, CRT_DTM, CRT_USER_ID, LAST_UPDT_DTM, LAST_UPDT_USER_ID) VALUES (cte.SCRCRD_WORK_TYP_ID, cte.SCRCRD_WORK_TYP_DESC, cte.ACTV_IN, cte.CRT_DTM, cte.CRT_USER_ID, cte.LAST_UPDT_DTM, cte.LAST_UPDT_USER_ID);",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "APT_IMPORT_NOWARN_STRING_FIELD_OVERRUNS": {
+        "type": "String",
+        "defaultValue": "1"
+      },
+      "CurrentRunDtm": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "annotations": [],
+    "runtimeConfiguration": {
+      "integrationRuntime": {
+        "referenceName": "AutoResolveIntegrationRuntime"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/ScoreCard/Prod_Item"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2008 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    ScorecardEmplProdItemDailyCntl\n\n\nModifications:\n=====================================================================================================================================================================\n Developer\\(9)Date\\(9)\\(9)Project/Altiris #\\(9)                    Change Description\\(9)\\(9)\\(9)\\(9)Development Project\\(9)Code Reviewer\\(9)             Date Reviewed\n=====================================================================================================================================================================\nSruthi M    \\(9)09/09/2018\\(9)5236-Indigo Replacement\\(9)    Original Development\\(9)\\(9)\\(9)\\(9)EnterpriseDev1                         Kalyan Neelam                     2018-09-27"
+}

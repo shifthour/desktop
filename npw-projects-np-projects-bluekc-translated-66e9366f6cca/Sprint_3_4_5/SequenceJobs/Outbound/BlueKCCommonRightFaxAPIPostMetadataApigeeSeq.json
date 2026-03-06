@@ -1,0 +1,489 @@
+{
+  "name": "BlueKCCommonRightFaxAPIPostMetadataApigeeSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    },
+    "parameters": {
+      "DynamicAccessToken": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RightFaxAPIURL": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "COMM_SK": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FIRSTNAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LASTNAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "MIDDLENAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DESTINATION": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ATTACHMENTS": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LETTERQUEUEID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TEMPLATENAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SUBSCRIBERID": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "FileCount": {
+        "type": "String"
+      },
+      "NoFileInd": {
+        "type": "String"
+      },
+      "JobId": {
+        "type": "String"
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Cmd_ChkPDFFile",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/landing",
+              "type": "Expression"
+            },
+            "command": "ls -l <src_file_with_path> | wc -l",
+            "project": "outbound"
+          }
+        }
+      },
+      {
+        "name": "Set_FileCount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Cmd_ChkPDFFile",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "FileCount",
+          "value": {
+            "value": "@string(activity('Cmd_ChkPDFFile').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Fax_Start",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Set_FileCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(variables('FileCount'),'1')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Exec_Cmd_CurlPostFaxPDF",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/curl_post_fax_pdf')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "param1": {
+                    "value": "@pipeline().parameters.LASTNAME",
+                    "type": "Expression"
+                  },
+                  "param2": {
+                    "value": "@pipeline().parameters.DESTINATION",
+                    "type": "Expression"
+                  },
+                  "param3": {
+                    "value": "@pipeline().parameters.DynamicAccessToken",
+                    "type": "Expression"
+                  },
+                  "param4": {
+                    "value": "@pipeline().parameters.ATTACHMENTS",
+                    "type": "Expression"
+                  },
+                  "param5": {
+                    "value": "@pipeline().globalParameters.gbl_param_FilePath",
+                    "type": "Expression"
+                  },
+                  "param6": {
+                    "value": "@pipeline().parameters.RightFaxAPIURL",
+                    "type": "Expression"
+                  },
+                  "param7": {
+                    "value": "@pipeline().parameters.FIRSTNAME",
+                    "type": "Expression"
+                  },
+                  "param8": {
+                    "value": "@pipeline().parameters.MIDDLENAME",
+                    "type": "Expression"
+                  },
+                  "param9": {
+                    "value": ">",
+                    "type": "Expression"
+                  },
+                  "param10": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_published, '/', pipeline().globalParameters.gbl_param_environment, '/external/GetApigeeJobIdResponse.json')",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Exec_cmd_parse_response",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Exec_Cmd_CurlPostFaxPDF",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/external/GetApigeeJobIdResponse.json",
+                    "type": "Expression"
+                  },
+                  "command": "grep 'jobId' <src_file_with_path> | cut -d : -f2 | sed -e 's/\\\"//g; s/,//g; s/}//g'",
+                  "project": "outbound"
+                }
+              }
+            },
+            {
+              "name": "Set_JobId",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Exec_cmd_parse_response",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "JobId",
+                "value": {
+                  "value": "@string(activity('Exec_cmd_parse_response').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "Set_NoFileInd",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "NoFileInd",
+                "value": {
+                  "value": "@{if(equals(variables('FileCount'),'1'),'N','Y')}",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "BlueKCCommonRightFaxAPIJobIDRspnsUpdate",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          {
+            "activity": "Set_JobId",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Set_NoFileInd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "BlueKCCommonRightFaxAPIJobIDRspnsUpdate",
+            "type": "PipelineReference"
+          },
+          "parameters": {
+            "DynamicAccessToken": "DynamicAccessToken.txt",
+            "JobId": {
+              "value": "@variables('JobId')",
+              "type": "Expression"
+            },
+            "CommTrnsmsnOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_CommTrnsmsnOwner",
+              "type": "Expression"
+            },
+            "commtrnsmsn_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_CommTrnsmsnSecret",
+              "type": "Expression"
+            },
+            "NoFileInd": {
+              "value": "@variables('NoFileInd')",
+              "type": "Expression"
+            },
+            "COMM_SK": {
+              "value": "@pipeline().parameters.COMM_SK",
+              "type": "Expression"
+            }
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "JobId_Start",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "BlueKCCommonRightFaxAPIJobIDRspnsUpdate",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(not(equals(trim(variables('JobId')), '')), equals(variables('FileCount'),'1'), equals(trim(variables('JobId')), ''))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "BlueKCCommonRightFaxAPIPostJobIDApigeeSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "BlueKCCommonRightFaxAPIPostJobIDApigeeSeq",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "JobId": {
+                    "value": "@variables('JobId')",
+                    "type": "Expression"
+                  },
+                  "CommTrnsmsnOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_CommTrnsmsnOwner",
+                    "type": "Expression"
+                  },
+                  "commtrnsmsn_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_CommTrnsmsnSecret",
+                    "type": "Expression"
+                  },
+                  "DynamicAccessToken": "DynamicAccessToken.txt",
+                  "RightFaxAPIURL": {
+                    "value": "@pipeline().parameters.RightFaxAPIURL",
+                    "type": "Expression"
+                  },
+                  "COMM_SK": {
+                    "value": "@pipeline().parameters.COMM_SK",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            },
+            {
+              "name": "ApigeeFaxStatusLog",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "BlueKCCommonRightFaxAPIPostJobIDApigeeSeq",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/external/GetFaxJobIDResponse.json",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/.txt",
+                    "type": "Expression"
+                  },
+                  "command": "cat <src_file_with_path> > <trgt_file_with_path>; mv <trgt_file_with_path> <trgt_file_with_path>../../processed/; compress -f <trgt_file_with_path>../../processed/*.txt",
+                  "project": "outbound"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "ApigeeStatusLog",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/external/GetApigeeJobIdResponse.json",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/.txt",
+                    "type": "Expression"
+                  },
+                  "command": "cat <src_file_with_path> > <trgt_file_with_path>; mv <trgt_file_with_path> <trgt_file_with_path>../../processed/; compress -f <trgt_file_with_path>../../processed/*.txt",
+                  "project": "outbound"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

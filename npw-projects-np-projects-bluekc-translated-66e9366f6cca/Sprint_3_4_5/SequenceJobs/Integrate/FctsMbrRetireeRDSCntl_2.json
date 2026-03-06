@@ -1,0 +1,344 @@
+{
+  "name": "FctsMbrRetireeRDSCntl_2",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/member"
+    },
+    "parameters": {
+      "EmailNotify": {
+        "type": "String",
+        "defaultValue": "sharon.andrew@bcbskc.com"
+      },
+      "Variables_ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Time_EndDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Time_RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Variables_LastRunDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Source": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Target": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Subject": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Frequency": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCountFkey_LinkCountFkey": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCountExtr_LinkCountExtr": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Variables_PerformRecordDeletes": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1F",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(contains(split(string(pipeline().parameters.Variables_ExclusionList), ';'), 'IdsMbrRDSDeleteFromIdsNotOnFile'), false), equals(pipeline().parameters.Variables_PerformRecordDeletes, 'Y'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsMbrRDSDeleteFromIdsNotOnFile",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/member/Delete/IdsMbrRDSDeleteFromIdsNotOnFile')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "WriteLastRunDate",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_1F",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/WriteRunInfo')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "arg1": {
+              "value": "@concat(pipeline().parameters.Initial_JobName, ':LastRunDate')",
+              "type": "Expression"
+            },
+            "arg2": {
+              "value": "@pipeline().parameters.Time_EndDate",
+              "type": "Expression"
+            },
+            "arg3": {
+              "value": "@pipeline().parameters.Variables_LastRunDate",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CloseRunCycle",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "WriteLastRunDate",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/CloseRunCycle')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "DBOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "SrcSystem": {
+              "value": "@pipeline().parameters.Initial_Source",
+              "type": "Expression"
+            },
+            "TrgtSystem": {
+              "value": "@pipeline().parameters.Initial_Target",
+              "type": "Expression"
+            },
+            "SubjCode": {
+              "value": "@pipeline().parameters.Initial_Subject",
+              "type": "Expression"
+            },
+            "FreqCode": {
+              "value": "@pipeline().parameters.Initial_Frequency",
+              "type": "Expression"
+            },
+            "RunCycle": {
+              "value": "@pipeline().parameters.Time_RunCycle",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "SaveRunCycle",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "CloseRunCycle",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/WriteRunInfo')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "arg1": "FctsMbrRetireeRDSCntlRunCyc",
+            "arg2": {
+              "value": "@pipeline().parameters.Time_RunCycle",
+              "type": "Expression"
+            },
+            "arg3": {
+              "value": "@pipeline().parameters.Time_RunCycle",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CountChkExtr_Fkey",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "SaveRunCycle",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(equals(pipeline().parameters.LinkCountExtr_LinkCountExtr, pipeline().parameters.LinkCountFkey_LinkCountFkey))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email_no_balance",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().parameters.EmailNotify",
+                    "type": "Expression"
+                  },
+                  "subject": "IDS FctsMbrRetireeRDSCntl abend",
+                  "body": "IDS job FctsMbrRetireeCnl job has detected an out-of-balance between the number of members within the input file verses the number of members loaded to the IDS MBR_RDS table.    Possible problems is mulitple members without a MBR_UNIQ_KEY, thereby generating mulitple records with 0  as the primary key.\n",
+                  "blobFilenames": " ",
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": " "
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

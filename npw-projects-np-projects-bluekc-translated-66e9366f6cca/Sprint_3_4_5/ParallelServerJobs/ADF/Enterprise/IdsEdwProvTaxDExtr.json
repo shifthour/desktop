@@ -1,0 +1,93 @@
+{
+  "name": "IdsEdwProvTaxDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "copy_IdsEdwProvTaxDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH CTE1 AS ( SELECT A.PROV_TAX_SK, A.PROV_ID, A.TAX_ID, A.EFF_DT_SK, A.PROV_SK, A.TAX_DMGRPHC_SK, A.TERM_DT_SK, COALESCE(CM.TRGT_CD,'UNK') AS SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_TAX A LEFT OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CM ON A.SRC_SYS_CD_SK=CM.CD_MPPNG_SK ) SELECT PROV_TAX_SK, CASE WHEN dbo.trim_default(SRC_SYS_CD)='' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, PROV_ID, TAX_ID, EFF_DT_SK AS PROV_TAX_EFF_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, PROV_SK, TAX_DMGRPHC_SK, TERM_DT_SK AS PROV_TAX_TERM_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM CTE1",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PROV_TAX"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "PROV_TAX_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/ProvTaxD"
+    }
+  },
+  "Description": "Oliver Nielsen  09/10/2005    Originally Programmed\n\n  \nMODIFICATIONS:\n                                                       \nDEVELOPER        DATE           PROJECT                      DESCRIPTION                                                               DATASTAGE ENVIRONMENT         CODEREVIEWER                   REVIEW\n  ---------------------   ----------------          --------------                       ----------                                                                              .........................................       ..............................                   .................... \n\n Bhupinder     06/28/2013   EDWefficiencies(5114)     To create a loadfile for EDW target table PROV_TAX_D     EnterpriseWrhsDevl                     Jag Yelavarthi                      2013-09-01\n\nAnnotations:\nJOB NAME: IdsEdwProvTaxDExtr\nRead all the Data from IDS PROV_TAX Table; Pull records based on LAST_UPDT_RUN_CYC_EXCTN_SK\nWrite Data into a Sequential file for Load Job IdsEdwProvTaxDLoad.\nAdd Defaults and Null Handling."
+}

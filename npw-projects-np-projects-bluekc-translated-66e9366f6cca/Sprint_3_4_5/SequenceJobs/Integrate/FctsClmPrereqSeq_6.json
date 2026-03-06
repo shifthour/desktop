@@ -1,0 +1,508 @@
+{
+  "name": "FctsClmPrereqSeq_6",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim/SeqFacets"
+    },
+    "parameters": {
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "BeginDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EndDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DriverTable": {
+        "type": "String",
+        "defaultValue": "TMP_IDS_CLAIM"
+      },
+      "AdjFromTable": {
+        "type": "String",
+        "defaultValue": "TMP_ADJ_FROM"
+      },
+      "GrouperTable": {
+        "type": "String",
+        "defaultValue": "TMP_GROUPER_VER"
+      },
+      "RecycleDay": {
+        "type": "String",
+        "defaultValue": "MONDAY"
+      },
+      "RecycleFreq": {
+        "type": "String",
+        "defaultValue": "W"
+      },
+      "CntlJobName": {
+        "type": "String",
+        "defaultValue": "FctsClmCntl"
+      },
+      "SrcSysCd": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcSysCdSK": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TableID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrentDate": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "ErrorMessageCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Count_ErrorMessageCount_R",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/UnixFileRecCnt')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "UnixFileRecCnt_a1": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_FilePath,'/landing')",
+              "type": "Expression"
+            },
+            "UnixFileRecCnt_a2": "NewExcdList.dat",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FileName": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "ErrorMessageCount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Count_ErrorMessageCount_R",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "ErrorMessageCount",
+          "value": {
+            "value": "@string(activity('Count_ErrorMessageCount_R').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "If_3G",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "ErrorMessageCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(equals(variables('ErrorMessageCount'),'0'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "MvFile",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": "../NewExcdList.dat",
+                  "trgt_file_with_path": {
+                    "value": "/NewExcdList.txt.",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "integrate"
+                }
+              }
+            },
+            {
+              "name": "Email",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "MvFile",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "subject": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_IDSDB,'   New EXCD Codes Found')",
+                    "type": "Expression"
+                  },
+                  "body": "See Attached file for new EXCD code list.   \nemail sent from the IDS Facets Claim / FclmClmPrereqSeq job",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath,'/landing/processed/NewExcdList.txt.', pipeline().parameters.RunID)",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_raw",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3H",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3G",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Email",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'ConcatDsalwExcd'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatDsalwExcd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "arg1": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate,'/',pipeline().globalParameters.gbl_param_environment,'/key')",
+                    "type": "Expression"
+                  },
+                  "arg2": "*.DsalwExcd",
+                  "arg3": "FctsDsalwExcdExtr.DsalwExcd",
+                  "arg4": "-k9,9 -k5,5r",
+                  "arg5": "-k9,9",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3I",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3H",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "ConcatDsalwExcd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'IdsDsalwExcdFkey'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsDsalwExcdFkey",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/codes/DsalwExcd/IdsDsalwExcdFkey')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "Logging": "X"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3J",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3I",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsDsalwExcdFkey",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'RmDsalwExcd'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "RmDsalwExcd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/key/FctsDsalwExcdExtr.DsalwExcd.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "integrate"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3K",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3J",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "RmDsalwExcd",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList,';'),'LoadDsalwExcd'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadDsalwExcd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "DSALW_EXCD",
+                  "action": "UPDATE",
+                  "file_name": "DSALW_EXCD.dat",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

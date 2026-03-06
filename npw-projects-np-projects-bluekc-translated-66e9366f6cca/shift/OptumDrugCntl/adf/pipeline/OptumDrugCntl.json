@@ -1,0 +1,305 @@
+{
+  "name": "OptumDrugCntl",
+  "properties": {
+    "activities": [
+      {
+        "dependsOn": [
+          {
+            "activity": "UV1_LinkCount",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ],
+        "name": "CountChk",
+        "type": "IfCondition",
+        "typeProperties": {
+          "expression": {
+            "type": "Expression",
+            "value": "@not(equals(variables('LinkCount'),0))"
+          },
+          "ifTrueActivities": [
+            {
+              "description": "Placeholder for send email activity\n      from: _DATA_WAREHOUSE_SUPPORT@bcbskc.com\n      to: @pipeline().parameters.EmailSupport\n      subject: Optum RX Claim Process Abort\n      body: The Optum RX Claim processing cannot run while IDS claim is being updated or extracted from.\n\n      Source:  Optum RX\n      Target:    IDS\n      Subject:  Claim",
+              "name": "Email_DAT",
+              "type": "Wait",
+              "typeProperties": {
+                "waitTimeInSeconds": 1
+              }
+            },
+            {
+              "dependsOn": [
+                {
+                  "activity": "Email_DAT",
+                  "dependencyConditions": [
+                    "Completed"
+                  ]
+                }
+              ],
+              "linkedServiceName": {
+                "referenceName": "notebook_linked_service",
+                "type": "LinkedServiceReference"
+              },
+              "name": "Failed",
+              "type": "DatabricksNotebook",
+              "typeProperties": {
+                "baseParameters": {
+                  "command": "texttypefieldnametypetexttypenametypetexttypefieldnametypetexttype"
+                },
+                "notebookPath": "notebook_path"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "LinkCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "name": "UV1_LinkCount",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "@GetExclusionList(variables('JobName'))",
+          "variableName": "ExclusionList"
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "ProcessCheckExtr",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ],
+        "name": "LinkCount",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "@JobLinkCount(concat('ProcessCheckExtr.', variables('JobName')), 'Trans1', 'Output')",
+          "variableName": "LinkCount"
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "UV5_Initial",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ],
+        "name": "ProcessCheckExtr",
+        "type": "ExecutePipeline",
+        "typeProperties": {
+          "parameters": {
+            "IDSAcct": {
+              "type": "Expression",
+              "value": "@pipeline().parameters.IDSAcct"
+            },
+            "IDSDB": {
+              "type": "Expression",
+              "value": "@pipeline().parameters.IDSDB"
+            },
+            "IDSOwner": {
+              "type": "Expression",
+              "value": "@pipeline().parameters.IDSOwner"
+            },
+            "IDSPW": {
+              "type": "Expression",
+              "value": "@pipeline().parameters.IDSPW"
+            },
+            "SourceSys": {
+              "type": "Expression",
+              "value": "@variables('Source')"
+            },
+            "Subject": {
+              "type": "Expression",
+              "value": "@variables('Subject')"
+            },
+            "TargetSys": {
+              "type": "Expression",
+              "value": "@variables('Target')"
+            }
+          },
+          "pipeline": {
+            "referenceName": "ProcessCheckExtr",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "UV4_Initial",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "name": "UV5_Initial",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "'DAILY'",
+          "variableName": "Frequency"
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "UV3_Initial",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "name": "UV4_Initial",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "'CLAIM'",
+          "variableName": "Subject"
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "UV2_Initial",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "name": "UV3_Initial",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "'IDS'",
+          "variableName": "Target"
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "UV1_Initial",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "name": "UV2_Initial",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "'OPTUMRX'",
+          "variableName": "Source"
+        }
+      },
+      {
+        "dependsOn": [
+          {
+            "activity": "Initial",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "name": "UV1_Initial",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "'IDS_OPTUMRX_DRUG'",
+          "variableName": "GroupName"
+        }
+      },
+      {
+        "name": "Initial",
+        "type": "SetVariable",
+        "typeProperties": {
+          "value": "@pipeline().parameters.DSJobName",
+          "variableName": "JobName"
+        }
+      }
+    ],
+    "description": "\n      Extract OPTUMRX claims and load to IDS called via CLAIMS_OPTUMRX_DLY_WRHS_000\n      Parameters:\n      -----------\n      APT_CONFIG_FILE:\n        Configuration file\n        The Parallel job configuration file.\n      FilePath:\n        File Path\n      EDWFilePath:\n        EDW File Path\n      EmailSupport:\n        Warehouse Support Email\n      IDSInstance:\n        IDS DB Instance\n      IDSDSN:\n        IDS DSN\n      IDSDB:\n        IDS Database\n      IDSOwner:\n        IDS DB Owner\n      IDSAcct:\n        IDS DB Account\n      IDSPW:\n        IDS DB Password\n      CactusServer:\n        Cactus Server\n      CactusDB:\n        Cactus Database\n      CactusOwner:\n        Cactus Table Owner\n      CactusAcct:\n        Cactus Account\n      CactusPW:\n        Cactus Password\n      ClmMartAcct:\n        Claim Mart Account\n      ClmMartPW:\n        Claim Mart Password\n      ClmMartServer:\n        Claim Mart Server\n      ClmMartDB:\n        Claim Mart Database\n      ClmMartOwner:\n        Claim Mart Table Owner\n      UWSDB:\n        UWS Database\n      UWSOwner:\n        UWS Table Owner\n      UWSPW:\n        UWS Password\n      UWSAcct:\n        UWS Account\n      LANAcct:\n        LAN Account\n      LANPW:\n        LAN Password\n      IDSDB2ArraySize:\n        IDS DB2 Array Size for Load\n      IDSDB2RecordCount:\n        IDS DB2 Record Count for Load\n      VendorEmail:\n        VendorEmail\n      Env:\n        Env\n      MbrTermDate:\n        MbrTermDate\n        Used in IDS Member Extract for matching back to Optum claims.  Should not be receiving claims for termed members.  To avoid all members for past 20 years.\n      LOB:\n        LOB",
+    "folder": {
+      "name": "claim"
+    },
+    "parameters": {
+      "CactusAcct": {
+        "type": "String"
+      },
+      "CactusPW": {
+        "type": "String"
+      },
+      "ClmMartAcct": {
+        "type": "String"
+      },
+      "ClmMartPW": {
+        "type": "String"
+      },
+      "Env": {
+        "defaultValue": "T",
+        "type": "String"
+      },
+      "IDSAcct": {
+        "type": "String"
+      },
+      "IDSPW": {
+        "type": "String"
+      },
+      "LANAcct": {
+        "type": "String"
+      },
+      "LANPW": {
+        "type": "String"
+      },
+      "LOB": {
+        "type": "String"
+      },
+      "MbrTermDate": {
+        "type": "String"
+      },
+      "UWSAcct": {
+        "type": "String"
+      },
+      "UWSPW": {
+        "type": "String"
+      },
+      "VendorEmail": {
+        "type": "String"
+      }
+    },
+    "variables": {
+      "CountChk_fired": {
+        "defaultValue": "n",
+        "type": "String"
+      },
+      "ExclusionList": {
+        "type": "String"
+      },
+      "Frequency": {
+        "type": "String"
+      },
+      "GroupName": {
+        "type": "String"
+      },
+      "JobName": {
+        "type": "String"
+      },
+      "LinkCount": {
+        "type": "String"
+      },
+      "Source": {
+        "type": "String"
+      },
+      "Subject": {
+        "type": "String"
+      },
+      "Target": {
+        "type": "String"
+      }
+    }
+  }
+}

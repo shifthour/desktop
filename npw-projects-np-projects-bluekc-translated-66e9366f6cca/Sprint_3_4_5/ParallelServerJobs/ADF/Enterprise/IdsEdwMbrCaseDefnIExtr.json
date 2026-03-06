@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwMbrCaseDefnIExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "String"
+      },
+      "ExtractRunCycle": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwMbrCaseDefnIExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH NA_SET AS (SELECT 1 AS MBR_CASE_DEFN_SK,'NA' AS SRC_SYS_CD,1 AS MBR_UNIQ_KEY,'175301' AS PRCS_YR_MO_SK,'NA' AS CASE_DEFN_ID,'1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK,'1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,1 AS CASE_DEFN_SK,1 AS MBR_MED_MESRS_SK,100 AS CRT_RUN_CYC_EXCTN_SK,100 AS LAST_UPDT_RUN_CYC_EXCTN_SK), UNK_SET AS (SELECT 0 AS MBR_CASE_DEFN_SK,'UNK' AS SRC_SYS_CD,0 AS MBR_UNIQ_KEY,'175301' AS PRCS_YR_MO_SK,'UNK' AS CASE_DEFN_ID,'1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK,'1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,0 AS CASE_DEFN_SK,0 AS MBR_MED_MESRS_SK,100 AS CRT_RUN_CYC_EXCTN_SK,100 AS LAST_UPDT_RUN_CYC_EXCTN_SK), MAIN AS (SELECT MCD.MBR_CASE_DEFN_SK,CASE WHEN CM.TRGT_CD IS NULL OR dbo.trim_default(CM.TRGT_CD)='' THEN 'UNK' ELSE CM.TRGT_CD END AS SRC_SYS_CD,MCD.MBR_UNIQ_KEY,MCD.PRCS_YR_MO_SK,MCD.CASE_DEFN_ID,@{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK,@{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,MCD.CASE_DEFN_SK,MCD.MBR_MED_MESRS_SK,@{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK,@{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR_CASE_DEFN MCD LEFT OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CM ON MCD.SRC_SYS_CD_SK=CM.CD_MPPNG_SK WHERE MCD.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtractRunCycle} AND MCD.MBR_CASE_DEFN_SK<>0 AND MCD.MBR_CASE_DEFN_SK<>1) SELECT * FROM NA_SET UNION ALL SELECT * FROM UNK_SET UNION ALL SELECT * FROM MAIN",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "MBR_CASE_DEFN"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "MBR_CASE_DEFN_I.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/MemberRisk/MbrCaseDefnI"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2008 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nPROCESSING:  Extract data from Case_Defn\n\n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #               Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------   ----------------------------------   ---------------------------------    -------------------------   \nRalph Tucker                  4/2/2008           3036                               Originally Programmed                         devlEDW                         Steph Goddard            04/15/2008\nBhupinder Kaur               10/31/2013       5114                               Newly Programmed                             EnterpriseWhrsDevl   Peter Marshall              12/11/2013\n\nAnnotations:\nJob Name: IdsEdwMbrCaseDefnIExtr\nWrite MBR_CASE_DEFN_I Data into a Sequential file for Load Job IdsEdwMbrClnclInILoad.\nAdd Defaults and Null Handling.\nData extracted from IDS table MBR_CASE_DEFN_I"
+}

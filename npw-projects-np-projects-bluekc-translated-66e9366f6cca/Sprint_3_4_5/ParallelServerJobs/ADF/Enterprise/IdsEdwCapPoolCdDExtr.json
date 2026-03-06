@@ -1,0 +1,201 @@
+{
+  "name": "IdsEdwCapPoolCdDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EDWRunCycle": {
+        "type": "Int",
+        "defaultValue": 0
+      },
+      "IDSRunCycle": {
+        "type": "Int",
+        "defaultValue": 0
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwCapPoolCdDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH source AS (SELECT CAP_POOL_CD_SK, CAP_POOL_CD, CAP.SRC_SYS_CD_SK, CAP.CRT_RUN_CYC_EXCTN_SK, CAP.LAST_UPDT_RUN_CYC_EXCTN_SK, CAP_POOL_NM, RUN_CYC.STRT_DT CREATE_IDS_REC_PROCESS_DT, COALESCE(CD2.TRGT_CD,'UNK') AS SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CAP_POOL_CD CAP, @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC RUN_CYC, @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD2 WHERE (CAP.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle}) AND CAP.CRT_RUN_CYC_EXCTN_SK = RUN_CYC.RUN_CYC_NO AND RUN_CYC.SUBJ_CD = 'CAPITATION' AND RUN_CYC.TRGT_SYS_CD = 'IDS' AND CAP.SRC_SYS_CD_SK = CD2.CD_MPPNG_SK), detail AS (SELECT CAP_POOL_CD_SK, CAP_POOL_CD, SRC_SYS_CD, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CAP_POOL_NM, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK FROM source WHERE CAP_POOL_CD_SK <> 0 AND CAP_POOL_CD_SK <> 1), unk AS (SELECT TOP 1 0 AS CAP_POOL_CD_SK, 'UNK' AS CAP_POOL_CD, 'UNK' AS SRC_SYS_CD, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 'UNK' AS CAP_POOL_NM, 100 AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, 0 AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK), na AS (SELECT TOP 1 1 AS CAP_POOL_CD_SK, 'NA' AS CAP_POOL_CD, 'NA' AS SRC_SYS_CD, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 'NA' AS CAP_POOL_NM, 100 AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, 1 AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK) SELECT CAP_POOL_CD_SK, CAP_POOL_CD, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CAP_POOL_NM, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, IDS_LAST_UPDT_RUN_CYC_EXCTN_SK FROM detail UNION ALL SELECT CAP_POOL_CD_SK, CAP_POOL_CD, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CAP_POOL_NM, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, IDS_LAST_UPDT_RUN_CYC_EXCTN_SK FROM unk UNION ALL SELECT CAP_POOL_CD_SK, CAP_POOL_CD, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CAP_POOL_NM, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, IDS_LAST_UPDT_RUN_CYC_EXCTN_SK FROM na",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "CAP_POOL_CD_SK",
+                    "type": "INT",
+                    "physicalType": "INT"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "CAP_POOL_CD",
+                    "type": "STRING",
+                    "physicalType": "VARCHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD",
+                    "type": "STRING",
+                    "physicalType": "VARCHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "CRT_RUN_CYC_EXCTN_DT_SK",
+                    "type": "STRING",
+                    "physicalType": "CHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "LAST_UPDT_RUN_CYC_EXCTN_DT_SK",
+                    "type": "STRING",
+                    "physicalType": "CHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "CAP_POOL_NM",
+                    "type": "STRING",
+                    "physicalType": "VARCHAR"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "CRT_RUN_CYC_EXCTN_SK",
+                    "type": "INT",
+                    "physicalType": "INT"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 8
+                  },
+                  "sink": {
+                    "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                    "type": "INT",
+                    "physicalType": "INT"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 9
+                  },
+                  "sink": {
+                    "name": "IDS_LAST_UPDT_RUN_CYC_EXCTN_SK",
+                    "type": "INT",
+                    "physicalType": "INT"
+                  }
+                }
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "CAP_POOL_CD"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Capitation/EdwLoads/CapPoolCdD/load')",
+              "param_filename": "CAP_POOL_CD_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Capitation/EdwLoads/CapPoolCdD"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\n\nPROCESSING:\n                Extracts from IDS and pulls into flat file to be bulk loaded into EDW.  Do nothing with the data.  Use lookups to retrieve data from the hash files.\n\n\nMODIFICATIONS:\nDeveloper                             Date                  Project/Altiris #                                   Change Description                                                    Development Project     Code Reviewer            Date Reviewed\n----------------------------------        -------------------      -----------------------------------    ---------------------------------------------------------------------------------------------             ----------------------------------    ---------------------------------    -------------------------   \nRalph Tucker                    2011-03-22       TTR-1058                       Originally Programmed                                                                        EnterpriseNewDevl        \n\nLeandrew Moore              07/22/2013       5114                              update to parallel                                                                                 Enterprisewarehouse    Bhoomi Dasari               9/6/2013\n\nAnnotations:\nJob : IdsEdwCapPoolCdDExtr\nRead from source table CAP_POOL_CD_D from IDS.  Apply Run Cycle filters when applicable to get just the needed rows forward\nThis is a load ready file conforms to the target table structure.\n\nWrite this into a Dataset if the data goes into a PKEY job otherwise write this info into a Sequential file\n\nPlease use Metadata available in Table definitions to support data Lineage.\nAdd Defaults and Null Handling."
+}

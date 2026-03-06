@@ -1,0 +1,210 @@
+{
+  "name": "IdsEdwProdBillCmpntDDel",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "description": "",
+    "activities": [
+      {
+        "name": "Copy_To_Staging",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.A9_TMP_IdsEdwProdBillCmpntDDel",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "PROD_CMPNT_PFX_ID",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "PROD_BILL_CMPNT_ID",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "PROD_BILL_CMPNT_EFF_DT_SK",
+                  "type": "String",
+                  "physicalType": "CHAR"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "EdwProdBillCmpntDel.uniq",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "A9_TMP_IdsEdwProdBillCmpntDDel"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Delete_From_Target",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_To_Staging",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cteDelete AS (SELECT SRC_SYS_CD, PROD_CMPNT_PFX_ID, PROD_BILL_CMPNT_ID, PROD_BILL_CMPNT_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_edw_staging}.A9_TMP_IdsEdwProdBillCmpntDDel) DELETE T FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.PROD_BILL_CMPNT_D T JOIN cteDelete D ON T.SRC_SYS_CD = D.SRC_SYS_CD AND T.PROD_CMPNT_PFX_ID = D.PROD_CMPNT_PFX_ID AND T.PROD_BILL_CMPNT_ID = D.PROD_BILL_CMPNT_ID AND T.PROD_BILL_CMPNT_EFF_DT_SK = D.PROD_BILL_CMPNT_EFF_DT_SK",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "DatabricksNotebook_DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Script_Delete_From_Target",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "EdwProdBillCmpntDel.uniq",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/ProdBillCmpntD"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:  EdwProdEctrSeq\n            \n\nPROCESSING:   Delete IDS Product Vrbl Cmpnt Change Data Capture rows.   \n\n\nMODIFICATIONS:\nDeveloper                                  Date                 \tProject/Altiris #\t                   Change Description\t          Development Project\tCode Reviewer\tDate Reviewed       \n------------------                            --------------------     \t------------------------\t                  ---------------------------------------------------     --------------------------------\t-------------------------------\t----------------------------       \nPete Cundy                           2009-09-18\t               3556 Change Data Capture \t   Original Programming                       devlIDSnew                     Steph Goddard      10/07/2009\n \n   \nRajasekhar Mangalampally   06/05/2013              5114                                              Original Programming                       EnterpriseWrhsDevl      Peter Marshall        8/8/2013\n\nAnnotations:\nCopy for Buffer\nRead Delete File created in the IDS Job IdsProdBillCmpntDel\nApply deletes to the EDW PROD_BILL_CMPNT_D Table."
+}

@@ -1,0 +1,204 @@
+{
+  "name": "FctsIdsWorkCompnstnCaseExtr",
+  "properties": {
+    "parameters": {
+      "RunCycle": {
+        "type": "String"
+      },
+      "Env": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "ScriptTransformWorkCompnstnCase",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH CTE_BASE AS (SELECT DISTINCT CMC_SBSB_SUBSC.SBSB_CK,CMC_SBSB_SUBSC.GRGR_CK,CMC_SBSB_SUBSC.SBSB_ID,CMC_SBSB_SUBSC.SBSB_LAST_NAME,CMC_SBSB_SUBSC.SBSB_FIRST_NAME,CMC_SBSB_SUBSC.SBSB_MID_INIT,CMC_SBSB_SUBSC.SBSB_ORIG_EFF_DT,CMC_SBSB_SUBSC.SBSB_HIRE_DT,CASE WHEN CMC_SBSB_SUBSC.SYS_LAST_UPD_DTM IS NULL THEN GETDATE() ELSE CMC_SBSB_SUBSC.SYS_LAST_UPD_DTM END AS SYS_LAST_UPD_DTM,CMC_GRGR_GROUP.GRGR_ID,CMC_MEME_MEMBER.MEME_CK FROM @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_SBSB_SUBSC CMC_SBSB_SUBSC INNER JOIN @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_GRGR_GROUP CMC_GRGR_GROUP ON CMC_SBSB_SUBSC.GRGR_CK=CMC_GRGR_GROUP.GRGR_CK INNER JOIN @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_MEME_MEMBER CMC_MEME_MEMBER ON CMC_SBSB_SUBSC.SBSB_CK=CMC_MEME_MEMBER.SBSB_CK WHERE EXISTS (SELECT 'Y' FROM @{pipeline().globalParameters.gbl_param_BCBSOwner}.P_SEL_PRCS_CRITR P_SEL_PRCS_CRITR,@{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_GRGR_GROUP CMC_GRGR WHERE P_SEL_PRCS_CRITR.SEL_PRCS_ID='WRHSINBEXCL' AND P_SEL_PRCS_CRITR.SEL_PRCS_ITEM_ID='WORKCOMP' AND P_SEL_PRCS_CRITR.SEL_PRCS_CRITR_CD='MEDPROC' AND CMC_GRGR.GRGR_ID>=P_SEL_PRCS_CRITR.CRITR_VAL_FROM_TX AND CMC_GRGR.GRGR_ID<=P_SEL_PRCS_CRITR.CRITR_VAL_THRU_TX AND CMC_GRGR.GRGR_CK=CMC_GRGR_GROUP.GRGR_CK)), CTE_WORK1 AS (SELECT SBSB_CK AS SUB_UNIQ_KEY,'FACETS' AS SRC_SYS_CD,@{pipeline().parameters.RunCycle} AS CRT_RUN_CYC_EXCTN_SK,@{pipeline().parameters.RunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK,GRGR_ID AS GRP_ID,SBSB_ID AS SUB_ID,1 AS SRC_SYS_LAST_UPDT_USER_SK,CAST(SBSB_HIRE_DT AS DATE) AS HIRE_DT,CAST(SBSB_ORIG_EFF_DT AS DATE) AS ORIG_EFF_DT,CAST(SYS_LAST_UPD_DTM AS DATE) AS SRC_SYS_LAST_UPDT_DT,MEME_CK AS MBR_UNIQ_KEY,'00' AS MBR_SFX_NO,SBSB_MID_INIT AS MIDINIT,SBSB_FIRST_NAME AS FIRST_NM,SBSB_LAST_NAME AS LAST_NM FROM CTE_BASE), CTE_WORK2 AS (SELECT SBSB_CK AS SUB_UNIQ_KEY,'FACETS' AS SRC_SYS_CD FROM CTE_BASE) DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.a1_TMP_FctsIdsWorkCompnstnCaseExtr; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.a1_TMP_FctsIdsWorkCompnstnCaseExtr FROM CTE_WORK1; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.a2_TMP_FctsIdsWorkCompnstnCaseExtr; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.a2_TMP_FctsIdsWorkCompnstnCaseExtr FROM CTE_WORK2",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyWorkCompnstnCase",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransformWorkCompnstnCase",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "a1_TMP_FctsIdsWorkCompnstnCaseExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "WORK_COMPNSTN_CASE.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyBWorkCompnstnCase",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptTransformWorkCompnstnCase",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "a2_TMP_FctsIdsWorkCompnstnCaseExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "B_WORK_COMPNSTN_CASE.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/WorkersComp/Case"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2013 Blue Cross/Blue Shield of Kansas City\n\nJOB NAME: FctsIdsWorkCompnstnCaseExtr\nCALLED BY: FctsIdsWorkCompGrpCaseSeq\n\nPROCESSING:     Workers Compensation claims extract from FacetsDbo and load to IDS WORK_COMPNSTN_CASE table\n\n\nMODIFICATIONS:\n\nDeveloper                    Date                 \\(9)Project                                                          Change Description                                                   Development Project\\(9)          Code Reviewer          Date Reviewed       \n------------------                --------------------     \\(9)------------------------                                        -----------------------------------------------------------------------                  ------------------------------\\(9)         -------------------------------   ----------------------------       \nAkhila Manickavelu\\(9)  2016-12-01\\(9)5628 WORK_COMPNSTN_CASE \\(9)    Original Programming\\(9)\\(9)\\(9)          Integratedev2                           Kalyan Neelam          2017-01-09\n                                                                (Facets to IDS) ETL Report \nPrabhu ES                 2022-03-02            S2S Remediation                                        MSSQL ODBC conn added and other param changes  IntegrateDev5\\(9)Ken Bradmon\\(9)2022-06-03\n\nAnnotations:\nThis job Extracts the Claims data from Facets tables to generate the load file WorkCompnstnCase.dat to be send to IDS WORK_COMPNSTN_CASE table\nJoin CMC_SBSB_SUBSC, CMC_MEME_MEMBER and CMC_GRGR_GROUP  for master extract and Look up on P_SEL_PRCS_CRITR for GRGR_ID\nB_WORK_COMPNSTN_EMPL.dat load file have the key fields from WORK_COMPNSTN_CASE for Balancing Report"
+}

@@ -1,0 +1,500 @@
+{
+  "name": "EAMEnrlRptLEPSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/TraceabilityReporting/EnrollmetOperations"
+    },
+    "parameters": {
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LEPFileName": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LAN_LEP_FilePath": {
+        "type": "String",
+        "defaultValue": "/library/library/Government/PHI11/Shared/MEDICARE_ADVANTAGE/LEP/"
+      },
+      "FileList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_ChkFiles_branch": {
+        "type": "String",
+        "defaultValue": "0"
+      },
+      "var_If_1G_branch": {
+        "type": "String",
+        "defaultValue": "0"
+      },
+      "var_If_1H_branch": {
+        "type": "String",
+        "defaultValue": "0"
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_0A",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'EAMEnrlRptLEPSeq'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": []
+        }
+      },
+      {
+        "name": "FTPLEPFile",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_0A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'ftp_binary')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "arg1": "o_lib",
+            "lanAcct": {
+              "value": "@pipeline().globalParameters.gbl_param_LANAcct",
+              "type": "Expression"
+            },
+            "lanPw": {
+              "value": "@pipeline().globalParameters.gbl_param_LANPW",
+              "type": "Expression"
+            },
+            "action": "get",
+            "remotePath": "/library/library/Government/PHI11/Shared/MEDICARE_ADVANTAGE/LEP",
+            "fileName": {
+              "value": "@pipeline().parameters.LEPFileName",
+              "type": "Expression"
+            },
+            "localDir": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_container_raw,'/',pipeline().globalParameters.gbl_param_environment,'/landing')",
+              "type": "Expression"
+            },
+            "localFileName": {
+              "value": "@pipeline().parameters.LEPFileName",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "ListFiles_Routine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "FTPLEPFile",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/LIST.FILES')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "file_path": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_container_raw,'/',pipeline().globalParameters.gbl_param_environment,'/landing')",
+              "type": "Expression"
+            },
+            "file_pattern": "LEP_Letters*",
+            "gbl_param_environment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Set_FileList",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "ListFiles_Routine",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "FileList",
+          "value": {
+            "value": "@string(activity('ListFiles_Routine').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "ChkFiles_Switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "Set_FileList",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(equals(length(trim(variables('FileList'))), 0),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "Set_var_ChkFiles_branch_true",
+                  "type": "SetVariable",
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_ChkFiles_branch",
+                    "value": "1"
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "Set_var_ChkFiles_branch_false",
+              "type": "SetVariable",
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_ChkFiles_branch",
+                "value": "0"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1G_Switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "ChkFiles_Switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(and(equals(variables('var_ChkFiles_branch'),'0'),equals(contains(split(variables('ExclusionList'),';'),'EAMEnrlRptLEPExtr'),false)),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "Set_var_If_1G_branch_true",
+                  "type": "SetVariable",
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_If_1G_branch",
+                    "value": "1"
+                  }
+                },
+                {
+                  "name": "EAMEnrlRptLEPExtr",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "Set_var_If_1G_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/TraceabilityReporting/EnrollmetOperations/EAMEnrlRptLEPExtr')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "RunID": {
+                        "value": "@pipeline().parameters.RunID",
+                        "type": "Expression"
+                      },
+                      "LEPFileName": {
+                        "value": "@pipeline().parameters.LEPFileName",
+                        "type": "Expression"
+                      },
+                      "CurrDt": {
+                        "value": "@pipeline().parameters.CurrDate",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "Set_var_If_1G_branch_false",
+              "type": "SetVariable",
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_If_1G_branch",
+                "value": "0"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1H_Switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "EAMEnrlRptLEPExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Set_var_If_1G_branch_false",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(and(equals(variables('var_ChkFiles_branch'),'0'),equals(contains(split(variables('ExclusionList'),';'),'EAMEnrlRptLEPLoad'),false)),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "Set_var_If_1H_branch_true",
+                  "type": "SetVariable",
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_If_1H_branch",
+                    "value": "1"
+                  }
+                },
+                {
+                  "name": "EAMEnrlRptLEPLoad",
+                  "type": "ExecutePipeline",
+                  "dependsOn": [
+                    {
+                      "activity": "Set_var_If_1H_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "pipeline": {
+                      "referenceName": "EAMEnrlRptLEPLoad",
+                      "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                      "EAMRPTOwner": {
+                        "value": "@pipeline().globalParameters.gbl_param_EAMRPTOwner",
+                        "type": "Expression"
+                      },
+                      "eamrpt_secret_name": {
+                        "value": "@pipeline().globalParameters.gbl_param_EAMRPTSecret",
+                        "type": "Expression"
+                      },
+                      "RUNID": {
+                        "value": "@pipeline().parameters.RunID",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "Set_var_If_1H_branch_false",
+              "type": "SetVariable",
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_If_1H_branch",
+                "value": "0"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "cp_LEP_SrcFile",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "EAMEnrlRptLEPLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Set_var_If_1H_branch_false",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/landing",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/.",
+              "type": "Expression"
+            },
+            "command": "copy",
+            "project": "integrate"
+          }
+        }
+      }
+    ]
+  }
+}

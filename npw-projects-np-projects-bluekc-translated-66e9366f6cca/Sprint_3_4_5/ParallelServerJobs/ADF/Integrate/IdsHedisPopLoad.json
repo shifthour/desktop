@@ -1,0 +1,197 @@
+{
+  "name": "IdsHedisPopLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyHedisPop",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "HEDIS_POP_SK"
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "HEDIS_POP_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "HEDIS_POP_NM",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "HEDIS_POP.@{pipeline().parameters.SrcSysCd}.@{pipeline().parameters.RunID}.dat",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "HEDIS_POP"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "CopyHedisPop",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "HEDIS_POP.@{pipeline().parameters.SrcSysCd}.@{pipeline().parameters.RunID}.dat",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "annotations": [],
+    "variables": [],
+    "type": "Microsoft.DataFactory/factories/pipelines",
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Membership/GDIT/HedisPop"
+    }
+  },
+  "Description": "COPYRIGHT 2005, 2006, 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nJob Name : IdsHedisPopLoad\n\nCalled By: GDITIdsMbrHedisMesrYRMOExtCntl\n\n                   \nPROCESSING:\n\n\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                    ----------------------------------   ---------------------------------    -------------------------   \nAkhila M                            2018-03-22                 30001                                 Orig Development                                   IntegrateDev2            Jaideep Mankala        03/30/2018\n\nAnnotations:\nRead Load File created in the PKEY job\nCopy Stage for buffer\nLoad HEDIS_POP table\nLoad rejects are redirected into a Reject file"
+}

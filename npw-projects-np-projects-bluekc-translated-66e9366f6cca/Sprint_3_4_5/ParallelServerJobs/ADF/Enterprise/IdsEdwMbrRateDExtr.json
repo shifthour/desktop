@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwMbrRateDExtr",
+  "properties": {
+    "parameters": {
+      "IDSRunCycle": {
+        "type": "Int"
+      },
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "Int"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwMbrRateDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH MBR_RATE_in AS (SELECT MBR_RATE.MBR_RATE_SK, MBR_RATE.MBR_UNIQ_KEY, MBR_RATE.EFF_DT_SK, MBR_RATE.SRC_SYS_CD_SK, MBR_RATE.CRT_RUN_CYC_EXCTN_SK, MBR_RATE.LAST_UPDT_RUN_CYC_EXCTN_SK, MBR_RATE.MBR_SK, MBR_RATE.SMOKER_IN, MBR_RATE.TERM_DT_SK, COALESCE(CD.TRGT_CD,'UNK') SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR_RATE MBR_RATE LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON MBR_RATE.SRC_SYS_CD_SK = CD.CD_MPPNG_SK WHERE MBR_RATE.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle}), main_data AS (SELECT MBR_RATE_SK, SRC_SYS_CD, MBR_UNIQ_KEY, EFF_DT_SK AS MBR_RATE_EFF_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, MBR_SK, SMOKER_IN, TERM_DT_SK AS MBR_RATE_TERM_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM MBR_RATE_in WHERE MBR_RATE_SK NOT IN (0,1)), unk_data AS (SELECT 0 MBR_RATE_SK, 'UNK' SRC_SYS_CD, 0 MBR_UNIQ_KEY, '1753-01-01' MBR_RATE_EFF_DT_SK, '1753-01-01' CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 0 MBR_SK, 'N' SMOKER_IN, '2199-12-31' MBR_RATE_TERM_DT_SK, 100 CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} LAST_UPDT_RUN_CYC_EXCTN_SK), na_data AS (SELECT 1 MBR_RATE_SK, 'NA' SRC_SYS_CD, 1 MBR_UNIQ_KEY, '1753-01-01' MBR_RATE_EFF_DT_SK, '1753-01-01' CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 1 MBR_SK, 'N' SMOKER_IN, '2199-12-31' MBR_RATE_TERM_DT_SK, 100 CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} LAST_UPDT_RUN_CYC_EXCTN_SK) SELECT * FROM main_data UNION ALL SELECT * FROM unk_data UNION ALL SELECT * FROM na_data",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "MBR_RATE"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "MBR_RATE_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/MbrRateD"
+    }
+  },
+  "Description": "COPYRIGHT 2014 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:     IdsMbrRateDExtr\n\nCalled By:  EdwMbrNoDriverSeq\n\nDESCRIPTION:  Extracts from IDS MBR_RATE to flatfile MBR_RATE_D.dat.  Only records with the most recent LAST_UPDT_RUN_CYC_EXCTN_SK are pulled.\n      \n\nINPUTS:\nThe following IDS table is used:\nMBR_RATE\n\nOUTPUTS: \n                    Flatfile: MBR_RATE_D.dat\n\nMODIFICATIONS:\n              \nMODIFICATIONS:\nDate                 Developer                Change Description                                                                                 Development Environment               Code Reviewer                 Review Date\n------------------      ----------------------------     --------------------------------------------------------------------------------------------------------      ----------------------------------------------         -----------------------------------       --------------------\n2014-02-14     Santosh Bokka         Original Programming                                                                                 EnterpriseNewDevl                      Bhoomi Dasari                    3/27/2014\n\nAnnotations:\nAdd CRT_RUN_CYC_EXCTN_DT_SK and LAST_UPDT_RUN_CYC_EXCTN_DT_SK\nJob name:\nIdsEdwMbrRateDExtr\nMember Rate Extract - Pulls from IDS MBR_RATE to load to file MBR_RATE_D.dat\nWrite MBR_RATE_D Data into a Sequential file for Load Ready Job.\nExtract updated MBR_RATE IDS Data"
+}

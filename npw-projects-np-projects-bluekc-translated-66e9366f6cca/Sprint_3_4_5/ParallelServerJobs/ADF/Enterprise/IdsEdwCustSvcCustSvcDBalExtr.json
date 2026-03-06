@@ -1,0 +1,201 @@
+{
+  "name": "IdsEdwCustSvcCustSvcDBalExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_Snapshot_to_Temp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.SNAPSHOT_TMP_IdsEdwCustSvcCustSvcDBalExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": {
+                "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/snapshot')",
+                "type": "Expression"
+              },
+              "param_filename": "IDS_CUST_SVC.uniq",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "SNAPSHOT_TMP_IdsEdwCustSvcCustSvcDBalExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform_BCustSvc",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_Snapshot_to_Temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          },
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.BCUSTSVC_TMP_IdsEdwCustSvcCustSvcDBalExtr; WITH snapshot AS ( SELECT SRC_SYS_CD_SK, CUST_SVC_ID, DISCLMR_IN FROM @{pipeline().globalParameters.gbl_param_ids_staging}.SNAPSHOT_TMP_IdsEdwCustSvcCustSvcDBalExtr ), cd_mppng AS ( SELECT CD_MPPNG_SK, COALESCE(TRGT_CD,'UNK') AS TRGT_CD, COALESCE(TRGT_CD_NM,'UNK') AS TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG ) SELECT CASE WHEN cd.TRGT_CD IS NULL OR LEN(dbo.trim_default(cd.TRGT_CD)) = 0 THEN 'NA' ELSE cd.TRGT_CD END AS SRC_SYS_CD, s.CUST_SVC_ID, s.DISCLMR_IN AS CUST_SVC_DISCLMR_IN INTO @{pipeline().globalParameters.gbl_param_ids_staging}.BCUSTSVC_TMP_IdsEdwCustSvcCustSvcDBalExtr FROM snapshot s LEFT JOIN cd_mppng cd ON cd.CD_MPPNG_SK = s.SRC_SYS_CD_SK",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Copy_Final_to_File",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_BCustSvc",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "SELECT SRC_SYS_CD, CUST_SVC_ID, CUST_SVC_DISCLMR_IN FROM @{pipeline().globalParameters.gbl_param_ids_staging}.BCUSTSVC_TMP_IdsEdwCustSvcCustSvcDBalExtr",
+              "type": "Expression"
+            },
+            "partitionOption": "None",
+            "queryTimeout": "02:00:00"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "BCUSTSVC_TMP_IdsEdwCustSvcCustSvcDBalExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": {
+                "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+                "type": "Expression"
+              },
+              "param_filename": "B_CUST_SVC_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/CustSvc/EdwLoads/CustSvcD/Balancing"
+    }
+  },
+  "description": "CALLED BY:    IdsEdwCustSvcBalSeq\n\nPROCESSING:\n                  This pulls data from the Concatenated Source Sequential file coming from IDS and loads into the B table in EDW\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                          Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                     ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada              06/26/2007         3264                              Originally Programmed                                        devlEDW10    \n\nParikshith Chada              08/29/2007         3264                            Changed the Snapshot file Extract to                   devlEDW10                 Steph Goddard            10/21/2007\n                                                                                                         Snapshot table extract                             \n\nBhupinder Kaur                12/05/2013          5114                               Create Load File for                                         EnterpriseWhseDevl     Jag Yelavarthi              2014-02-25\n                                                                                                             EDW Table B_CUST_SVC_D\n\nAnnotations:\nLoading Balancing Snapshot Table\nJob: IdsEdwCustSvcCustSvcDBalExtr"
+}

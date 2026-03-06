@@ -1,0 +1,182 @@
+{
+  "name": "FncIdsCoExtr",
+  "properties": {
+    "parameters": {
+      "RunCycle": {
+        "type": "int"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "SrcSysCdSk": {
+        "type": "int"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyFileToTmpFncIdsCoExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.co_tmp_FncIdsCoExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/landing')",
+              "param_filename": "@concat('WORKDAY.Company.file.', pipeline().parameters.RunID, '.csv')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "\""
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "co_tmp_FncIdsCoExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_LkpXfrm",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTmpFncIdsCoExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH stextr AS (SELECT DISTINCT CD_MPPNG_SK, SRC_CD FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG WHERE SRC_SYS_CD = 'IDS' AND SRC_DOMAIN_NM = 'STATE'), extrco AS (SELECT Company_Id, Company_Name, Full_Address, Address_Line_1, Address_Line_2, City, State, Zip, NAIC_Number, Tax_Id FROM @{pipeline().globalParameters.gbl_param_ids_staging}.co_tmp_FncIdsCoExtr), final AS (SELECT extrco.Company_Id AS CO_ID, @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD, @{pipeline().parameters.RunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.RunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, extrco.Company_Name AS CO_LGL_NM, extrco.Full_Address AS FULL_CO_MAIL_ADDR_TX, extrco.Address_Line_1 AS CO_MAIL_ADDR_LN_1, CASE WHEN LEN(RTRIM(LTRIM(COALESCE(extrco.Address_Line_2, ''))))=0 THEN ' ' ELSE extrco.Address_Line_2 END AS CO_MAIL_ADDR_LN_2, extrco.City AS CO_MAIL_ADDR_CITY_NM, stextr.CD_MPPNG_SK AS CO_MAIL_ADDR_ST_CD_SK, CASE WHEN LEN(extrco.Zip)=10 THEN SUBSTRING(extrco.Zip,1,5) ELSE extrco.Zip END AS CO_MAIL_ADDR_ZIP_CD_5, CASE WHEN LEN(extrco.Zip)=10 THEN SUBSTRING(extrco.Zip,6,4) ELSE '    ' END AS CO_MAIL_ADDR_ZIP_CD_4, CASE WHEN RTRIM(LTRIM(COALESCE(extrco.NAIC_Number, '')))= '' THEN ' ' ELSE extrco.NAIC_Number END AS NAIC_ID, CASE WHEN extrco.Tax_Id IS NULL OR RTRIM(LTRIM(extrco.Tax_Id))= '' THEN ' ' ELSE LEFT(extrco.Tax_Id, CHARINDEX(',', extrco.Tax_Id + ',') -1 ) END AS TAX_ID FROM extrco LEFT JOIN stextr ON stextr.SRC_CD=extrco.State) DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.co_transform_tmp_FncIdsCoExtr; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.co_transform_tmp_FncIdsCoExtr FROM final",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyFinalFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_LkpXfrm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "co_transform_tmp_FncIdsCoExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/key')",
+              "param_filename": "IDS.CO.Extr.dat",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/Company"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2010 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nJOB NAME : FncIdsCoExtr\n\nCALLED BY: FncIdsCoCntl\n\nPROCESSING: Extract company dat from workday file on daily.\n\nMODIFICATIONS:\n\nDeveloper                          Date                      Project/Altiris #                    Change Description                             Development Project              Code Reviewer          Date Reviewed\n----------------------------------      -------------------         -----------------------------------        -----------------------------------------------------         ----------------------------------               ----------------------------      -------------------------   \nRaj Kommineni                 2020-04-29                  5879                                Originally Programmed                         IntegrateDev2                         Kalyan Neelam          2020-05-05\n\nRaj Kommineni                 2020-05-27                  5879                   Updated job to accomodate the k-table pkey     IntegrateDev2                      Jaideep Mankala     06/11/2020"
+}

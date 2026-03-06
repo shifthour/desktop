@@ -1,0 +1,512 @@
+{
+  "name": "FctsIncomePrereqSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/Income/Seq"
+    },
+    "parameters": {
+      "CntlJobName": {
+        "type": "String",
+        "defaultValue": "FctsIncomeCntl"
+      },
+      "SrcSysCdSK": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TableID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EmailNotify": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DriverTable": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CreateBeginDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CreateEndDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DueBeginDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DueEndDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "InvcSubSbsdyBegDt": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "FctsIncomeHitNotFoundCnt": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "JobLinkCount_a1": {
+        "type": "String",
+        "defaultValue": "FctsIncomeDriverHitList"
+      },
+      "JobLinkCount_a2": {
+        "type": "String",
+        "defaultValue": "TrnsSK"
+      },
+      "JobLinkCount_a3": {
+        "type": "String",
+        "defaultValue": "not_found"
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'tmp_income'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "crt_tmp_ids_income",
+              "type": "ExecutePipeline",
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "SQLQueryCmd",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  },
+                  "Command1": "DROP TABLE IF EXISTS tempdb..TMP_IDS_INCOME",
+                  "Command2": "CREATE TABLE tempdb..TMP_IDS_INCOME(BILL_INVC_ID VARCHAR(15), CONSTRAINT IDSINC01 PRIMARY KEY NONCLUSTERED (BILL_INVC_ID))"
+                }
+              }
+            },
+            {
+              "name": "FctsIncomeTempLoad",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "crt_tmp_ids_income",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Income/Driver/FctsIncomeTempLoad')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CreateBeginDate": {
+                    "value": "@pipeline().parameters.CreateBeginDate",
+                    "type": "Expression"
+                  },
+                  "CreateEndDate": {
+                    "value": "@pipeline().parameters.CreateEndDate",
+                    "type": "Expression"
+                  },
+                  "DueBeginDate": {
+                    "value": "@pipeline().parameters.DueBeginDate",
+                    "type": "Expression"
+                  },
+                  "DueEndDate": {
+                    "value": "@pipeline().parameters.DueEndDate",
+                    "type": "Expression"
+                  },
+                  "DriverTable": {
+                    "value": "@pipeline().parameters.DriverTable",
+                    "type": "Expression"
+                  },
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  },
+                  "InvcSubSbsdyBegDt": {
+                    "value": "@pipeline().parameters.InvcSubSbsdyBegDt",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'FctsIncomeDriverHitList'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FctsIncomeDriverHitList",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Income/Driver/FctsIncomeDriverHitList')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "DriverTable": {
+                    "value": "@pipeline().parameters.DriverTable",
+                    "type": "Expression"
+                  },
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "JobLinkCount",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/JobLinkCount')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "JobLinkCount_a1": "FctsIncomeDriverHitList",
+            "JobLinkCount_a2": "TrnsSK",
+            "JobLinkCount_a3": "not_found",
+            "file_path": {
+              "value": "",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "delimiter": {
+              "value": "",
+              "type": "Expression"
+            },
+            "quote": {
+              "value": "",
+              "type": "Expression"
+            },
+            "header": {
+              "value": "",
+              "type": "Expression"
+            },
+            "nullValue": {
+              "value": "",
+              "type": "Expression"
+            },
+            "table_nm": {
+              "value": "",
+              "type": "Expression"
+            },
+            "schema": {
+              "value": "",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Set_FctsIncomeHitNotFoundCnt",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "JobLinkCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "FctsIncomeHitNotFoundCnt",
+          "value": {
+            "value": "@string(activity('JobLinkCount').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "If_1C1",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Set_FctsIncomeHitNotFoundCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(int(variables('FctsIncomeHitNotFoundCnt')), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email",
+              "type": "ExecutePipeline",
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().parameters.EmailNotify",
+                    "type": "Expression"
+                  },
+                  "subject": "IDS Invoice in Hit List not Found",
+                  "body": "Invoice number listed in the FctsIncomeHitList.dat file could not be found ont Facets.",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/scripts/log/FctsIdsIncomeNotify.txt')",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_integrate",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1C1",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'MvIncomeHitList'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "MvIncomeHitList",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/update/FctsIncomeHitList.dat",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/landing/processed/FctsIncomeHitList.dat.",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "integrate"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1D",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'FctsIncomePreReqHashFiles'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FctsIncomePreReqHashFiles",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Income/Driver/FctsIncomePreReqHashFiles')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "DriverTable": {
+                    "value": "@pipeline().parameters.DriverTable",
+                    "type": "Expression"
+                  },
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

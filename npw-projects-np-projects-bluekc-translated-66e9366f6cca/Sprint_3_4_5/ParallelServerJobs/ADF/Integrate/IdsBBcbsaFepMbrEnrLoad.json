@@ -1,0 +1,179 @@
+{
+  "name": "IdsBBcbsaFepMbrEnrLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsBBcbsaFepMbrEnrLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_IDSOwner}.B_BCBSA_FEP_MBR_ENR",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "MBR_UNIQ_KEY",
+                  "type": "INT",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "PROD_SH_NM",
+                  "type": "STRING",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "FEP_MBR_ENR_EFF_DT_SK",
+                  "type": "STRING",
+                  "physicalType": "CHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD_SK",
+                  "type": "INT",
+                  "physicalType": "INT"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "@concat('B_BCBSA_FEP_MBR_ENR.', pipeline().parameters.SrcSysCd, '.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "B_BCBSA_FEP_MBR_ENR"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DatabricksNotebook_DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Copy_IdsBBcbsaFepMbrEnrLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "@concat('B_BCBSA_FEP_MBR_ENR.', pipeline().parameters.SrcSysCd, '.dat')",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Member/IDSLoads/BcbsaFepMbrEnr/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This Job Loads Data from Sequential File created in xfrm Job and loads into IDS B_BCBSA_FEP_MBR_ENR table\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam           2015-11-23        5403                              Initial Programming                                                                                IntegrateDev1           Bhoomi Dasari               11/27/2015\n\nAnnotations:\nRead Load File created in the FKEY job\nCopy Stage for buffer\nTruncate and Load B_BCBSA_FEP_MBR_ENR table\nLoad rejects are redirected into a Reject file"
+}

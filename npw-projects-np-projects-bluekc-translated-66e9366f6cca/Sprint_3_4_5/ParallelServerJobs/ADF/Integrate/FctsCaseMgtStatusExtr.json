@@ -1,0 +1,92 @@
+{
+  "name": "FctsCaseMgtStatusExtr",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/MedMgt/MedMgt/CMStatus"
+    },
+    "activities": [
+      {
+        "name": "cp_FctsCaseMgtStatus",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH source_data AS (SELECT DISTINCT CMCM_ID,CMST_SEQ_NO,USUS_ID,CMST_STS,CMST_STS_DTM,CMST_MCTR_REAS,CMST_USID_ROUTE,CMST_LOCK_TOKEN,ATXR_SOURCE_ID FROM @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_CMST_STATUS WHERE CMST_STS_DTM >= '@{pipeline().parameters.LastRunDt}'),transform AS (SELECT STRIP.FIELD.EE(CMCM_ID) + ';' + CAST(CMST_SEQ_NO AS VARCHAR(10)) + ';' + dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS PRI_NAT_KEY_STRING,@{pipeline().parameters.RunIDTimeStamp} AS FIRST_RECYC_TS,STRIP.FIELD.EE(CMCM_ID) AS CASE_MGT_ID,CMST_SEQ_NO AS CASE_MGT_STTUS_SEQ_NO,dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS SRC_SYS_CD,STRIP.FIELD.EE(dbo.trim_default(USUS_ID)) AS USUS_ID,STRIP.FIELD.EE(dbo.trim_default(CMST_STS)) AS CMST_STS,CMST_STS_DTM AS CMST_STS_DTM,STRIP.FIELD.EE(dbo.trim_default(CMST_MCTR_REAS)) AS CMST_MCTR_REAS,STRIP.FIELD.EE(dbo.trim_default(CMST_USID_ROUTE)) AS CMST_USID_ROUTE FROM source_data) SELECT PRI_NAT_KEY_STRING,FIRST_RECYC_TS,CASE_MGT_ID,CASE_MGT_STTUS_SEQ_NO,SRC_SYS_CD,USUS_ID,CMST_STS,CMST_STS_DTM,CMST_MCTR_REAS,CMST_USID_ROUTE FROM transform",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "ParquetWriteSettings"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "facets",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_facets",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_FacetsOwner}",
+              "param_table": "CMC_CMST_STATUS"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/ds')",
+              "param_filename": "@concat('CASE_MGT_STTUS.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "LastRunDt": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      }
+    }
+  },
+  "Description": "Called By: FctsMedMgtCntl\n\n\nProcess : Extract Case Mgt Status data from Facets to DataSet which is processed and loaded to CASE_MGT_STTUS table\n\n\nModifications:                        \n                                             \t\t  Project/                                                                                                    \tCode                  Date\nDeveloper         \tDate             \t Altiris #     \tChange Description                                                   \tReviewer            Reviewed\n-----------------------  \t-------------------   \t-------------   \t-----------------------------------------------------------------------------   \t-------------------------  -------------------\nJaideep Mankala         2019-07-09          US115013               Extract Case Mgt Status data from Facets to DataSet           Abhiram Dasarathy\t2019-07-15\nPrabhu ES                   2022-03-07          S2S Remediation     MSSQL ODBC conn params added - IntegrateDev5\tHarsha Ravuri\t06-14-2022\n\nAnnotations:\nJobName: FctsCaseMgtStatusExtr\n\n\nExtract data from CMC_CMST_STATUS facets\ntable to load into IDS"
+}

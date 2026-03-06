@@ -1,0 +1,172 @@
+{
+  "name": "UwsEdwPNewDirDrgLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_UwsEdwPNewDirDrgLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_EDWOwner}.P_NEWDIR_DRG",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "DRG_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "DRG_METH_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "USER_ID",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "LAST_UPDT_DT_SK",
+                  "type": "String",
+                  "physicalType": "CHAR"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Claims/EdwLoads/PTables/load')",
+              "param_filename": "P_NEWDIR_DRG.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "P_NEWDIR_DRG"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Db2StatsSubroutine_UwsEdwPNewDirDrgLoad",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Copy_UwsEdwPNewDirDrgLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": "load",
+            "filename": {
+              "value": "P_NEWDIR_DRG.dat",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Claims/EdwLoads/PTables"
+    }
+  },
+  "Description": "COPYRIGHT 2006 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nDESCRIPTION:    Pulls data from UWS NEWDIR_DRG  table and loads into edw P_NEWDIR_DRG table\n      \n                          \nPROCESSING:\n                  UWS - read from source and loads into sequential file.\n                  EDW - Read from source and dump to target table.\n                  \n\nMODIFICATIONS:\n              \n\nDate                 Developer                Project                     Change Description                                                        Environment           Reviewer                Date\n=============================================================================================================================================================\n2016-01-28     Manasa Andru          TFS - 10783             Original Programming                                                    EnterpriseDev1         Kalyan Neelam        2016-01-29\n\n2017-01-17     Manasa Andru          TFS - 10783            Updated the 'Update SQL' in the db2 stage to              EnterpriseDev1         Jag Yelavarthi          2017-01-18\n                                                                                             use all key columns.\n\n2017-01-27     Manasa Andru          TFS - 17137          Changed the load type from 'Update then Insert' to         EnterpriseDev1        Kalyan Neelam         2017-01-31\n                                                                                              'Truncate then Insert' to have records which\n                                                                                                   only exist in the source table from UWS.\n\nAnnotations:\nRead the Load ready file created in UwsPNewDirDrgExtr Job\nLoad file created in the previous job will be loaded into the target DB2 table here. \n\nLoad Type; \"Truncate the Table then Insert Records\" .\nCopy For Buffer\nJob Name:UwsEdwPNewDirDrgLoad"
+}

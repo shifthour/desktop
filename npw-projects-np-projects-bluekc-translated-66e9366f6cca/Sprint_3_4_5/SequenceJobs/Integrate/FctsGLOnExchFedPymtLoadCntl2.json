@@ -1,0 +1,546 @@
+{
+  "name": "FctsGLOnExchFedPymtLoadCntl2",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/PeopleSoft"
+    },
+    "parameters": {
+      "EmailFinance": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcCd": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Variables_NextMonthDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Source": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Target": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Subject": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Initial_Frequency": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "OpenRunCycle_EDWRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "ExCmd_DupRpt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/GL_Duplicates.csv",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "integrate"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CMSExch_Dup",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "ExCmd_DupRpt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(int(activity('ExCmd_DupRpt').output.runOutput),1)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email_Notify_Dup_Rpt",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().parameters.EmailFinance",
+                    "type": "Expression"
+                  },
+                  "subject": "GL Duplicate records",
+                  "body": "Records that are dropped as duplicates to GL_ON_EXCH_FED_PYMT_DTL",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/external/GL_Duplicates.csv')",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_published",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FTP_lan_DupRpt",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Email_Notify_Dup_Rpt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "MACHINE": "o_lib",
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath,'/external')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": "GL_Duplicates.csv",
+                  "REMOTEPATH": "/library/library/Finance/PHI09/Dedicated/Reports",
+                  "REMOTEFILENAME": "GL_Duplicates.csv",
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Move_ExchngDup",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "FTP_lan_DupRpt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/external/GL_Duplicates.csv",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/external/processed/GL_Duplicates.csv",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "integrate"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "ExCmd_QHPRpt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Move_ExchngDup",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "CMSExch_Dup",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/CMS_QHPNotFound.csv",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "integrate"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CMSExch_QHP",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "ExCmd_QHPRpt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@greater(int(activity('ExCmd_QHPRpt').output.runOutput),1)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email_Notify_QHP_Rpt",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().parameters.EmailFinance",
+                    "type": "Expression"
+                  },
+                  "subject": "CMS Exchange File - QHP not found",
+                  "body": "Attached QHP  not present in QLFD_HLTH_PLN QHP",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/external/CMS_QHPNotFound.csv')",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_published",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FTP_lan_QHPRpt",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Email_Notify_QHP_Rpt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "MACHINE": "o_lib",
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath,'/external')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": "CMS_QHPNotFound.csv",
+                  "REMOTEPATH": "/library/library/Finance/PHI09/Dedicated/Reports",
+                  "REMOTEFILENAME": "CMS_QHPNotFound.csv",
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Move_Exchngqhp",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "FTP_lan_QHPRpt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/external/CMS_QHPNotFound.csv",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/external/processed/CMS_QHPNotFound.csv",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "integrate"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Write_Next_BeginDate",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Move_Exchngqhp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "CMSExch_QHP",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/WriteRunInfo')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "arg1": {
+              "value": "@pipeline().parameters.Initial_JobName",
+              "type": "Expression"
+            },
+            "arg2": {
+              "value": "@pipeline().parameters.Variables_NextMonthDate",
+              "type": "Expression"
+            },
+            "arg3": {
+              "value": "@pipeline().parameters.Variables_NextMonthDate",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CloseRunCycle",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Write_Next_BeginDate",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/CloseRunCycle')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "DBOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "SrcSystem": {
+              "value": "@pipeline().parameters.Initial_Source",
+              "type": "Expression"
+            },
+            "TrgtSystem": {
+              "value": "@pipeline().parameters.Initial_Target",
+              "type": "Expression"
+            },
+            "SubjCode": {
+              "value": "@pipeline().parameters.Initial_Subject",
+              "type": "Expression"
+            },
+            "FreqCode": {
+              "value": "@pipeline().parameters.Initial_Frequency",
+              "type": "Expression"
+            },
+            "RunCycle": {
+              "value": "@pipeline().parameters.OpenRunCycle_EDWRunCycle",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ]
+  }
+}

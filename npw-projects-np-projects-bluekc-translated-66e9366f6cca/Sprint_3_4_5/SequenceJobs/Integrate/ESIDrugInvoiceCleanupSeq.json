@@ -1,0 +1,744 @@
+{
+  "name": "ESIDrugInvoiceCleanupSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim/SeqESI"
+    },
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "UpdateDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "IDSCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EDWCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "WDMCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_2A",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'WebDMLastUpd'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FORMAT_DATE_UpdateDate",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FORMAT.DATE')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "pInDate": "string('@DATE')",
+                  "pSource": "DATE",
+                  "pSourceFormat": "CURRENT",
+                  "pOutFormat": "CCYY-MM-DD"
+                }
+              }
+            },
+            {
+              "name": "Set_UpdateDate",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "FORMAT_DATE_UpdateDate",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "UpdateDate",
+                "value": {
+                  "value": "@string(activity('FORMAT_DATE_UpdateDate').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "WebDMLastUpd",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_UpdateDate",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/WebDataMart/Claim/CycUpdt/WebDMLastUpd')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "ClmMartOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_ClmMartOwner",
+                    "type": "Expression"
+                  },
+                  "clmmart_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_ClmMartSecret",
+                    "type": "Expression"
+                  },
+                  "SubjectName": "ESI INVOICE",
+                  "UpdateDate": {
+                    "value": "@variables('UpdateDate')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        },
+        "dependsOn": []
+      },
+      {
+        "name": "If_2B",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ESIInvoiceRunCycUpd'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ESIInvoiceRunCycUpd",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/ESIinvoice/ESIInvoiceRunCycUpd')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "RunCycle": {
+                    "value": "@pipeline().parameters.CurrRunCycle",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        },
+        "dependsOn": [
+          {
+            "activity": "If_2A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "If_2C",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'MvESI_DrugInvoice'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "MvESI_DrugInvoice",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/landing/ESI_DrugInvoice.dat",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/landing/processed/ESI_DrugInvoice.dat.",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "integrate"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        },
+        "dependsOn": [
+          {
+            "activity": "If_2B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "JobLinkCount_IDSCount",
+        "type": "DatabricksNotebook",
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/JobLinkCount')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "JobLinkCount_a1": "ESIIdsUpd",
+            "JobLinkCount_a2": "Trns1",
+            "JobLinkCount_a3": "Unmatched",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "file_path": {
+              "value": "",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "delimiter": {
+              "value": "",
+              "type": "Expression"
+            },
+            "quote": {
+              "value": "",
+              "type": "Expression"
+            },
+            "header": {
+              "value": "",
+              "type": "Expression"
+            },
+            "nullValue": {
+              "value": "",
+              "type": "Expression"
+            },
+            "table_nm": {
+              "value": "",
+              "type": "Expression"
+            },
+            "schema": {
+              "value": "",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "dependsOn": [
+          {
+            "activity": "If_2C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Set_IDSCount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "JobLinkCount_IDSCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "IDSCount",
+          "value": {
+            "value": "@string(activity('JobLinkCount_IDSCount').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "JobLinkCount_EDWCount",
+        "type": "DatabricksNotebook",
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/JobLinkCount')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "JobLinkCount_a1": "ESIEdwUpd",
+            "JobLinkCount_a2": "Trns1",
+            "JobLinkCount_a3": "Unmatched",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "file_path": {
+              "value": "",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "delimiter": {
+              "value": "",
+              "type": "Expression"
+            },
+            "quote": {
+              "value": "",
+              "type": "Expression"
+            },
+            "header": {
+              "value": "",
+              "type": "Expression"
+            },
+            "nullValue": {
+              "value": "",
+              "type": "Expression"
+            },
+            "table_nm": {
+              "value": "",
+              "type": "Expression"
+            },
+            "schema": {
+              "value": "",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "dependsOn": [
+          {
+            "activity": "Set_IDSCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Set_EDWCount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "JobLinkCount_EDWCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "EDWCount",
+          "value": {
+            "value": "@string(activity('JobLinkCount_EDWCount').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "JobLinkCount_WDMCount",
+        "type": "DatabricksNotebook",
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/JobLinkCount')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "JobLinkCount_a1": "ESIWebDMUpd",
+            "JobLinkCount_a2": "Trns1",
+            "JobLinkCount_a3": "Unmatched",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "file_path": {
+              "value": "",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "delimiter": {
+              "value": "",
+              "type": "Expression"
+            },
+            "quote": {
+              "value": "",
+              "type": "Expression"
+            },
+            "header": {
+              "value": "",
+              "type": "Expression"
+            },
+            "nullValue": {
+              "value": "",
+              "type": "Expression"
+            },
+            "table_nm": {
+              "value": "",
+              "type": "Expression"
+            },
+            "schema": {
+              "value": "",
+              "type": "Expression"
+            },
+            "secret_name": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "dependsOn": [
+          {
+            "activity": "Set_EDWCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Set_WDMCount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "JobLinkCount_WDMCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "WDMCount",
+          "value": {
+            "value": "@string(activity('JobLinkCount_WDMCount').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "IDS_Chk",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(equals(variables('IDSCount'), 0))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email_DAT1",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "subject": "ESI Invoice Unmatched #Counts.IDSCount# in IDS",
+                  "body": "The ESI Invoice weekly Drug Claim file has claims that are not in the IDS.  View the exception table for specific claims.",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/external/processed/ESI_IDS_Unmatched_', pipeline().parameters.RunID,'.txt')",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_published",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        },
+        "dependsOn": [
+          {
+            "activity": "Set_WDMCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "EDW_Chk",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(equals(variables('IDSCount'), 0))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email_DAT2",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "subject": "ESI Invoice Unmatched #Counts.EDWCount# in EDW ",
+                  "body": "The ESI Invoice weekly Drug Claim file has claims that are not in the IDS.  See attached file for specific claims.",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/external/processed/ESI_EDW_Unmatched_', pipeline().parameters.RunID,'.txt')",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_published",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        },
+        "dependsOn": [
+          {
+            "activity": "Set_WDMCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "WebDM_Chk",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(equals(variables('IDSCount'), 0))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Email_DAT3",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "Email_Notification",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "recipients": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "subject": "ESI Invoice Unmatched #Counts.WDMCount# in WEB Datamart",
+                  "body": "The ESI Invoice weekly Drug Claim file has claims that are not in the IDS.  See attached file for specific claims.",
+                  "blobFilenames": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/external/processed/ESI_WDM_Unmatched_', pipeline().parameters.RunID,'.txt')",
+                    "type": "Expression"
+                  },
+                  "fromemail": {
+                    "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                    "type": "Expression"
+                  },
+                  "containerName": {
+                    "value": "@pipeline().globalParameters.gbl_param_container_published",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        },
+        "dependsOn": [
+          {
+            "activity": "Set_WDMCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

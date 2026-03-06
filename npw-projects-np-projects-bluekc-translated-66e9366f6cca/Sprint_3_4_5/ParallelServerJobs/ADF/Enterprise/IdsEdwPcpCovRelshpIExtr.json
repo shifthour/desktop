@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwPcpCovRelshpIExtr",
+  "properties": {
+    "annotations": [],
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "string",
+        "defaultValue": ""
+      },
+      "EDWRunCycle": {
+        "type": "int",
+        "defaultValue": 0
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwPcpCovRelshpIExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_in AS ( SELECT i.PCP_COV_RELSHP_SK, COALESCE(CD.TRGT_CD,'UNK') as raw_SRC_SYS_CD, i.PROV_ID, i.COV_PROV_ID, i.COV_RELSHP_PFX_ID, i.EFF_DT_SK, i.CRT_RUN_CYC_EXCTN_SK, i.LAST_UPDT_RUN_CYC_EXCTN_SK, i.COV_PROV_SK, i.OVRD_PROV_AGMNT_SK, i.PROV_SK, i.TERM_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PCP_COV_RELSHP i LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON i.SRC_SYS_CD_SK = CD.CD_MPPNG_SK ), cte_out AS ( SELECT cte_in.PCP_COV_RELSHP_SK AS PCP_COV_RELSHP_SK, CASE WHEN dbo.trim_default(cte_in.raw_SRC_SYS_CD) = '' THEN 'UNK' ELSE dbo.trim_default(cte_in.raw_SRC_SYS_CD) END as SRC_SYS_CD, cte_in.PROV_ID as PCP_PROV_ID, cte_in.COV_PROV_ID, cte_in.COV_RELSHP_PFX_ID as PCP_COV_RELSHP_PFX_ID, cte_in.EFF_DT_SK as PCP_COV_RELSHP_EFF_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' as CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' as LAST_UPDT_RUN_CYC_EXCTN_DT_SK, cte_in.COV_PROV_SK, cte_in.PROV_SK as PCP_PROV_SK, cte_in.OVRD_PROV_AGMNT_SK, cte_in.TERM_DT_SK as PCP_COV_RELSHP_TERM_DT_SK, @{pipeline().parameters.EDWRunCycle} as CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} as LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_in ) SELECT * FROM cte_out",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            },
+            "linkedServiceName": {
+              "referenceName": "ids",
+              "type": "LinkedServiceReference"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PCP_COV_RELSHP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "PCP_COV_RELSHP_I.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/PcpCovRelshpI"
+    }
+  },
+  "Description": "COPYRIGHT 2005 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:     EdwProvPcpCovRelshpExtr\n\nDESCRIPTION:  \n  Pulls data from ids and edw  \n      \n\nINPUTS:\n\tIDS - PCP_COV_RELSHP\n  \nHASH FILES:\n                hf_cdma_codes         - CDMA code table - resolve code lookups\n               \n\nTRANSFORMS:  \n                  TRIM all the fields that are extracted or used in lookups\n                           \nPROCESSING:\n                  IDS - read from source, lookup all code SK values and get the natural codes\n                \n  \n\nOUTPUTS: \n                    PCP_COV_RELSHP_I.dat\n\nMODIFICATIONS:\n              Oliver Nielsen  09/07/2005    Originally Programmed\n\nMODIFICATIONS:\n                                                                                                                                                                                                                      \nDEVELOPER                         DATE                   PROJECT                                             DESCRIPTION                                                       DATASTAGE   ENVIRONMENT                     CODE  REVIEW            REVIEW DATE                    \n-----------------------------                 ----------------------      ------------------------------                               -----------------------------------------------------                            ----------------------------                                          ------------------------------      --------------------\nNagesh Bandi                         06/17/2013        5114-Enterprise Efficiencies                 Move ids to edw for PCP CONV RELSHP I                EnterpriseWrhseDevl                                   Bhoomi Dasari             8/24/2013\n\nAnnotations:\nWrite PCP_COV_RELSHP Data into a Sequential file for Load Job IdsEdwPcpCovRelshpILoad.\nRead all the Data from IDS PCP_COV_RELSHP Table;\nAdd Defaults and Null Handling.\nJob Name: IdsEdwPcpCovRelshpIExtr"
+}

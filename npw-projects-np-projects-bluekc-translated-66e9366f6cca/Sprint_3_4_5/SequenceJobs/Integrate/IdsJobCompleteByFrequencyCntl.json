@@ -1,0 +1,617 @@
+{
+  "name": "IdsJobCompleteByFrequencyCntl",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/Balancing"
+    },
+    "parameters": {
+      "Frequency": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "CurrentDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LastProcessedDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FullFrequencyName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DataStageJobNamesList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CompleteCnt": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "JobName1": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "FORMAT_DATE",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FORMAT.DATE')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "pInDate": "string('@DATE')",
+            "pSource": "DATE",
+            "pSourceFormat": "CURRENT",
+            "pOutFormat": "CCYY-MM-DD"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "SetCurrentDate",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "FORMAT_DATE",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "CurrentDate",
+          "value": {
+            "value": "@string(activity('FORMAT_DATE').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "SetJobName",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "SetCurrentDate",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "JobName",
+          "value": {
+            "value": "@pipeline().Pipeline",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "FIND_DATE",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "SetJobName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FIND.DATE')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "Start": {
+              "value": "@variables('CurrentDate')",
+              "type": "Expression"
+            },
+            "Num": {
+              "value": "@pipeline().parameters.Frequency",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "ids_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "Unit": {
+              "value": "",
+              "type": "Expression"
+            },
+            "DayOf": {
+              "value": "",
+              "type": "Expression"
+            },
+            "Output": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "SetLastProcessedDate",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "FIND_DATE",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "LastProcessedDate",
+          "value": {
+            "value": "@string(activity('FIND_DATE').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "SetFullFrequencyName",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "SetLastProcessedDate",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "FullFrequencyName",
+          "value": {
+            "value": "@if(equals(pipeline().parameters.Frequency,'W'),'WEEKLY','Monthly')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "IdsPullJobsToProcess",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "SetFullFrequencyName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Balancing/JobComplete/IdsPullJobsToProcessExtr')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "Frequency": {
+              "value": "@pipeline().parameters.Frequency",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "ids_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "GetValueFrmUnixFile",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "IdsPullJobsToProcess",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/GetValueFrmUnixFile')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "filePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/load')",
+              "type": "Expression"
+            },
+            "fileName": "IdsJobNamesSelected.dat",
+            "delimiter": "\" \"",
+            "columnIndex": "1",
+            "IDSOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "ids_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "SetDataStageJobNamesList",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "GetValueFrmUnixFile",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "DataStageJobNamesList",
+          "value": {
+            "value": "@string(activity('GetValueFrmUnixFile').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "StartLoop",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "SetDataStageJobNamesList",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "items": {
+            "value": "@split(variables('DataStageJobNamesList'), ',')",
+            "type": "Expression"
+          },
+          "activities": [
+            {
+              "name": "SetJobName1",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "JobName1",
+                "value": {
+                  "value": "@item()",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "IdsJobCompleteByFrequencyExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "SetJobName1",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Balancing/JobComplete/IdsJobCompleteByFrequencyExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "LastProcessedDate": {
+                    "value": "@variables('LastProcessedDate')",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "JobName1": {
+                    "value": "@variables('JobName1')",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "JOBLINKCOUNT",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "IdsJobCompleteByFrequencyExtr",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/JobLinkCount')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "JobName": "IdsJobCompleteByFrequencyExtr",
+                  "Stage": "Trans2",
+                  "Port": "Output",
+                  "schema": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "delimiter": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "quote": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "header": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "nullValue": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "table_nm": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "SetCompleteCnt",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "JOBLINKCOUNT",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "CompleteCnt",
+                "value": {
+                  "value": "@string(activity('JOBLINKCOUNT').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "CheckCount",
+              "type": "IfCondition",
+              "dependsOn": [
+                {
+                  "activity": "SetCompleteCnt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "expression": {
+                  "value": "@not(equals(variables('CompleteCnt'),0))",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
+                  {
+                    "name": "Email",
+                    "type": "ExecutePipeline",
+                    "dependsOn": [],
+                    "policy": {
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "pipeline": {
+                        "referenceName": "Email_Notification",
+                        "type": "PipelineReference"
+                      },
+                      "waitOnCompletion": true,
+                      "parameters": {
+                        "recipients": {
+                          "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                          "type": "Expression"
+                        },
+                        "subject": {
+                          "value": "@concat('IDS ', variables('FullFrequencyName'), ' Job ', variables('JobName1'), ' Has Not Run Since ', variables('LastProcessedDate'))",
+                          "type": "Expression"
+                        },
+                        "body": "See attached file for job information.",
+                        "blobFilenames": {
+                          "value": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/', variables('JobName1'), 'Complete.txt')",
+                          "type": "Expression"
+                        },
+                        "fromemail": {
+                          "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                          "type": "Expression"
+                        },
+                        "containerName": {
+                          "value": "@pipeline().globalParameters.gbl_param_container_integrate",
+                          "type": "Expression"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "ifFalseActivities": []
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

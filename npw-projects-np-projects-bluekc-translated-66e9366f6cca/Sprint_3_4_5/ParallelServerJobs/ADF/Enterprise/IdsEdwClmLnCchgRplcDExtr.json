@@ -1,0 +1,93 @@
+{
+  "name": "IdsEdwClmLnCchgRplcDExtr",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "parameters": {
+      "CurrRunCycleDate": {
+        "type": "string"
+      },
+      "ExtractRunCycle": {
+        "type": "int"
+      },
+      "CurrRunCycle": {
+        "type": "int"
+      }
+    },
+    "activities": [
+      {
+        "name": "cp_IdsEdwClmLnCchgRplc",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH base AS (SELECT CLC.CLM_LN_CCHG_RPLC_SK AS CLM_LN_CCHG_SK, CLC.CLM_ID, CLC.CLM_LN_SEQ_NO, COALESCE(CD2.TRGT_CD,'UNK') AS CLM_SRC_SYS_CD, CLC.PRCS_YR_MO_SK, COALESCE(CD1.TRGT_CD,'UNK') AS SRC_SYS_CD, '@{pipeline().parameters.CurrRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.CurrRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CLC.CCHG_MULT_CAT_GRP_SK, CLC.CLM_SK, CLC.CLM_LN_SK, @{pipeline().parameters.CurrRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, CLC.LAST_UPDT_RUN_CYC_EXCTN_SK AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK, CLC.VRSN_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CLM_LN_CCHG_RPLC AS CLC LEFT OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG AS CD1 ON CLC.SRC_SYS_CD_SK = CD1.CD_MPPNG_SK LEFT OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG AS CD2 ON CLC.CLM_SRC_SYS_CD_SK = CD2.CD_MPPNG_SK WHERE CLC.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtractRunCycle} AND CLC.CLM_LN_CCHG_RPLC_SK NOT IN (0,1)), union_na AS (SELECT 1 AS CLM_LN_CCHG_SK, 'NA' AS CLM_ID, 1 AS CLM_LN_SEQ_NO, 'NA' AS CLM_SRC_SYS_CD, '175301' AS PRCS_YR_MO_SK, 'NA' AS SRC_SYS_CD, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 1 AS CCHG_MULT_CAT_GRP_SK, 1 AS CLM_SK, 1 AS CLM_LN_SK, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK, 100 AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK, 'NA' AS VRSN_ID), union_unk AS (SELECT 0 AS CLM_LN_CCHG_SK, 'UNK' AS CLM_ID, 0 AS CLM_LN_SEQ_NO, 'UNK' AS CLM_SRC_SYS_CD, '175301' AS PRCS_YR_MO_SK, 'UNK' AS SRC_SYS_CD, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 0 AS CCHG_MULT_CAT_GRP_SK, 0 AS CLM_SK, 0 AS CLM_LN_SK, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK, 100 AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK, 'UNK' AS VRSN_ID) SELECT * FROM base UNION ALL SELECT * FROM union_na UNION ALL SELECT * FROM union_unk",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "CLM_LN_CCHG_RPLC"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "CLM_LN_CCHG_D_RPLC.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/MemberRisk/CCHG/ClmLnCchgD"
+    }
+  },
+  "Description": "COPYRIGHT 2015 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nPROCESSING:  Extract data from IDS CLM_LN_CCHG_D_RPLC table\n\n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #               Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------   ----------------------------------   ---------------------------------    -------------------------   \nGoutham Kalidindi            4/8/2022        US-500022                New job to Extract Data from IDS to EDW     EnterpriseDev2     Reddy Sanam               04/13/2022\n\nAnnotations:\nRead all the Data from IDS CLM_LN_CCHG_RPLC Table;\nAdd Defaults and Null Handling.\nWrite CLM_LN_CCHG_D_RPLC Data into a Sequential file for Load Job"
+}

@@ -1,0 +1,218 @@
+{
+  "name": "FctsUMPrereqSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/MedMgt/MedMgt/Seq"
+    },
+    "parameters": {
+      "RunID": {
+        "type": "String",
+        "defaultValue": "20070425"
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcSysCdSK": {
+        "type": "String",
+        "defaultValue": "35122"
+      },
+      "TableID": {
+        "type": "String",
+        "defaultValue": "TMP_IDS_UM"
+      },
+      "LookbackDate": {
+        "type": "String",
+        "defaultValue": "2009-03-19"
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'DropCreateTempTbl'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "DropCreateTempTbl",
+              "type": "ExecutePipeline",
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "SQLQueryCmd",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  },
+                  "Command1": "DROP TABLE IF EXISTS tempdb..TMP_IDS_UM",
+                  "Command2": "CREATE TABLE tempdb..TMP_IDS_UM (UM_REF_ID CHAR(9), CONSTRAINT IDSUM01 PRIMARY KEY NONCLUSTERED (UM_REF_ID))"
+                },
+                "waitOnCompletion": true
+              }
+            },
+            {
+              "name": "InsertDataToTempTable",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "DropCreateTempTbl",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "SQLQueryCmd",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  },
+                  "Command1": "INSERT INTO tempdb..TMP_IDS_UM (UM_REF_ID) SELECT DISTINCT U.UMUM_REF_ID FROM (facets.dbo.CMC_UMUM_UTIL_MGT U LEFT OUTER JOIN facets.dbo.CMC_UMIT_STATUS I ON U.UMUM_REF_ID = I.UMUM_REF_ID ) LEFT OUTER JOIN facets.dbo.CMC_UMVT_STATUS VT ON U.UMUM_REF_ID = VT.UMUM_REF_ID LEFT OUTER JOIN facets.dbo.CMC_UMAC_ACTIVITY AC ON U.UMUM_REF_ID = AC.UMUM_REF_ID GROUP BY U.UMUM_REF_ID HAVING MAX(I.UMIT_STS_DTM)>= ':LookbackDate:' OR MAX(VT.UMVT_STS_DTM)>= ':LookbackDate:' OR MAX(AC.UMAC_ACTIV_DT) >= ':LookbackDate:'",
+                  "Command2": "SELECT 1"
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'FctsUMDriverHitList'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FctsUMDriverHitList",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/MedMgt/MedMgt/Driver/FctsUMDriverHitList')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "DriverTable": {
+                    "value": "@pipeline().parameters.TableID",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'MvMedMgtHitList'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "MvMedMgtHitList",
+              "type": "DatabricksNotebook",
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/update/FctsMedMgtUMHitList.dat",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/landing/processed/FctsMedMgtUMHitList.dat:",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "integrate"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

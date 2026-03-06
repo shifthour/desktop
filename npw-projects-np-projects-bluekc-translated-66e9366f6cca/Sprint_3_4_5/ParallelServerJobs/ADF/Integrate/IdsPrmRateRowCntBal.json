@@ -1,0 +1,215 @@
+{
+  "name": "IdsPrmRateRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "Int"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "ScriptCreateTmpTables",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RND001_TMP_IdsPrmRateRowCntBal",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "SELECT TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK, TRGT.PRM_RATE_UNIQ_KEY AS TRGT_PRM_RATE_UNIQ_KEY, SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK, SRC.PRM_RATE_UNIQ_KEY AS SRC_PRM_RATE_UNIQ_KEY INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RND001_TMP_IdsPrmRateRowCntBal FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PRM_RATE AS TRGT FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.B_PRM_RATE AS SRC ON TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK AND TRGT.PRM_RATE_UNIQ_KEY = SRC.PRM_RATE_UNIQ_KEY WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle}",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RND002_TMP_IdsPrmRateRowCntBal",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "SELECT TRGT_SRC_SYS_CD_SK, TRGT_PRM_RATE_UNIQ_KEY, SRC_SRC_SYS_CD_SK, SRC_PRM_RATE_UNIQ_KEY INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RND002_TMP_IdsPrmRateRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.RND001_TMP_IdsPrmRateRowCntBal WHERE TRGT_SRC_SYS_CD_SK IS NULL OR TRGT_PRM_RATE_UNIQ_KEY IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR SRC_PRM_RATE_UNIQ_KEY IS NULL",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RND003_TMP_IdsPrmRateRowCntBal",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "IF ('@{pipeline().parameters.ToleranceCd}' = 'OUT') BEGIN SELECT TOP 1 'ROW COUNT BALANCING FACETS - IDS PREMIUM RATING IS OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RND003_TMP_IdsPrmRateRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.RND001_TMP_IdsPrmRateRowCntBal END ELSE BEGIN SELECT TOP 0 ' ' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RND003_TMP_IdsPrmRateRowCntBal END",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptCreateTmpTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "RND002_TMP_IdsPrmRateRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/research')",
+              "param_filename": "@concat('FacetsIdsPremiumRatingResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyErrorNotificationFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptCreateTmpTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "RND003_TMP_IdsPrmRateRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/notify')",
+              "param_filename": "PremiumRatingBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/PremiumRating/PrmRate/Balancing"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\n\nBhoomi Dasari       2014-04-18               5345                             Original Programming                                                                             IntegrateWrhsDevl    Sharon Andrew          2014-10-22\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - PRM_RATE\nJob Name: IdsIdsWCdmEtlDrvrLoad"
+}

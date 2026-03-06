@@ -1,0 +1,776 @@
+{
+  "name": "IdsCustSvcBalSeq2",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/CustServ/Seq/Balancing"
+    },
+    "parameters": {
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FctsExtrRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "NpsExtrRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Subject": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FctsSource": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "NpsSource": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Target": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Frequency": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_4A",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ConcatBCustSvcTaskLink'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatBCustSvcTaskLink",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "filePath": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate, '/', pipeline().globalParameters.gbl_param_environment, '/load')",
+                    "type": "Expression"
+                  },
+                  "PATTERN": "B_CUST_SVC_TASK_LINK.*",
+                  "tableName": "B_CUST_SVC_TASK_LINK",
+                  "sortKeys1": "-k9,9",
+                  "sortKeys2": "-k5,5r",
+                  "sortKeys3": "-k1,5",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "CopyBCustSvcTaskLink",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "ConcatBCustSvcTaskLink",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/load/B_CUST_SVC_TASK_LINK.uniq",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/balancing/snapshot/IDS_CUST_SVC_TASK_LINK.uniq",
+                    "type": "Expression"
+                  },
+                  "command": "copy",
+                  "project": "integrate"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_4B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_4A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'LoadB_CUST_SVC_TASK_LINK'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadB_CUST_SVC_TASK_LINK",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "B_CUST_SVC_TASK_LINK",
+                  "action": "REPLACE",
+                  "file_name": "B_CUST_SVC_TASK_LINK.uniq",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FctsIdsCustSvcTaskLinkBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "LoadB_CUST_SVC_TASK_LINK",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "FctsIdsCustSvcTaskLinkBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EmailSupport": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.FctsExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.FctsSource",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "Table": "CUST_SVC_TASK_LINK",
+                  "SnpshtTbl": "B_CUST_SVC_TASK_LINK"
+                }
+              },
+              "policy": {
+                "secureInput": false
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_5A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'LoadB_CUST_SVC_TASK_LTR'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadB_CUST_SVC_TASK_LTR",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "B_CUST_SVC_TASK_LTR",
+                  "action": "REPLACE",
+                  "file_name": "B_CUST_SVC_TASK_LTR.dat",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FctsIdsCustSvcTaskLtrBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "LoadB_CUST_SVC_TASK_LTR",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "FctsIdsCustSvcTaskLtrBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EmailSupport": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.FctsExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.FctsSource",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "Table": "CUST_SVC_TASK_LTR",
+                  "SnpshtTbl": "B_CUST_SVC_TASK_LTR"
+                }
+              },
+              "policy": {
+                "secureInput": false
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_6A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_5A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'LoadB_CUST_SVC_TASK_NOTE'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadB_CUST_SVC_TASK_NOTE",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "B_CUST_SVC_TASK_NOTE",
+                  "action": "REPLACE",
+                  "file_name": "B_CUST_SVC_TASK_NOTE.dat",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FctsIdsCustSvcTaskNoteBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "LoadB_CUST_SVC_TASK_NOTE",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "FctsIdsCustSvcTaskNoteBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EmailSupport": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.FctsExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.FctsSource",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "Table": "CUST_SVC_TASK_NOTE",
+                  "SnpshtTbl": "B_CUST_SVC_TASK_NOTE"
+                }
+              },
+              "policy": {
+                "secureInput": false
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_8A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ConcatBCustSvcTaskSttus'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatBCustSvcTaskSttus",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "filePath": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate, '/', pipeline().globalParameters.gbl_param_environment, '/load')",
+                    "type": "Expression"
+                  },
+                  "PATTERN": "B_CUST_SVC_TASK_STTUS.*",
+                  "tableName": "B_CUST_SVC_TASK_STTUS",
+                  "sortKeys1": "-k9,9",
+                  "sortKeys2": "-k5,5r",
+                  "sortKeys3": "-k1,4",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_8B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_8A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'LoadB_CUST_SVC_TASK_STTUS'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "LoadB_CUST_SVC_TASK_STTUS",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.LOAD')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "table": "B_CUST_SVC_TASK_STTUS",
+                  "action": "REPLACE",
+                  "file_name": "B_CUST_SVC_TASK_STTUS.uniq",
+                  "run_stat": "Y",
+                  "owner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "FctsIdsCustSvcTaskSttusBalSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "LoadB_CUST_SVC_TASK_STTUS",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "FctsIdsCustSvcTaskSttusBalSeq",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "UWSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSOwner",
+                    "type": "Expression"
+                  },
+                  "uws_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_UWSSecret",
+                    "type": "Expression"
+                  },
+                  "EmailSupport": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  },
+                  "RunID": {
+                    "value": "@pipeline().parameters.RunID",
+                    "type": "Expression"
+                  },
+                  "Target": {
+                    "value": "@pipeline().parameters.Target",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@pipeline().parameters.Subject",
+                    "type": "Expression"
+                  },
+                  "ExtrRunCycle": {
+                    "value": "@pipeline().parameters.FctsExtrRunCycle",
+                    "type": "Expression"
+                  },
+                  "Frequency": {
+                    "value": "@pipeline().parameters.Frequency",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@pipeline().parameters.FctsSource",
+                    "type": "Expression"
+                  },
+                  "CurrDate": {
+                    "value": "@pipeline().parameters.CurrDate",
+                    "type": "Expression"
+                  },
+                  "Table": "CUST_SVC_TASK_STTUS",
+                  "SnpshtTbl": "B_CUST_SVC_TASK_STTUS"
+                }
+              },
+              "policy": {
+                "secureInput": false
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

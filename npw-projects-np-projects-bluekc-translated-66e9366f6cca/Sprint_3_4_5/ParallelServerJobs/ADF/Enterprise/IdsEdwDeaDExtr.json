@@ -1,0 +1,97 @@
+{
+  "name": "IdsEdwDeaDExtr",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EDWRunCycleDate": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwDeaD",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_in1 AS ( SELECT A.PROV_DEA_SK, A.DEA_NO, A.CMN_PRCT_SK, A.CLM_TRANS_ADD_IN, A.EFF_DT_SK, A.TERM_DT_SK, A.PROV_NM, A.ADDR_LN_1, A.ADDR_LN_2, A.CITY_NM, A.PROV_DEA_ST_CD_SK, A.POSTAL_CD, A.NTNL_PROV_ID, A.NTNL_PROV_ID_SPEC_DESC, B.CMN_PRCT_ID, B.FIRST_NM, B.LAST_NM, B.MIDINIT, A.NTNL_PROV_ID_PROV_TYP_DESC, A.NTNL_PROV_ID_PROV_CLS_DESC FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_DEA A JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CMN_PRCT B ON A.CMN_PRCT_SK = B.CMN_PRCT_SK ), cte_in2 AS ( SELECT CD_MPPNG_SK, COALESCE(TRGT_CD,'UNK') AS TRGT_CD, COALESCE(TRGT_CD_NM,'UNK') AS TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG ), cte_lkp AS ( SELECT cte_in1.*, cte_in2.TRGT_CD, cte_in2.TRGT_CD_NM FROM cte_in1 LEFT JOIN cte_in2 ON cte_in1.PROV_DEA_ST_CD_SK = cte_in2.CD_MPPNG_SK ), cte_svPostalCd AS ( SELECT cte_lkp.*, CASE WHEN cte_lkp.POSTAL_CD IS NULL OR dbo.trim_default(cte_lkp.POSTAL_CD)='' THEN '' ELSE FORMAT.POSTALCD.EE(cte_lkp.POSTAL_CD) END AS svPostalCd FROM cte_lkp ), cte_svZipCd5 AS ( SELECT cte_svPostalCd.*, CASE WHEN LEN(dbo.trim_default(cte_svPostalCd.svPostalCd))=0 OR cte_svPostalCd.svPostalCd='' THEN NULL ELSE SUBSTRING(cte_svPostalCd.svPostalCd,1,5) END AS svZipCd5 FROM cte_svPostalCd ), cte_svZipCd4 AS ( SELECT cte_svZipCd5.*, CASE WHEN LEN(dbo.trim_default(cte_svZipCd5.svPostalCd))<6 OR cte_svZipCd5.svPostalCd='' THEN NULL ELSE SUBSTRING(cte_svZipCd5.svPostalCd,6,4) END AS svZipCd4 FROM cte_svZipCd5 ), cte_svValidSk AS ( SELECT cte_svZipCd4.*, CASE WHEN cte_svZipCd4.PROV_DEA_ST_CD_SK=1 OR cte_svZipCd4.PROV_DEA_ST_CD_SK=0 THEN 0 ELSE 1 END AS svValidSk FROM cte_svZipCd4 ), final_select AS ( SELECT cte_svValidSk.PROV_DEA_SK AS DEA_SK, cte_svValidSk.DEA_NO, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, cte_svValidSk.CLM_TRANS_ADD_IN, cte_svValidSk.CMN_PRCT_SK, cte_svValidSk.CMN_PRCT_ID, cte_svValidSk.FIRST_NM AS CMN_PRCT_FIRST_NM, cte_svValidSk.LAST_NM AS CMN_PRCT_LAST_NM, CASE WHEN cte_svValidSk.MIDINIT IS NOT NULL THEN cte_svValidSk.MIDINIT ELSE '' END AS CMN_PRCT_MIDINIT, CASE WHEN cte_svValidSk.EFF_DT_SK IS NULL OR dbo.trim_default(cte_svValidSk.EFF_DT_SK)='' OR dbo.trim_default(cte_svValidSk.EFF_DT_SK)='NA' OR dbo.trim_default(cte_svValidSk.EFF_DT_SK)='UNK' THEN '1753-01-01' ELSE cte_svValidSk.EFF_DT_SK END AS DEA_EFF_DT_SK, dbo.trim_custom(cte_svValidSk.PROV_NM,'^','A') AS DEA_NM, dbo.trim_custom(cte_svValidSk.ADDR_LN_1,'^','A') AS DEA_ADDR_LN_1, cte_svValidSk.ADDR_LN_2 AS DEA_ADDR_LN_2, cte_svValidSk.CITY_NM AS DEA_CITY_NM, CASE WHEN cte_svValidSk.TRGT_CD IS NULL OR dbo.trim_default(cte_svValidSk.TRGT_CD)='' THEN 'UNK' ELSE cte_svValidSk.TRGT_CD END AS DEA_ST_CD, cte_svValidSk.TRGT_CD_NM AS DEA_ST_NM, CASE WHEN cte_svValidSk.svValidSk=0 OR ISNUMERIC(cte_svValidSk.svZipCd5)=0 THEN NULL ELSE cte_svValidSk.svZipCd5 END AS DEA_ADDR_ZIP_CD_5, CASE WHEN cte_svValidSk.svValidSk=0 OR ISNUMERIC(cte_svValidSk.svZipCd4)=0 THEN NULL ELSE cte_svValidSk.svZipCd4 END AS DEA_ADDR_ZIP_CD_4, CASE WHEN cte_svValidSk.TERM_DT_SK IS NULL OR dbo.trim_default(cte_svValidSk.TERM_DT_SK)='' OR dbo.trim_default(cte_svValidSk.TERM_DT_SK)='NA' OR dbo.trim_default(cte_svValidSk.TERM_DT_SK)='UNK' THEN '2199-12-31' ELSE cte_svValidSk.TERM_DT_SK END AS DEA_TERM_DT_SK, cte_svValidSk.NTNL_PROV_ID, cte_svValidSk.NTNL_PROV_ID_SPEC_DESC, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, cte_svValidSk.PROV_DEA_ST_CD_SK AS DEA_ST_CD_SK, cte_svValidSk.NTNL_PROV_ID_PROV_TYP_DESC, cte_svValidSk.NTNL_PROV_ID_PROV_CLS_DESC FROM cte_svValidSk ) SELECT * FROM final_select;",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PROV_DEA"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "DEA_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/DeaD"
+    }
+  },
+  "annotations": [],
+  "Description": "MODIFICATIONS:\n              Oliver Nielsen  09/08/2005    Originally Programmed\n              Steph Goddard 12/13/2005   Changed output format, table name, field names for CMN_PRCT_DEA_D to DEA_D\n                                                             Changed program name, moved to DEA category in DataStage project\n\n\nDeveloper                          Date               Project/Altiris #               Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------                  ----------------------------------   ---------------------------------    -------------------------   \nKalyan Neelam               2009-10-28         TTR-525                     Added new fields CLM_TRANS_ADD_IN,               devlEDW                Steph Goddard             10/29/2009\n                                                                                                     DEA_ADDR_LN_2, NTNL_PROV_ID,\n                                                                                                     NTNL_PROV_ID_SPEC_DESC                \n\n\n\n     \nBhupinder     05/24/2013   EDWefficiencies(5114)     To create a loadfile for EDW target table DEA_D             EnterpriseWrhsDevl                    \n\nKalyan Neelam              2015-10-30      5403/TFS1048              Added 2 new columns on end -                              EnterpriseDev1       Bhoomi Dasari                   11/9/2015 \n                                                                                                   NTNL_PROV_ID_PROV_TYP_DESC and NTNL_PROV_ID_PROV_TYP_DESC\n\nAnnotations:\nJOB NAME: IdsEdwDeaDExtr\nDB2 connector brings in data from IDS tables PROV_DEA and CMN_PRCT\nData is written into a load ready SF file named as DEA_D.dat\nReference Code Mapping Data for Code SK lookups\nCode SK lookups for Denormalization\nLookup Key:\nPROV_DEA_ST_CD_SK\nAdd Defaults and null handling"
+}

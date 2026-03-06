@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwProvMcareDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "String"
+      },
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "IDSRunCycle": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwProvMcareDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_base AS (SELECT PROV_MCARE_SK,COALESCE(CD.TRGT_CD,'UNK') AS SRC_SYS_CD,PROV_ID,MCARE_SEQ_NO,PROV_SK,MCARE_BILL_NO FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_MCARE PROV_MCARE LEFT OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON PROV_MCARE.SRC_SYS_CD_SK = CD.CD_MPPNG_SK),cte_final AS (SELECT PROV_MCARE_SK,SRC_SYS_CD,PROV_ID,MCARE_SEQ_NO AS PROV_MCARE_SEQ_NO,@{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK,@{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,PROV_SK,MCARE_BILL_NO AS PROV_MCARE_BILL_NO,@{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK,@{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_base) SELECT * FROM cte_final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PROV_MCARE"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Provider/EdwLoads/ProvMcareD/load')",
+              "param_filename": "PROV_MCARE_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/ProvMcareD"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                      \nDEVELOPER                         DATE                 PROJECT                                                  DESCRIPTION                                        DATASTAGE   ENVIRONMENT                     CODE  REVIEW            REVIEW DATE                    \n-----------------------------                 ----------------------      ------------------------------                                  -----------------------------------                               ------------------------------                                          ------------------------------      --------------------\nAditya Raju                           07/02/2013        5114-Enterprise Efficiencies                 Move ids to edw for PROV MCARE D             EnterpriseWrhseDevl                                       Peter Marshall             8/28/2013\n\nAnnotations:\nThis is Source extract data from an IDS table and apply Code denormalization, create a load ready file.\n\nJob Name:\nIdsEdwProvMcareDExtr\nRead from source table PROV_MCARE from IDS. Apply Run Cycle filters to get just the needed rows forward\nThis is a load ready file conforms to the target table structure.\n\nWrite PROV_MCARE_D Data into a Sequential file for Load Job.\nAdd Defaults and Null Handling"
+}

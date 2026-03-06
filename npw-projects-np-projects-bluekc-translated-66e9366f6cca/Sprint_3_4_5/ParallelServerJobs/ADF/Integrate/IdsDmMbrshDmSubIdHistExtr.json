@@ -1,0 +1,93 @@
+{
+  "name": "IdsDmMbrshDmSubIdHistExtr",
+  "properties": {
+    "parameters": {
+      "ExtractRunCycle": {
+        "type": "int"
+      },
+      "CurrRunCycle": {
+        "type": "int"
+      }
+    },
+    "activities": [
+      {
+        "name": "cpy_IdsDmMbrshDmSubIdHistExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte1 AS (SELECT DISTINCT SUB_ID_HIST.SUB_SK, SUB_ID_HIST.IDS_RCRD_STRT_DT_SK, COALESCE(CD.TRGT_CD,'UNK') AS SRC_SYS_CD, SUB_ID_HIST.SUB_UNIQ_KEY, SUB_ID_HIST.GRP_SK, SUB_ID_HIST.IDS_CUR_RCRD_IN, SUB_ID_HIST.SCRD_IN, SUB_ID_HIST.IDS_RCRD_END_DT_SK, SUB_ID_HIST.GRP_ID, SUB_ID_HIST.SUB_ID, SUB_ID_HIST.SUB_INDV_BE_KEY FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.SUB_ID_HIST SUB_ID_HIST LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON SUB_ID_HIST.SRC_SYS_CD_SK = CD.CD_MPPNG_SK, @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR MBR WHERE SUB_ID_HIST.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtractRunCycle} AND MBR.SUB_SK = SUB_ID_HIST.SUB_SK AND MBR.HOST_MBR_IN <> 'Y'), cte2 AS (SELECT *, CASE WHEN LTRIM(RTRIM(SRC_SYS_CD)) = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD_fix FROM cte1), cte3 AS (SELECT * FROM cte2 WHERE SUB_SK <> 0 AND SUB_SK <> 1), cte_final AS (SELECT SRC_SYS_CD_fix AS SRC_SYS_CD, SUB_UNIQ_KEY, CASE WHEN LTRIM(RTRIM(IDS_RCRD_STRT_DT_SK)) IN ('NA','UNK') THEN '1753-01-01 00:00:00.000' ELSE CONVERT(DATETIME2(3), IDS_RCRD_STRT_DT_SK + ' 00:00:00.000', 121) END AS EDW_RCRD_STRT_DT, IDS_CUR_RCRD_IN AS EDW_CUR_RCRD_IN, CASE WHEN LTRIM(RTRIM(IDS_RCRD_END_DT_SK)) IN ('NA','UNK') THEN '2199-12-31 00:00:00.000' ELSE CONVERT(DATETIME2(3), IDS_RCRD_END_DT_SK + ' 00:00:00.000', 121) END AS EDW_RCRD_END_DT, GRP_SK, GRP_ID, SUB_SK, SCRD_IN, SUB_INDV_BE_KEY, SUB_ID, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_NO FROM cte3) SELECT SRC_SYS_CD, SUB_UNIQ_KEY, EDW_RCRD_STRT_DT, EDW_CUR_RCRD_IN, EDW_RCRD_END_DT, GRP_SK, GRP_ID, SUB_SK, SCRD_IN, SUB_INDV_BE_KEY, SUB_ID, LAST_UPDT_RUN_CYC_NO FROM cte_final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "SUB_ID_HIST"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "MBRSH_DM_SUB_ID_HIST.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Member/MbrshDmSubIdHist"
+    }
+  },
+  "Description": "COPYRIGHT 2006 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:    IdsMbrSubIdHistExtr\n\nDESCRIPTION:  \n                   IDS Membership Data Mart Member Subscriber ID History extract from IDS to Data Mart.  \n\nINPUTS:\n                   IDS:  SUB_ID_HIST\n\nHASH FILES:         \n                    hf_etrnl_cd_mppng\n\nTRANSFORMS:  \n                    Lookups to extract fields             \n                           \nPROCESSING:\n                    Extracts from IDS and pulls to the Data Marts.  Perform no changes with the data except for changing UNK and NA dates to 1753-01-01.\n\nOUTPUTS: \n                    Data Mart:  MBRSH_DM_SUB_ID_HIST\n\nMODIFICATIONS:\n                   Tao Luo:  Original Programming - 03/29/2006\n\n\nDeveloper                          Date                    Project/Altiris #                     Change Description                                                       Development Project               Code Reviewer                      Date Reviewed\n---------------------------------      -------------------      -----------------------------------           ---------------------------------------------------------                                 ----------------------------------              ---------------------------------               -------------------------\n            \n  \nNagesh Bandi                07/29/2013              5114                                 Original Programming(Server to Parallel)                             IntegrateWrhsDevl              Peter Marshall                          10/23/2013\n\n\nPooja Sunkara               04/22/2015             TFS#4460                        Added a constraint in Transformer to filter out                     IntegrateNewDevl                  Kalyan Neelam                        2015-04-22                                                                                                                                                                                                                                                                                                                                                                                                                                   NA and UNK rows since we don't use those                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         in datamart tables\nKalyan Neelam               2015-10-29          5212                                Added to the SQL, join to MBR to filter out hosted members     IntegrateDev1                      Bhoomi Dasari                          10/29/2015\n\nAnnotations:\nWrite SUB_ID_HIST Data into a Sequential file for Load Job IdsDmMbrshDmSubIdHistLoad.\nRead all the Data from IDS SUB_ID_HIST Table; Pull records based on LAST_UPDT_RUN_CYC_EXCTN_SK.\nAdd Defaults and Null Handling.\nIDS Membership Data Mart Member Subscriber ID History extract from IDS to Data Mart.  \n\nJob Name: IdsDmMbrshDmSubIdHistExtr"
+}

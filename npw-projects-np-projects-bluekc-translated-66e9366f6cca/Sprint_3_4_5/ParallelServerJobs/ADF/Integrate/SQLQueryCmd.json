@@ -1,0 +1,92 @@
+{
+  "name": "SQLQueryCmd",
+  "properties": {
+    "parameters": {
+      "Command1": {
+        "type": "String"
+      },
+      "Command2": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_SQL_Commands_to_NULL",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "@concat(pipeline().parameters.Command1,'; SELECT 1 AS ONE; ',pipeline().parameters.Command2)",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "facets_primary",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_facets_primary",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_SCHEMAOwner}",
+              "param_table": "dummy"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','file/dev')",
+              "param_filename": "null.txt",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/util"
+    }
+  },
+  "Description": "Multiple Instance job to run SQL command in the Before SQL and After SQL option in ODBC stage.\n\nMain SQL does nothing (SELECT 1).\nBefore SQL processing parameter Command1.\nQuotes in SQL have to be escaped \\\\'\nEntire command put in double quotes.\nAfter SQL processing parameter Command2.\nConstraint field must be lised as NOT NULL.\nCommand2 can be blank without aborting the job.\n\n\n\n\nMODIFICATIONS:\n\n======================================================================================================================================\nDeveloper\tDate\t\tProject/Altiris #\tChange Description\t\t\tDevelopment Project               Reviewer\t\tReview Date\n======================================================================================================================================\nBrent Leland            2022-03-08             Sybase to SQL         Original Programming                               IntegrateDev1\n\nAnnotations:\nBefore SQL Command\nDrop table when used to cleanup and end of processing\n\nExample: \"DROP TABLE tempdb..TMP_CDMA_COMP\":Table.TableTimestamp\nAfter SQL Command\nUsed to create table.\nCommand can be blank to allow drop table in Before SQL command.\nConstraint field must be listed as NOT NULL.\nConcate table name parameter with colon :\nExample: 'CREATE TABLE tempdb..TMP_MPI_CDC_DRVR':TempTable:'(MEME_CK INTEGER NOT NULL,OP CHAR(1),CONSTRAINT BEKEY':TempTable:' PRIMARY KEY NONCLUSTERED (MEME_CK))'\nIf the Before or After SQL Command is not used, enter an empty string ''\nRun Before and After main SQL commands passed in as parameters."
+}

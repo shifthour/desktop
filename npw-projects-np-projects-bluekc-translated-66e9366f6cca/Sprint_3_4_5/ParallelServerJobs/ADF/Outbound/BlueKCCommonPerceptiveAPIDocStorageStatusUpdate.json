@@ -1,0 +1,337 @@
+{
+  "name": "BlueKCCommonPerceptiveAPIDocStorageStatusUpdate",
+  "properties": {
+    "annotations": [],
+    "parameters": {
+      "DynamicAccessToken": {
+        "type": "String"
+      },
+      "PerceptiveStatus": {
+        "type": "String"
+      },
+      "NoFileInd": {
+        "type": "String"
+      },
+      "Vendor": {
+        "type": "String"
+      },
+      "COMM_SK": {
+        "type": "String"
+      },
+      "ATTACHMENTS": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Populate_TmpTables",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP1_BlueKCCommonPerceptiveAPIDocStorageStatusUpdate; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP2_BlueKCCommonPerceptiveAPIDocStorageStatusUpdate; WITH cte_data AS (SELECT 1 AS DefaultRecord), cte_transform AS (SELECT CAST(@{pipeline().parameters.COMM_SK} AS INT) AS COMM_SK, CASE WHEN @{pipeline().parameters.NoFileInd}='Y' THEN 'FAILED' WHEN dbo.trim_default(@{pipeline().parameters.PerceptiveStatus})='Successfully uploaded document' THEN 'SUCCESS' ELSE 'FAILED' END AS COMM_STTUS_CD, CASE WHEN @{pipeline().parameters.NoFileInd}='Y' THEN 'File Not Found' WHEN dbo.trim_default(@{pipeline().parameters.PerceptiveStatus})='Successfully uploaded document' THEN 'Document Storage Successful' ELSE 'Document Storage Unsuccessful' END AS COMM_STTUS_CMNT_TX, 'COMMTRNSMSN' AS COMM_SRC_SYS_CD, 'PRCPTV' AS COMM_TRGT_SYS_CD, 'PRCPTVSTS' AS COMM_TYP_CD, GETDATE() AS LAST_UPDT_DTM, GETDATE() AS COMM_SENT_DTM, @{pipeline().parameters.ATTACHMENTS} AS ATTACHMENTS FROM cte_data) SELECT COMM_SK, COMM_SRC_SYS_CD, COMM_TRGT_SYS_CD, COMM_STTUS_CD, COMM_TYP_CD, COMM_STTUS_CMNT_TX, LAST_UPDT_DTM, COMM_SENT_DTM INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP1_BlueKCCommonPerceptiveAPIDocStorageStatusUpdate FROM cte_transform; SELECT COMM_SK, ATTACHMENTS, ' ' AS Dummy INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP2_BlueKCCommonPerceptiveAPIDocStorageStatusUpdate FROM cte_transform",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_PercepStatusFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Populate_TmpTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "COMM_SK",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "COMM_SRC_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "COMM_TRGT_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "COMM_STTUS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "COMM_TYP_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "COMM_STTUS_CMNT_TX",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "LAST_UPDT_DTM",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 8
+                  },
+                  "sink": {
+                    "name": "COMM_SENT_DTM",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP1_BlueKCCommonPerceptiveAPIDocStorageStatusUpdate"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/GuidingCare/Fullfilment/external')",
+              "param_filename": {
+                "value": "@concat('GuidingCare#', pipeline().parameters.Vendor, '#PercepStatusData.txt')",
+                "type": "Expression"
+              },
+              "param_col_delimiter": "$$",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_MoveFilesFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Populate_TmpTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "COMM_SK",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "ATTACHMENTS",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "Dummy",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP2_BlueKCCommonPerceptiveAPIDocStorageStatusUpdate"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/GuidingCare/Fullfilment/external')",
+              "param_filename": {
+                "value": "@concat('GuidingCare#', pipeline().parameters.Vendor, '#PercepMoveFilesData.txt')",
+                "type": "Expression"
+              },
+              "param_col_delimiter": "$",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2017 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY : BlueKCCommonPerceptiveAPIDocStorageSeq\n\n\nPROCESSING : Job updates LetterQueueID Status in COMM table\n\nMODIFICATIONS :\n\nDeveloper                               Date                         Project                                   Change Description            Development Project          Code Reviewer                   Date Reviewed       \n------------------------------              ------------------        ----------------------             ---------------------------------------       ------------------------------\\(9)----------------------------------         -------------------------------        \nBharani Chalamalasetty      04/01/2020             Fullfillment                       Original Programming               OutboundDev3                    Jaideep Mankala              04/20/2020\n\nSaranya A                                2021-06-29            US370660         Modified Job to process NextPage and RightFax    OutboundDev3          Jaideep Mankala                 06/30/2021\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)jobs in Parallel\n\nAnnotations:\nDSJobStartTimestamp used instead of Timestamp variable as rows need to be updated with new timestamp."
+}

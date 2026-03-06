@@ -1,0 +1,249 @@
+{
+  "name": "DominionIdsCmnPrctXfrm",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      },
+      "SrcSysCdSk": {
+        "type": "Int"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "DominionProvFile": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "cpy_DominionIdsCmnPrctXfrm_Tmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP1_TMP_DominionIdsCmnPrctXfrm",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Provider/CmnPrct')",
+              "param_filename": "@{pipeline().parameters.DominionProvFile}",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP1_TMP_DominionIdsCmnPrctXfrm"
+            }
+          }
+        ]
+      },
+      {
+        "name": "scr_transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "cpy_DominionIdsCmnPrctXfrm_Tmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP2_TMP_DominionIdsCmnPrctXfrm; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP3_TMP_DominionIdsCmnPrctXfrm; WITH cte1 AS (SELECT Provider_Identifier,Provider_Address_Identifier,Term_Date,First_Name,Last_Name,Middle_Name,Suffix,National_Provider_Identifer,Provider_Tax_Identifier,Cultural_Capability_Name FROM @{pipeline().globalParameters.gbl_param_ids_staging}.TMP1_TMP_DominionIdsCmnPrctXfrm), cte2 AS (SELECT Provider_Identifier + Provider_Address_Identifier AS SvCmnPrctId,1 AS SvLangSeqNo,CASE WHEN dbo.trim_default(Term_Date) = '' THEN '' ELSE SUBSTRING(dbo.trim_default(Term_Date),1,4) + '-' + SUBSTRING(dbo.trim_default(Term_Date),6,2) + '-' + SUBSTRING(dbo.trim_default(Term_Date),9,2) END AS svTermDt,First_Name,Last_Name,Middle_Name,Suffix,National_Provider_Identifer,Provider_Tax_Identifier,Cultural_Capability_Name FROM cte1), cte3 AS (SELECT (cte2.SvCmnPrctId + ';' + CAST(cte2.SvLangSeqNo AS VARCHAR(10)) + ';' + '@{pipeline().parameters.SrcSysCd}') AS PRI_NAT_KEY_STRING,'@{pipeline().parameters.RunIDTimeStamp}' AS FIRST_RECYC_TS,0 AS CMN_PRCT_SK,cte2.SvCmnPrctId AS CMN_PRCT_ID,'@{pipeline().parameters.SrcSysCd}' AS SRC_SYS_CD,0 AS CRT_RUN_CYC_EXCTN_SK,0 AS LAST_UPDT_RUN_CYC_EXCTN_SK,@{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK,'1' AS CMN_PRCT_GNDR_CD,CASE WHEN cte2.svTermDt < SUBSTRING('@{pipeline().parameters.RunIDTimeStamp}',1,10) THEN 'N' ELSE 'Y' END AS ACTV_IN,'1753-01-01' AS BRTH_DT,'1753-01-01' AS INIT_CRDTL_DT,'1753-01-01' AS LAST_CRDTL_DT,'1753-01-01' AS NEXT_CRDTL_DT,UPPER(dbo.trim_default(cte2.First_Name)) AS FIRST_NM,UPPER(dbo.trim_default(cte2.Last_Name)) AS LAST_NM,UPPER(dbo.trim_default(cte2.Middle_Name)) AS MIDINIT,UPPER(dbo.trim_default(cte2.Suffix)) AS CMN_PRCT_TTL,cte2.National_Provider_Identifer AS NTNL_PROV_ID,cte2.Provider_Tax_Identifier AS SSN,UPPER(dbo.trim_default(cte2.Cultural_Capability_Name)) AS CULT_CPBLTY_NM FROM cte2), cte4 AS (SELECT @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK,cte2.SvCmnPrctId AS CMN_PRCT_ID FROM cte2) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP2_TMP_DominionIdsCmnPrctXfrm FROM cte3; SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP3_TMP_DominionIdsCmnPrctXfrm FROM cte4;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "cpy_ds_CMN_PRCT_Xfm",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "scr_transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "ParquetWriteSettings"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP2_TMP_DominionIdsCmnPrctXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Provider/CmnPrct/ds')",
+              "param_filename": "@concat('CMN_PRCT.', pipeline().parameters.SrcSysCd, '.xfrm.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ]
+      },
+      {
+        "name": "cpy_seq_B_CMN_PRCT_csv",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "scr_transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP3_TMP_DominionIdsCmnPrctXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Provider/CmnPrct/load')",
+              "param_filename": "@concat('B_CMN_PRCT.', pipeline().parameters.SrcSysCd, '.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/CmnPrct"
+    }
+  },
+  "Description": "COPYRIGHT 2005 - 2012 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nJOB NAME:  DominionIdsCmnPrctXfrm\n\nDESCRIPTION:    Pulls data from DOMINION PROVIDERS, and REFTABLE  to a extract file for the IDS\n  \nCALLED BY : DominionProvExtrSeq   \n\nPROCESSING:  Output file is created with a temp. name.  File renamed in job control.\n\nOUTPUTS:   Dataset name is created in the job control ( FinalOutFile Parameter )\n\nMODIFICATIONS:\n\nDeveloper                          Date                    Project/Altiris #                     Change Description                                                       Development Project               Code Reviewer                      Date Reviewed\n----------------------------------      -------------------      -----------------------------------           ---------------------------------------------------------                                 ----------------------------------              ---------------------------------               -------------------------\n   \nVamsi Aripaka                 01/30/2024              US 609430                           Initial Programming                                                            IntegrateDev1                    Jeyaprasanna                          2024-02-02\n\nAnnotations:\nJobName: DominionIdsCmnPrctXfrm\n\nStrip field function and Tranformation rules are applied on the data Extracted from Facets.\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns."
+}

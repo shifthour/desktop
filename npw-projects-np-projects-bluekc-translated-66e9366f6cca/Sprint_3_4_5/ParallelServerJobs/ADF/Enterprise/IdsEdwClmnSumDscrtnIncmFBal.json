@@ -1,0 +1,247 @@
+{
+  "name": "IdsEdwClmnSumDscrtnIncmFBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH cte_main AS ( SELECT DSCRTN_INCM_F.SRC_SYS_CD, DSCRTN_INCM_F.BILL_INVC_ID, DSCRTN_INCM_F.INVC_DSCRTN_SEQ_NO, DSCRTN_INCM_F.INVC_DSCRTN_YR_MO_SK, DSCRTN_INCM_F.GRP_ID, DSCRTN_INCM_F.SUBGRP_ID, DSCRTN_INCM_F.CLS_ID, DSCRTN_INCM_F.CLS_PLN_ID, DSCRTN_INCM_F.PROD_ID, DSCRTN_INCM_F.INVC_DSCRTN_SUB_PRM_AMT FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.DSCRTN_INCM_F DSCRTN_INCM_F FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.B_DSCRTN_INCM_F B_DSCRTN_INCM_F ON DSCRTN_INCM_F.SRC_SYS_CD = B_DSCRTN_INCM_F.SRC_SYS_CD AND DSCRTN_INCM_F.BILL_INVC_ID = B_DSCRTN_INCM_F.BILL_INVC_ID AND DSCRTN_INCM_F.INVC_DSCRTN_SEQ_NO = B_DSCRTN_INCM_F.INVC_DSCRTN_SEQ_NO AND DSCRTN_INCM_F.INVC_DSCRTN_YR_MO_SK = B_DSCRTN_INCM_F.INVC_DSCRTN_YR_MO_SK AND DSCRTN_INCM_F.GRP_ID = B_DSCRTN_INCM_F.GRP_ID AND DSCRTN_INCM_F.SUBGRP_ID = B_DSCRTN_INCM_F.SUBGRP_ID AND DSCRTN_INCM_F.CLS_ID = B_DSCRTN_INCM_F.CLS_ID AND DSCRTN_INCM_F.CLS_PLN_ID = B_DSCRTN_INCM_F.CLS_PLN_ID AND DSCRTN_INCM_F.PROD_ID = B_DSCRTN_INCM_F.PROD_ID WHERE DSCRTN_INCM_F.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND DSCRTN_INCM_F.INVC_DSCRTN_SUB_PRM_AMT <> B_DSCRTN_INCM_F.INVC_DSCRTN_SUB_PRM_AMT ) SELECT * FROM cte_main",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.F2TMP_IdsEdwClmnSumDscrtnIncmFBal",
+              "type": "Expression"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "DSCRTN_INCM_F"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "F2TMP_IdsEdwClmnSumDscrtnIncmFBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptNotifyTemp",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.F2TMP_IdsEdwClmnSumDscrtnIncmFBal_notify;SELECT T.NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_edw_staging}.F2TMP_IdsEdwClmnSumDscrtnIncmFBal_notify FROM (SELECT TOP 1 'COLUMN SUM BALANCING IDS - EDW DSCRTN INCM F OUT OF TOLERANCE' as NOTIFICATION FROM @{pipeline().globalParameters.gbl_param_edw_staging}.F2TMP_IdsEdwClmnSumDscrtnIncmFBal) T;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyError",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "CopyToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ls_azuredatabricks",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "F2TMP_IdsEdwClmnSumDscrtnIncmFBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/research')",
+              "param_filename": "@concat('IdsEdwDscrtnIncmFColumnSumResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyNotify",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptNotifyTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ls_azuredatabricks",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "F2TMP_IdsEdwClmnSumDscrtnIncmFBal_notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/notify')",
+              "param_filename": "IncomeBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Income/EdwLoads/DscrtnIncmF/Balancing"
+    }
+  },
+  "Description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:          IdsEdwClmnSumDscrtnIncmFBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target tables are compared on the specified column to see if there are any discrepancies\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/26/2007          3264                              Originally Programmed                           devlEDW10              Steph Goddard            10/26/2007        \n\nSrikanth Mettpalli               12/18/2013         5114                              Originally Programmed                         EnterpriseWrhsDevl    Peter Marshall              12/26/2013 \n                                                                                                            (Server to Parallel Conversion)\n\nAnnotations:\nJob Name: IdsEdwClmnSumDscrtnIncmFBal\nCopy stage used to remove duplicates and create one record for the Notification file.\nFile checked later for rows and email to on-call\nDetail file for on-call to research errors\nRows with Failed Comparison on Specified columns\nPull all the Missing Records from DSCRTN_INCM_F and B_DSCRTN_INCM_F Table.\nIDS - EDW Discretionary Income Facts Column Sum Comparisons"
+}

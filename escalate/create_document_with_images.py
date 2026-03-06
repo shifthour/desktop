@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""
+Script to create an escalation document with embedded screenshots
+"""
+
+import os
+from pathlib import Path
+
+def create_html_document():
+    """Create HTML document with embedded images"""
+
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Registration Dispute - Complete Documentation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }
+        h3 {
+            color: #7f8c8d;
+            margin-top: 20px;
+        }
+        .timeline {
+            background-color: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .evidence-section {
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .screenshot {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .screenshot img {
+            max-width: 100%;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .screenshot-caption {
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .key-point {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .critical-facts {
+            background-color: #d4edda;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .critical-facts ul {
+            margin: 10px 0;
+        }
+        .critical-facts li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        hr {
+            border: none;
+            border-top: 2px solid #e0e0e0;
+            margin: 30px 0;
+        }
+        .request {
+            background-color: #e3f2fd;
+            padding: 20px;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+            margin: 20px 0;
+        }
+        @media print {
+            body {
+                background-color: white;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LEAD REGISTRATION DISPUTE - COMPLETE DOCUMENTATION</h1>
+        <h3>Channel Partner Escalation Case</h3>
+
+        <hr>
+
+        <h2>EXECUTIVE SUMMARY</h2>
+        <div class="timeline">
+            <p>This document presents comprehensive evidence regarding a lead registration dispute where:</p>
+            <ul>
+                <li><strong>Lead registered on: 3rd January 2026</strong></li>
+                <li><strong>Customer site visit confirmed: 3rd January 2026 (same day)</strong></li>
+                <li><strong>"Existing lead" notification received: 4th January 2026 (next day)</strong></li>
+                <li><strong>Final outcome: Customer successfully booked the flat</strong></li>
+            </ul>
+            <p>Despite registering the lead first and receiving visit confirmation from the builder's team,
+            we are now facing commission denial due to "existing lead" status.</p>
+        </div>
+
+        <hr>
+
+        <h2>TIMELINE OF EVENTS WITH EVIDENCE</h2>
+
+        <div class="evidence-section">
+            <h3>1. Lead Registration - 3rd January 2026</h3>
+            <p><strong>Action:</strong> Lead registered in builder's system<br>
+            <strong>Status:</strong> Successfully registered</p>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 1: Lead Registration Proof</div>
+                <img src="lead_registered/Lead_registered.jpeg" alt="Lead Registration">
+            </div>
+
+            <div class="key-point">
+                ✓ KEY POINT: This establishes our priority claim - we registered this lead FIRST.
+            </div>
+        </div>
+
+        <div class="evidence-section">
+            <h3>2. Customer Site Visit Confirmation - 3rd January 2026 (Same Day)</h3>
+            <p><strong>Action:</strong> Customer visited site on the same day as registration<br>
+            <strong>Status:</strong> Visit confirmed by builder's diligent team</p>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 2: Customer Visit Confirmation from Builder's Team</div>
+                <img src="Cusomer_site_visit_confirmation/Customer_visited_confirmation.jpeg" alt="Customer Visit Confirmation">
+            </div>
+
+            <div class="key-point">
+                ✓ KEY POINT: Builder's own team confirmed the customer visit on 3rd January, establishing legitimacy of our lead.
+            </div>
+        </div>
+
+        <div class="evidence-section">
+            <h3>3. "Lead Existing" Message - 4th January 2026 (Next Day)</h3>
+            <p><strong>Action:</strong> Received notification that lead already exists<br>
+            <strong>Status:</strong> We immediately responded that customer had ALREADY VISITED on 3rd January</p>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 3: "Lead Existing" Message (Received AFTER Registration & Visit)</div>
+                <img src="lead_existing_message_nextday/Lead_exist_message_nextday_after_customer_visit.jpeg" alt="Lead Existing Message">
+            </div>
+
+            <div class="key-point">
+                ✓ KEY POINT: This message came AFTER our registration and AFTER the confirmed visit.
+                Our response clearly stated the customer had already visited.
+            </div>
+        </div>
+
+        <div class="evidence-section">
+            <h3>4. Customer Follow-up & Engagement - Call Logs</h3>
+            <p><strong>Action:</strong> Continued customer engagement through multiple calls<br>
+            <strong>Status:</strong> Maintained regular communication leading to successful booking</p>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 4A: Customer Call Log (Part 1)</div>
+                <img src="Customer_call_log/customer_call_log_1.jpeg" alt="Customer Call Log 1">
+            </div>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 4B: Customer Call Log (Part 2)</div>
+                <img src="Customer_call_log/Customer_call_log_2.jpeg" alt="Customer Call Log 2">
+            </div>
+
+            <div class="key-point">
+                ✓ KEY POINT: These call logs demonstrate our continuous engagement and effort in closing this lead.
+            </div>
+        </div>
+
+        <div class="evidence-section">
+            <h3>5. WhatsApp Communication with Customer</h3>
+            <p><strong>Action:</strong> Detailed follow-up conversations via WhatsApp<br>
+            <strong>Status:</strong> Active engagement demonstrating our role in the conversion</p>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 5A: WhatsApp Communication (Part 1)</div>
+                <img src="whatsapp_communication_with_Client/Customer_whatsapp_followup_1.png" alt="WhatsApp 1">
+            </div>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 5B: WhatsApp Communication (Part 2)</div>
+                <img src="whatsapp_communication_with_Client/Customer_whatsapp_followup_2.png" alt="WhatsApp 2">
+            </div>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 5C: WhatsApp Communication (Part 3)</div>
+                <img src="whatsapp_communication_with_Client/Customer_whatsapp_followup_3.png" alt="WhatsApp 3">
+            </div>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 5D: WhatsApp Communication (Part 4)</div>
+                <img src="whatsapp_communication_with_Client/Customer_whatsapp_followup_4.png" alt="WhatsApp 4">
+            </div>
+
+            <div class="screenshot">
+                <div class="screenshot-caption">📄 EVIDENCE 5E: WhatsApp Communication (Part 5)</div>
+                <img src="whatsapp_communication_with_Client/Customer_whatsapp_followup_5.png" alt="WhatsApp 5">
+            </div>
+
+            <div class="key-point">
+                ✓ KEY POINT: Complete communication trail proving our involvement from start to finish.
+            </div>
+        </div>
+
+        <hr>
+
+        <h2>CRITICAL FACTS</h2>
+        <div class="critical-facts">
+            <ul>
+                <li>✅ Lead registered by us on <strong>3rd January 2026</strong></li>
+                <li>✅ Customer visit <strong>CONFIRMED by builder's team on 3rd January 2026</strong></li>
+                <li>❌ "Existing lead" message received on <strong>4th January 2026 - AFTER our registration and confirmed visit</strong></li>
+                <li>✅ We immediately clarified that customer had already visited</li>
+                <li>✅ We continued follow-ups and successfully closed the deal</li>
+                <li>✅ Customer has <strong>booked the flat as a result of our efforts</strong></li>
+            </ul>
+        </div>
+
+        <hr>
+
+        <h2>OUR POSITION</h2>
+        <p>The timeline and evidence clearly demonstrate:</p>
+        <ul>
+            <li><strong>Priority:</strong> We registered the lead before any "existing" notification</li>
+            <li><strong>Legitimacy:</strong> Builder's own team confirmed the customer visit</li>
+            <li><strong>Effort:</strong> We invested significant time in calls and follow-ups</li>
+            <li><strong>Result:</strong> Customer booking is a direct outcome of our work</li>
+        </ul>
+        <p>The "existing lead" notification came <strong>AFTER</strong> our registration and <strong>AFTER</strong>
+        your team's visit confirmation. This cannot be grounds for commission denial.</p>
+
+        <hr>
+
+        <h2>REQUEST FOR ACTION</h2>
+        <div class="request">
+            <p>We formally request:</p>
+            <ol>
+                <li><strong>Immediate review</strong> of this case based on provided evidence</li>
+                <li><strong>Commission credit</strong> as per our channel partner agreement</li>
+                <li><strong>Written confirmation</strong> of resolution</li>
+                <li><strong>Process clarification</strong> to prevent such issues in future</li>
+            </ol>
+        </div>
+
+        <hr>
+
+        <h2>CONCLUSION</h2>
+        <p>This documentation establishes beyond doubt that:</p>
+        <ul>
+            <li>We acted in good faith</li>
+            <li>We registered the lead first</li>
+            <li>We received confirmation from your team</li>
+            <li>We closed the deal successfully</li>
+        </ul>
+        <p><strong>We value our partnership with the builder and trust this matter will be resolved
+        fairly based on facts and timeline evidence.</strong></p>
+
+        <hr>
+
+        <div style="margin-top: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 5px;">
+            <p><strong>Prepared by:</strong> Channel Partner Team<br>
+            <strong>Date:</strong> 12th January 2026<br>
+            <strong>Case Type:</strong> Lead Registration Dispute - Commission Credit<br>
+            <strong>Total Evidence Files:</strong> 10 supporting documents</p>
+        </div>
+
+        <p style="margin-top: 30px; font-style: italic; color: #7f8c8d;">
+            All timestamps and communications are authentic and can be verified.
+            We are prepared to provide additional documentation if required.
+        </p>
+    </div>
+</body>
+</html>"""
+
+    # Write HTML file
+    output_file = "/Users/safestorage/Desktop/escalate/Complete_Documentation_With_Screenshots.html"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+    print(f"✓ HTML document created successfully!")
+    print(f"✓ File location: {output_file}")
+    print(f"\nTo view the document:")
+    print(f"1. Double-click the HTML file to open in your browser")
+    print(f"2. All screenshots will be visible in the document")
+    print(f"3. You can print to PDF from your browser (File > Print > Save as PDF)")
+    print(f"\nNote: Make sure all screenshot folders are in the same directory as the HTML file")
+
+if __name__ == "__main__":
+    create_html_document()

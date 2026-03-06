@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Cornerstone | Analytics Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { dark: { 900:'#080C14', 800:'#0D1320', 700:'#131B2E', 600:'#1a2340', 500:'#243050' } },
+          fontFamily: { sans: ['Montserrat', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family:'Montserrat',sans-serif; background:#080C14; color:#e2e8f0; }
+    .glass { background:rgba(13,19,32,0.6); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.06); }
+    .glass-bright { background:rgba(255,255,255,0.04); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.08); }
+    .accent-text { background:linear-gradient(135deg,#4AADE8,#84ACB6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .kpi-card { transition:all 0.3s ease; }
+    .kpi-card:hover { transform:translateY(-2px); border-color:rgba(74,173,232,0.2); }
+    .filter-btn { padding:6px 16px; border-radius:9999px; font-size:13px; font-weight:500; cursor:pointer; transition:all 0.2s; border:1px solid rgba(255,255,255,0.08); background:transparent; color:#94a3b8; }
+    .filter-btn:hover { border-color:rgba(74,173,232,0.3); color:#e2e8f0; }
+    .filter-btn.active { background:rgba(74,173,232,0.15); border-color:rgba(74,173,232,0.4); color:#4AADE8; }
+    .table-row { transition:background 0.2s; }
+    .table-row:hover { background:rgba(74,173,232,0.04); }
+    .loading-pulse { animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+    ::-webkit-scrollbar { width:6px; }
+    ::-webkit-scrollbar-track { background:#0D1320; }
+    ::-webkit-scrollbar-thumb { background:#243050; border-radius:3px; }
+    .funnel-step { position:relative; padding:16px 20px; border-radius:12px; transition:all 0.3s; }
+    .funnel-step:hover { transform:translateX(4px); }
+    .status-badge { padding:2px 10px; border-radius:9999px; font-size:10px; font-weight:600; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-50 glass border-b border-white/5">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-white">Project Cornerstone <span class="accent-text">Analytics</span></h1>
+        <p class="text-xs text-gray-500 mt-0.5">A R Business Brokers &bull; Listing #3746</p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex gap-1">
+          <button class="filter-btn" onclick="setRange('today',this)">Today</button>
+          <button class="filter-btn" onclick="setRange('7d',this)">7 Days</button>
+          <button class="filter-btn active" onclick="setRange('30d',this)">30 Days</button>
+          <button class="filter-btn" onclick="setRange('all',this)">All Time</button>
+        </div>
+        <button id="refreshBtn" onclick="toggleAutoRefresh()" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 border border-white/8 hover:border-cyan-500/30 transition-all cursor-pointer">
+          <span id="refreshDot" class="w-2 h-2 rounded-full bg-gray-600"></span>
+          <span id="refreshLabel">Auto-refresh</span>
+        </button>
+        <button onclick="loadAllData()" class="px-4 py-1.5 rounded-full text-xs font-semibold text-dark-900 bg-gradient-to-r from-sky-400 to-teal-400 cursor-pointer hover:shadow-lg hover:shadow-sky-500/20 transition-all">
+          Refresh Now
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Total Views</div>
+        <div id="kpi-views" class="text-3xl font-bold text-white mt-2 loading-pulse">&mdash;</div>
+        <div class="text-xs text-gray-500 mt-1">page visits</div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Unique Visitors</div>
+        <div id="kpi-visitors" class="text-3xl font-bold accent-text mt-2 loading-pulse">&mdash;</div>
+        <div class="text-xs text-gray-500 mt-1">distinct sessions</div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Avg Duration</div>
+        <div id="kpi-duration" class="text-3xl font-bold text-amber-400 mt-2 loading-pulse">&mdash;</div>
+        <div class="text-xs text-gray-500 mt-1">time on page</div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Buyer Profiles</div>
+        <div id="kpi-buyers" class="text-3xl font-bold text-emerald-400 mt-2 loading-pulse">&mdash;</div>
+        <div id="kpi-buyers-sub" class="text-xs text-gray-500 mt-1">submissions</div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">NDAs Executed</div>
+        <div id="kpi-ndas" class="text-3xl font-bold text-purple-400 mt-2 loading-pulse">&mdash;</div>
+        <div class="text-xs text-gray-500 mt-1">signed agreements</div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Conversion</div>
+        <div id="kpi-conversion" class="text-3xl font-bold text-sky-400 mt-2 loading-pulse">&mdash;</div>
+        <div class="text-xs text-gray-500 mt-1">visitors &rarr; leads</div>
+      </div>
+    </div>
+
+    <!-- Views Over Time -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-white">Views Over Time</h2>
+      <p class="text-xs text-gray-500 mt-0.5 mb-6">Daily page visits</p>
+      <div style="height:280px"><canvas id="viewsChart"></canvas></div>
+    </div>
+
+    <!-- Conversion Funnel + Scroll Depth -->
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Conversion Funnel</h2>
+        <p class="text-xs text-gray-500 mb-6">Visitor journey through the page</p>
+        <div id="funnel-container" class="space-y-3"></div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Scroll Depth</h2>
+        <p class="text-xs text-gray-500 mb-6">How far visitors scroll</p>
+        <div style="height:260px"><canvas id="scrollChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Device + Referrer -->
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Device Breakdown</h2>
+        <p class="text-xs text-gray-500 mb-6">Visitor devices</p>
+        <div style="height:260px"><canvas id="deviceChart"></canvas></div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Traffic Sources</h2>
+        <p class="text-xs text-gray-500 mb-6">Where visitors come from</p>
+        <div style="height:260px"><canvas id="referrerChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Buyer Profiles Table -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">Buyer Profiles</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Submitted buyer information &mdash; review and approve/reject</p>
+        </div>
+        <input id="buyerSearch" type="text" placeholder="Search by name, email, company..." oninput="filterBuyers()" class="px-4 py-2 rounded-xl bg-dark-700 border border-white/8 text-sm text-white placeholder-gray-500 focus:border-sky-500/40 focus:outline-none w-full sm:w-72">
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-white/8">
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Name</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Email</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Company</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Investment</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Timeline</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Status</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Date</th>
+              <th class="text-right py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="buyersBody">
+            <tr><td colspan="8" class="py-12 text-center text-gray-600">Loading buyer profiles...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NDA Submissions Table -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">NDA Submissions</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Executed Non-Disclosure Agreements</p>
+        </div>
+        <div id="nda-count" class="text-sm text-gray-500"></div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-white/8">
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Full Name</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Email</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Phone</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Company</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Signature</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Status</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Date</th>
+            </tr>
+          </thead>
+          <tbody id="ndasBody">
+            <tr><td colspan="7" class="py-12 text-center text-gray-600">Loading NDA submissions...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-white">Recent Activity</h2>
+      <p class="text-xs text-gray-500 mt-0.5 mb-6">Latest visitor interactions</p>
+      <div id="activityFeed" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+        <div class="text-center text-gray-600 py-8">Loading activity...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="py-6 border-t border-white/5 mt-8">
+    <div class="max-w-7xl mx-auto px-6 flex items-center justify-between">
+      <span class="text-xs text-gray-700">Project Cornerstone Analytics</span>
+      <span class="text-[10px] text-gray-700">&copy; 2025 A R Business Brokers Inc.</span>
+    </div>
+  </footer>
+
+<script>
+// ===== SUPABASE =====
+const SUPABASE_URL='https://eflvzsfgoelonfclzrjy.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmbHZ6c2Znb2Vsb25mY2x6cmp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2NTYxOTAsImV4cCI6MjA2MzIzMjE5MH0.LCxuFDJuBO8ggiqdWpv5uoOkplKWbcF8z5E_kdpOEWU';
+let sb=null;
+try{if(SUPABASE_URL!=='YOUR_SUPABASE_URL'&&window.supabase)sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)}catch(e){console.error(e)}
+
+let currentRange='30d',autoRefreshInterval=null,allBuyers=[],allNdas=[];
+let viewsCI=null,scrollCI=null,deviceCI=null,referrerCI=null;
+Chart.defaults.color='#64748b';Chart.defaults.borderColor='rgba(255,255,255,0.03)';Chart.defaults.font.family='Montserrat';
+
+function getDateStart(){const n=new Date();switch(currentRange){case'today':return new Date(n.getFullYear(),n.getMonth(),n.getDate()).toISOString();case'7d':return new Date(n-7*864e5).toISOString();case'30d':return new Date(n-30*864e5).toISOString();case'all':return'2020-01-01T00:00:00Z';default:return new Date(n-30*864e5).toISOString()}}
+function setRange(r,btn){currentRange=r;document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');loadAllData()}
+function toggleAutoRefresh(){const d=document.getElementById('refreshDot'),l=document.getElementById('refreshLabel');if(autoRefreshInterval){clearInterval(autoRefreshInterval);autoRefreshInterval=null;d.className='w-2 h-2 rounded-full bg-gray-600';l.textContent='Auto-refresh'}else{autoRefreshInterval=setInterval(loadAllData,30000);d.className='w-2 h-2 rounded-full bg-emerald-400 animate-pulse';l.textContent='Live (30s)'}}
+
+// ===== LOAD ALL DATA =====
+async function loadAllData(){
+  if(!sb){showNoData();return}
+  const ds=getDateStart();
+  try{
+    const[vR,eR,bR,nR]=await Promise.all([
+      sb.from('cornerstone_visits').select('*').gte('created_at',ds).order('created_at',{ascending:true}),
+      sb.from('cornerstone_events').select('*').gte('created_at',ds).order('created_at',{ascending:false}).limit(500),
+      sb.from('cornerstone_buyer_profiles').select('*').order('created_at',{ascending:false}),
+      sb.from('cornerstone_nda_submissions').select('*').order('created_at',{ascending:false})
+    ]);
+    const visits=vR.data||[],events=eR.data||[],buyers=bR.data||[],ndas=nR.data||[];
+    allBuyers=buyers;allNdas=ndas;
+    renderKPIs(visits,events,buyers,ndas);
+    renderViewsOverTime(visits);
+    renderConversionFunnel(visits,events,buyers,ndas);
+    renderScrollDepth(visits);
+    renderDeviceBreakdown(visits);
+    renderReferrerSources(visits);
+    renderBuyersTable(buyers);
+    renderNdasTable(ndas);
+    renderActivityFeed(events);
+  }catch(e){console.error('Load failed:',e)}
+}
+
+function showNoData(){
+  ['kpi-views','kpi-visitors','kpi-duration','kpi-buyers','kpi-ndas','kpi-conversion'].forEach(id=>{document.getElementById(id).textContent='—'});
+  document.getElementById('buyersBody').innerHTML='<tr><td colspan="8" class="py-12 text-center text-gray-500">Configure Supabase to see data.</td></tr>';
+  document.getElementById('ndasBody').innerHTML='<tr><td colspan="7" class="py-12 text-center text-gray-500">Configure Supabase to see data.</td></tr>';
+}
+
+// ===== KPIs =====
+function renderKPIs(visits,events,buyers,ndas){
+  const tv=visits.length;
+  document.getElementById('kpi-views').textContent=tv.toLocaleString();
+  document.getElementById('kpi-views').classList.remove('loading-pulse');
+
+  const uv=new Set(visits.map(v=>v.session_id)).size;
+  document.getElementById('kpi-visitors').textContent=uv.toLocaleString();
+  document.getElementById('kpi-visitors').classList.remove('loading-pulse');
+
+  const durs=visits.filter(v=>v.duration_seconds>0).map(v=>v.duration_seconds);
+  const avg=durs.length?Math.round(durs.reduce((a,b)=>a+b,0)/durs.length):0;
+  const m=Math.floor(avg/60),s=avg%60;
+  document.getElementById('kpi-duration').textContent=m>0?m+'m '+s+'s':s+'s';
+  document.getElementById('kpi-duration').classList.remove('loading-pulse');
+
+  document.getElementById('kpi-buyers').textContent=buyers.length;
+  document.getElementById('kpi-buyers').classList.remove('loading-pulse');
+  const pending=buyers.filter(b=>b.status==='pending').length;
+  document.getElementById('kpi-buyers-sub').textContent=pending>0?pending+' pending review':'submissions';
+
+  document.getElementById('kpi-ndas').textContent=ndas.length;
+  document.getElementById('kpi-ndas').classList.remove('loading-pulse');
+
+  const totalLeads=new Set([...buyers.map(b=>b.email),...ndas.map(n=>n.email)]).size;
+  const rate=tv>0?((totalLeads/tv)*100).toFixed(1):'0.0';
+  document.getElementById('kpi-conversion').textContent=rate+'%';
+  document.getElementById('kpi-conversion').classList.remove('loading-pulse');
+}
+
+// ===== VIEWS OVER TIME =====
+function renderViewsOverTime(visits){
+  const byDate={};visits.forEach(v=>{const d=v.created_at.split('T')[0];byDate[d]=(byDate[d]||0)+1});
+  const labels=Object.keys(byDate).sort(),data=labels.map(d=>byDate[d]);
+  if(viewsCI)viewsCI.destroy();
+  const ctx=document.getElementById('viewsChart').getContext('2d');
+  const g=ctx.createLinearGradient(0,0,0,280);g.addColorStop(0,'rgba(74,173,232,0.2)');g.addColorStop(1,'rgba(74,173,232,0)');
+  viewsCI=new Chart(ctx,{type:'line',data:{labels:labels.map(d=>{const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})}),datasets:[{label:'Page Views',data,borderColor:'#4AADE8',backgroundColor:g,fill:true,tension:0.4,pointRadius:data.length>30?0:4,pointHoverRadius:6,pointBackgroundColor:'#4AADE8',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0D1320',borderColor:'rgba(74,173,232,0.3)',borderWidth:1,titleColor:'#fff',bodyColor:'#4AADE8',padding:12,callbacks:{label:c=>c.raw+' visits'}}},scales:{x:{ticks:{color:'#4a5568',maxTicksLimit:10},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#4a5568',stepSize:1},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true}}}});
+}
+
+// ===== CONVERSION FUNNEL =====
+function renderConversionFunnel(visits,events,buyers,ndas){
+  const tv=visits.length;
+  const interacted=new Set(events.filter(e=>!['page_view','section_view','scroll_milestone'].includes(e.event_type)).map(e=>e.session_id)).size;
+  const steps=[
+    {label:'Page Views',count:tv,color:'#4AADE8',icon:'👁'},
+    {label:'Interacted',count:interacted,color:'#84ACB6',icon:'👆'},
+    {label:'Buyer Profile Submitted',count:buyers.length,color:'#10B981',icon:'📋'},
+    {label:'NDA Executed',count:ndas.length,color:'#A78BFA',icon:'🔒'}
+  ];
+  document.getElementById('funnel-container').innerHTML=steps.map((st,i)=>{
+    const pct=tv>0?((st.count/tv)*100).toFixed(1):'0';
+    const drop=i>0&&steps[i-1].count>0?((1-st.count/steps[i-1].count)*100).toFixed(0):null;
+    const w=tv>0?Math.max(15,st.count/tv*100):15;
+    return `<div class="funnel-step glass-bright" style="border-left:3px solid ${st.color}"><div class="flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-lg">${st.icon}</span><div><div class="text-sm font-semibold text-white">${st.label}</div><div class="text-xs text-gray-500">${pct}% of visitors</div></div></div><div class="text-right"><div class="text-xl font-bold" style="color:${st.color}">${st.count.toLocaleString()}</div>${drop!==null?`<div class="text-[10px] text-red-400/70">-${drop}% drop</div>`:''}</div></div><div class="mt-2 h-1.5 bg-dark-700 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all duration-700" style="width:${w}%;background:${st.color}"></div></div></div>`;
+  }).join('');
+}
+
+// ===== SCROLL DEPTH =====
+function renderScrollDepth(visits){
+  const b={'0-25%':0,'25-50%':0,'50-75%':0,'75-100%':0};
+  visits.forEach(v=>{const s=v.max_scroll_percent||0;if(s<25)b['0-25%']++;else if(s<50)b['25-50%']++;else if(s<75)b['50-75%']++;else b['75-100%']++});
+  if(scrollCI)scrollCI.destroy();
+  scrollCI=new Chart(document.getElementById('scrollChart'),{type:'bar',data:{labels:Object.keys(b),datasets:[{data:Object.values(b),backgroundColor:['#EF4444','#FFB347','#84ACB6','#4AADE8'],borderRadius:8,barThickness:48}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#0D1320',borderColor:'rgba(74,173,232,0.3)',borderWidth:1,titleColor:'#fff',bodyColor:'#94a3b8',padding:12,callbacks:{label:c=>c.raw+' visitors'+(visits.length?' ('+((c.raw/visits.length)*100).toFixed(0)+'%)':'')}}},scales:{x:{ticks:{color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#4a5568',stepSize:1},grid:{color:'rgba(255,255,255,0.05)'},beginAtZero:true}}}});
+}
+
+// ===== DEVICE BREAKDOWN =====
+function renderDeviceBreakdown(visits){
+  const d={};visits.forEach(v=>{const t=v.device_type||'unknown';d[t]=(d[t]||0)+1});
+  const dc={desktop:'#4AADE8',tablet:'#FFB347',mobile:'#84ACB6',unknown:'#64748b'};
+  const di={desktop:'💻',tablet:'📱',mobile:'📲',unknown:'❓'};
+  if(deviceCI)deviceCI.destroy();
+  deviceCI=new Chart(document.getElementById('deviceChart'),{type:'doughnut',data:{labels:Object.keys(d).map(k=>(di[k]||'')+' '+k.charAt(0).toUpperCase()+k.slice(1)),datasets:[{data:Object.values(d),backgroundColor:Object.keys(d).map(k=>dc[k]||'#64748b'),borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:12},padding:12,usePointStyle:true}},tooltip:{backgroundColor:'#0D1320',borderColor:'rgba(74,173,232,0.3)',borderWidth:1,titleColor:'#fff',bodyColor:'#94a3b8',padding:12}}}});
+}
+
+// ===== REFERRER SOURCES =====
+function renderReferrerSources(visits){
+  const refs={};visits.forEach(v=>{let r=v.referrer||'Direct';if(r!=='Direct')try{r=new URL(r).hostname.replace('www.','')}catch(e){r=r.substring(0,40)}refs[r]=(refs[r]||0)+1});
+  const sorted=Object.entries(refs).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const colors=['#4AADE8','#84ACB6','#FFB347','#A78BFA','#F472B6','#34D399','#60A5FA','#FBBF24'];
+  if(referrerCI)referrerCI.destroy();
+  referrerCI=new Chart(document.getElementById('referrerChart'),{type:'bar',data:{labels:sorted.map(([k])=>k),datasets:[{data:sorted.map(([,v])=>v),backgroundColor:colors.slice(0,sorted.length),borderRadius:8,barThickness:24}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{backgroundColor:'#0D1320',borderColor:'rgba(74,173,232,0.3)',borderWidth:1,titleColor:'#fff',bodyColor:'#94a3b8',padding:12}},scales:{x:{ticks:{color:'#4a5568',stepSize:1},grid:{color:'rgba(255,255,255,0.03)'},beginAtZero:true},y:{ticks:{color:'#e2e8f0',font:{weight:500,size:11}},grid:{display:false}}}}});
+}
+
+// ===== BUYER PROFILES TABLE =====
+function renderBuyersTable(buyers){
+  const body=document.getElementById('buyersBody');
+  if(!buyers.length){body.innerHTML='<tr><td colspan="8" class="py-12 text-center text-gray-600">No buyer profiles submitted yet.</td></tr>';return}
+  body.innerHTML=buyers.map(b=>{
+    const dt=new Date(b.created_at);
+    const ds=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const ts=dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    const sc={pending:'bg-amber-500/10 text-amber-400 border-amber-500/20',reviewed:'bg-sky-500/10 text-sky-400 border-sky-500/20',approved:'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',rejected:'bg-red-500/10 text-red-400 border-red-500/20'};
+    const cls=sc[b.status]||sc.pending;
+    return `<tr class="table-row border-b border-white/5">
+      <td class="py-3 px-3"><div class="text-white font-medium">${b.full_name||'—'}</div><div class="text-[10px] text-gray-500">${b.title||''}</div></td>
+      <td class="py-3 px-3 text-sky-400">${b.email||'—'}</td>
+      <td class="py-3 px-3 text-gray-300">${b.company||'—'}</td>
+      <td class="py-3 px-3 text-gray-300 text-xs">${b.investment_range||'—'}</td>
+      <td class="py-3 px-3 text-gray-400 text-xs">${b.acquisition_timeline||'—'}</td>
+      <td class="py-3 px-3"><span class="status-badge border ${cls}">${b.status}</span></td>
+      <td class="py-3 px-3 text-gray-500 text-xs whitespace-nowrap">${ds}<br>${ts}</td>
+      <td class="py-3 px-3 text-right whitespace-nowrap">
+        ${b.status==='pending'?`<button onclick="updateBuyerStatus(${b.id},'approved')" class="px-2 py-1 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 cursor-pointer mr-1">Approve</button><button onclick="updateBuyerStatus(${b.id},'rejected')" class="px-2 py-1 rounded text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 cursor-pointer">Reject</button>`:`<button onclick="updateBuyerStatus(${b.id},'pending')" class="px-2 py-1 rounded text-[10px] font-semibold bg-gray-500/10 text-gray-400 border border-gray-500/20 hover:bg-gray-500/20 cursor-pointer">Reset</button>`}
+        <button onclick="viewBuyerDetail(${b.id})" class="px-2 py-1 rounded text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 cursor-pointer ml-1">View</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filterBuyers(){
+  const q=document.getElementById('buyerSearch').value.toLowerCase();
+  renderBuyersTable(allBuyers.filter(b=>(b.full_name||'').toLowerCase().includes(q)||(b.email||'').toLowerCase().includes(q)||(b.company||'').toLowerCase().includes(q)));
+}
+
+async function updateBuyerStatus(id,status){
+  if(!sb)return;
+  await sb.from('cornerstone_buyer_profiles').update({status,reviewed_at:new Date().toISOString()}).eq('id',id);
+  loadAllData();
+}
+
+function viewBuyerDetail(id){
+  const b=allBuyers.find(x=>x.id===id);if(!b)return;
+  const d=new Date(b.created_at).toLocaleString();
+  alert(`BUYER PROFILE DETAIL\n\nName: ${b.full_name}\nEmail: ${b.email}\nPhone: ${b.phone||'N/A'}\nCompany: ${b.company||'N/A'}\nTitle: ${b.title||'N/A'}\nLocation: ${b.location||'N/A'}\nInvestment Range: ${b.investment_range||'N/A'}\nFunding Source: ${b.funding_source||'N/A'}\nTimeline: ${b.acquisition_timeline||'N/A'}\nExperience: ${b.industry_experience||'N/A'}\nNotes: ${b.additional_notes||'N/A'}\nStatus: ${b.status}\nSubmitted: ${d}`);
+}
+
+// ===== NDA TABLE =====
+function renderNdasTable(ndas){
+  const body=document.getElementById('ndasBody');
+  document.getElementById('nda-count').textContent=ndas.length+' total';
+  if(!ndas.length){body.innerHTML='<tr><td colspan="7" class="py-12 text-center text-gray-600">No NDAs executed yet.</td></tr>';return}
+  body.innerHTML=ndas.map(n=>{
+    const dt=new Date(n.created_at);
+    const ds=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const ts=dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    return `<tr class="table-row border-b border-white/5">
+      <td class="py-3 px-3 text-white font-medium">${n.full_name||'—'}</td>
+      <td class="py-3 px-3 text-sky-400">${n.email||'—'}</td>
+      <td class="py-3 px-3 text-gray-300">${n.phone||'—'}</td>
+      <td class="py-3 px-3 text-gray-300">${n.company||'—'}</td>
+      <td class="py-3 px-3" style="font-family:'Brush Script MT',cursive;font-size:16px;color:#84ACB6">${n.signature_text||'—'}</td>
+      <td class="py-3 px-3"><span class="status-badge border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">${n.status||'executed'}</span></td>
+      <td class="py-3 px-3 text-gray-500 text-xs whitespace-nowrap">${ds}<br>${ts}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== RECENT ACTIVITY =====
+function renderActivityFeed(events){
+  const feed=document.getElementById('activityFeed');
+  const recent=events.slice(0,50);
+  if(!recent.length){feed.innerHTML='<div class="text-center text-gray-600 py-8">No activity yet.</div>';return}
+  const icons={page_view:'🌐',scroll_milestone:'📜',section_view:'👁',form_open:'📂',form_submit:'✅',card_click:'🃏',button_click:'👆',modal_open:'📦'};
+  const colors={page_view:'#64748b',scroll_milestone:'#FFB347',section_view:'#84ACB6',form_open:'#A78BFA',form_submit:'#10B981',card_click:'#4AADE8',button_click:'#F472B6',modal_open:'#60A5FA'};
+  feed.innerHTML=recent.map(e=>{
+    const dt=new Date(e.created_at);
+    const ts=dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    const ds=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const icon=icons[e.event_type]||'⚡';
+    const color=colors[e.event_type]||'#64748b';
+    const desc=e.event_type.replace(/_/g,' ');
+    const target=e.event_target?' &mdash; '+e.event_target:'';
+    return `<div class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-white/[0.02] transition-colors"><div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm" style="background:${color}20">${icon}</div><div class="flex-1 min-w-0"><div class="text-sm text-gray-300 truncate">${desc}${target}</div><div class="text-[10px] text-gray-600">${e.session_id?.substring(0,8)||'—'}</div></div><div class="text-xs text-gray-600 whitespace-nowrap">${ds} ${ts}</div></div>`;
+  }).join('');
+}
+
+// ===== INIT =====
+loadAllData();
+</script>
+</body>
+</html>

@@ -1,0 +1,354 @@
+{
+  "name": "FctsClmPrereqSeq_4",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/claim/SeqFacets"
+    },
+    "parameters": {
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "BeginDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EndDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DriverTable": {
+        "type": "String",
+        "defaultValue": "TMP_IDS_CLAIM"
+      },
+      "AdjFromTable": {
+        "type": "String",
+        "defaultValue": "TMP_ADJ_FROM"
+      },
+      "GrouperTable": {
+        "type": "String",
+        "defaultValue": "TMP_GROUPER_VER"
+      },
+      "RecycleDay": {
+        "type": "String",
+        "defaultValue": "MONDAY"
+      },
+      "RecycleFreq": {
+        "type": "String",
+        "defaultValue": "W"
+      },
+      "CntlJobName": {
+        "type": "String",
+        "defaultValue": "FctsClmCntl"
+      },
+      "SrcSysCd": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SrcSysCdSK": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TableID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrentDate": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "WeekDay": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_2A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList, ';'), 'FctsClmDriverBuild'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FctsClmDriverBuild",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/claim/driver/FctsClmDriverBuild')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "SrcSysCdSK": {
+                    "value": "@pipeline().parameters.SrcSysCdSK",
+                    "type": "Expression"
+                  },
+                  "DriverTable": {
+                    "value": "@pipeline().parameters.DriverTable",
+                    "type": "Expression"
+                  },
+                  "AdjFromTable": {
+                    "value": "@pipeline().parameters.AdjFromTable",
+                    "type": "Expression"
+                  },
+                  "GrouperTable": {
+                    "value": "@pipeline().parameters.GrouperTable",
+                    "type": "Expression"
+                  },
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "WeekDay_notebook",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_2A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "FctsClmDriverBuild",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/WeekDayRoutine')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "SetVariable_WeekDay",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "WeekDay_notebook",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "WeekDay",
+          "value": {
+            "value": "@string(activity('WeekDay_notebook').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "If_2C",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "SetVariable_WeekDay",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@or(equals(pipeline().parameters.RecycleFreq, 'E'), and(equals(pipeline().parameters.RecycleFreq, 'W'), equals(variables('WeekDay'), pipeline().parameters.RecycleDay)))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsRecycleExtrJc",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "waitOnCompletion": true,
+                "pipeline": {
+                  "referenceName": "IdsRecycleExtrJc",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "IDSParams": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_IDSAcct, ':', pipeline().globalParameters.gbl_param_IDSPW, ':', pipeline().globalParameters.gbl_param_IDSInstance, ':', pipeline().globalParameters.gbl_param_IDSDB, ':', pipeline().globalParameters.gbl_param_IDSDSN, ':', pipeline().globalParameters.gbl_param_IDSOwner)",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "IDSDelete": "Y",
+                  "JobListFile": "IdsRecycExtract.par",
+                  "SrcSysCd": "FACETS"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_3A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Wait_Any3",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "If_2C",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(pipeline().parameters.ExclusionList, ';'), 'FctsClmPKExtrSeq'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FctsClmPKExtrSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "waitOnCompletion": true,
+                "pipeline": {
+                  "referenceName": "FctsClmPKExtrSeq",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "DriverTable": {
+                    "value": "@pipeline().parameters.DriverTable",
+                    "type": "Expression"
+                  },
+                  "AdjFromTable": {
+                    "value": "@pipeline().parameters.AdjFromTable",
+                    "type": "Expression"
+                  },
+                  "CurrRunCycle": {
+                    "value": "@pipeline().parameters.RunCycle",
+                    "type": "Expression"
+                  },
+                  "SrcSysCd": {
+                    "value": "@pipeline().parameters.SrcSysCd",
+                    "type": "Expression"
+                  },
+                  "SrcSysCdSk": {
+                    "value": "@pipeline().parameters.SrcSysCdSK",
+                    "type": "Expression"
+                  },
+                  "ExclusionList": {
+                    "value": "@pipeline().parameters.ExclusionList",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      }
+    ]
+  }
+}

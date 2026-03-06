@@ -1,0 +1,90 @@
+{
+  "name": "IdsEdwMbrClnclInIExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "string",
+        "defaultValue": ""
+      },
+      "EDWRunCycle": {
+        "type": "string",
+        "defaultValue": ""
+      },
+      "ExtractRunCycle": {
+        "type": "string",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Cpy_IdsEdwMbrClnclInIExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH source_data AS ( SELECT MCI.MBR_CLNCL_IN_SK, COALESCE(CM.TRGT_CD,'UNK') AS SRC_SYS_CD, MCI.MBR_UNIQ_KEY, MCI.PRCS_YR_MO_SK, MCI.CLNCL_IN_ID, MCI.CRT_RUN_CYC_EXCTN_SK, MCI.LAST_UPDT_RUN_CYC_EXCTN_SK, MCI.CLNCL_IN_SK, MCI.MBR_MED_MESRS_SK, MCI.MIN_DT_SK, MCI.MAX_DT_SK, MCI.OCCUR_CT FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR_CLNCL_IN MCI LEFT OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CM ON MCI.SRC_SYS_CD_SK=CM.CD_MPPNG_SK WHERE MCI.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtractRunCycle}), transform_data AS ( SELECT MBR_CLNCL_IN_SK, CASE WHEN SRC_SYS_CD IS NULL OR dbo.trim_default(SRC_SYS_CD)='' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, MBR_UNIQ_KEY, PRCS_YR_MO_SK, CLNCL_IN_ID, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CLNCL_IN_SK, MBR_MED_MESRS_SK, MIN_DT_SK AS MBR_CLNCL_IN_MIN_DT_SK, MAX_DT_SK AS MBR_CLNCL_IN_MAX_DT_SK, OCCUR_CT AS MBR_CLNCL_IN_OCCUR_CT, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM source_data WHERE MBR_CLNCL_IN_SK<>0 AND MBR_CLNCL_IN_SK<>1 ) SELECT * FROM ( SELECT 0 AS MBR_CLNCL_IN_SK, 'UNK' AS SRC_SYS_CD, 0 AS MBR_UNIQ_KEY, '175301' AS PRCS_YR_MO_SK, 'UNK' AS CLNCL_IN_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 0 AS CLNCL_IN_SK, 0 AS MBR_MED_MESRS_SK, '1753-01-01' AS MBR_CLNCL_IN_MIN_DT_SK, '1753-01-01' AS MBR_CLNCL_IN_MAX_DT_SK, 0 AS MBR_CLNCL_IN_OCCUR_CT, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK ) rowunk UNION ALL SELECT * FROM ( SELECT 1 AS MBR_CLNCL_IN_SK, 'NA' AS SRC_SYS_CD, 1 AS MBR_UNIQ_KEY, '175301' AS PRCS_YR_MO_SK, 'NA' AS CLNCL_IN_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 1 AS CLNCL_IN_SK, 1 AS MBR_MED_MESRS_SK, '1753-01-01' AS MBR_CLNCL_IN_MIN_DT_SK, '1753-01-01' AS MBR_CLNCL_IN_MAX_DT_SK, 0 AS MBR_CLNCL_IN_OCCUR_CT, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK ) rowna UNION ALL SELECT MBR_CLNCL_IN_SK, SRC_SYS_CD, MBR_UNIQ_KEY, PRCS_YR_MO_SK, CLNCL_IN_ID, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CLNCL_IN_SK, MBR_MED_MESRS_SK, MBR_CLNCL_IN_MIN_DT_SK, MBR_CLNCL_IN_MAX_DT_SK, MBR_CLNCL_IN_OCCUR_CT, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK FROM transform_data ) final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "MBR_CLNCL_IN"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "MBR_CLNCL_IN_I.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/MemberRisk/MbrClnclInI"
+    }
+  },
+  "Description": "MODIFICATIONS:\nDeveloper                          Date               Project/Altiris #               Change Description                                                                     Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------                                              ----------------------------------   ---------------------------------    -------------------------   \nRalph Tucker                  4/3/2008       3036                               Originally Programmed                                                                    devlEDW                         Steph Goddard            04/15/2008\n\n\n\nBhupinder Kaur                11/01/2013    EDWefficiencies(5114)     rewrite in parallel ( creating load file to load the edw table)          EnterpriseWrhsDevl     Peter Marshall                12/11/2013\n\nAnnotations:\nJobName: IdsEdwMbrClnclInIExtr\nData extracted from IDS table MBR_CLNCL_IN\nAdd Defaults and Null Handling.\nWrite MBR_CLNCL_IN Data into a Sequential file for Load Job IdsEdwMbrClnclInILoad."
+}

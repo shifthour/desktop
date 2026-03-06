@@ -1,0 +1,194 @@
+{
+  "name": "UwsOpsWorkUnitXrefLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_UwsOpsWorkUnitXrefLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "SRC_SYS_CD",
+                "SRC_VAL_TX"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "SRC_VAL_TX",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "OPS_WORK_UNIT_SK",
+                  "type": "Int64",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "USER_ID",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "LAST_UPDT_DT_SK",
+                  "type": "String",
+                  "physicalType": "char"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "P_OPS_WORK_UNIT_XREF.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "P_OPS_WORK_UNIT_XREF"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DatabricksNotebook_DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Copy_UwsOpsWorkUnitXrefLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "P_OPS_WORK_UNIT_XREF.dat",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/employee/OpsWorkUnit"
+    }
+  },
+  "Description": "Â© Copyright 2015 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    OpsDashboardClmInvtryCntl\n\nProcessing:\n                    *\n\nControl Job Rerun Information: \n             Previous Run Successful:    Restart, no other steps necessary\n             Previous Run Aborted:         Restart, no other steps necessary\n\nModifications:                        \n                                              Project/                                                                                                 Code                  Date\nDeveloper        Date              Altiris #           Change Description                                                        Reviewer            Reviewed\n----------------------  -------------------   -------------------   ------------------------------------------------------------------------------------   ----------------------     -------------------   \nADasarathy      07/20/2015     5407             Original program                                                           Kalyan Neelam     2015-07-20\n\nAnnotations:\nJob Name: UwsOpsWorkUnitXrefLoad\nRead Load File created in the FKEY job\nCopy Stage for buffer\nUpdate  and Insert PROD   table\nLoad rejects are redirected into a Reject file"
+}

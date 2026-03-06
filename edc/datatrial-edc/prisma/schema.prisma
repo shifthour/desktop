@@ -1,0 +1,719 @@
+// DataTrial EDC/IWRS Database Schema
+// Using SQLite for local development (can migrate to PostgreSQL/Supabase)
+// All tables prefixed with "datatrial_"
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ==================== USER MANAGEMENT ====================
+
+model User {
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  password             String
+  firstName            String
+  lastName             String
+  phone                String?
+  organization         String?
+  isActive             Boolean   @default(true)
+  lastLogin            DateTime?
+  failedLoginAttempts  Int       @default(0)
+  lockedUntil          DateTime?
+  passwordChangedAt    DateTime  @default(now())
+  mustChangePassword   Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Relations
+  studyAssignments     UserStudyAssignment[]
+  createdStudies       Study[]               @relation("StudyCreator")
+  createdSubjects      Subject[]             @relation("SubjectCreator")
+  auditLogs            AuditLog[]
+  raisedQueries        Query[]               @relation("QueryRaiser")
+  respondedQueries     Query[]               @relation("QueryResponder")
+  closedQueries        Query[]               @relation("QueryCloser")
+  eSignatures          ESignature[]
+  crfDataSubmissions   CRFData[]             @relation("CRFSubmitter")
+  crfDataSDV           CRFData[]             @relation("CRFSDV")
+  crfDataDMReview      CRFData[]             @relation("CRFDMReview")
+  crfDataLocked        CRFData[]             @relation("CRFLocker")
+  fieldValueUpdates    CRFFieldValue[]
+  ipDispensed          IPInventory[]         @relation("IPDispenser")
+  shipmentsCreated     Shipment[]            @relation("ShipmentCreator")
+  shipmentsDispatched  Shipment[]            @relation("ShipmentDispatcher")
+  shipmentsReceived    Shipment[]            @relation("ShipmentReceiver")
+  kitRequestsCreated   KitRequest[]          @relation("KitRequester")
+  kitRequestsApproved  KitRequest[]          @relation("KitApprover")
+
+  @@map("datatrial_users")
+}
+
+model Role {
+  id           String   @id @default(uuid())
+  roleCode     String   @unique
+  roleName     String
+  description  String?
+  isBlinded    Boolean  @default(true)
+  isSystemRole Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  // Relations
+  permissions  RolePermission[]
+  assignments  UserStudyAssignment[]
+
+  @@map("datatrial_roles")
+}
+
+model Permission {
+  id             String   @id @default(uuid())
+  permissionCode String   @unique
+  permissionName String
+  module         String
+  description    String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  roles RolePermission[]
+
+  @@map("datatrial_permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("datatrial_role_permissions")
+}
+
+model UserStudyAssignment {
+  id         String   @id @default(uuid())
+  userId     String
+  studyId    String
+  roleId     String
+  siteId     String?
+  isActive   Boolean  @default(true)
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  study Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  role  Role  @relation(fields: [roleId], references: [id])
+  site  Site? @relation(fields: [siteId], references: [id])
+
+  @@unique([userId, studyId, roleId, siteId])
+  @@map("datatrial_user_study_assignments")
+}
+
+// ==================== STUDY CONFIGURATION ====================
+
+model Study {
+  id              String    @id @default(uuid())
+  studyCode       String    @unique
+  studyName       String
+  protocolNumber  String?
+  sponsorName     String?
+  phase           String?
+  status          String    @default("draft")
+  therapeuticArea String?
+  indication      String?
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdById     String?
+
+  createdBy User? @relation("StudyCreator", fields: [createdById], references: [id])
+
+  // Relations
+  sites               Site[]
+  studyArms           StudyArm[]
+  visits              Visit[]
+  crfForms            CRFForm[]
+  lovLists            LOVList[]
+  editChecks          EditCheck[]
+  subjects            Subject[]
+  userAssignments     UserStudyAssignment[]
+  kitDefinitions      KitDefinition[]
+  randomizationList   RandomizationEntry[]
+  shipments           Shipment[]
+  kitRequests         KitRequest[]
+
+  @@map("datatrial_studies")
+}
+
+model Site {
+  id                      String   @id @default(uuid())
+  studyId                 String
+  siteCode                String
+  siteName                String
+  address                 String?
+  city                    String?
+  state                   String?
+  country                 String?
+  piName                  String?
+  piEmail                 String?
+  status                  String   @default("inactive")
+  screeningCap            Int      @default(0)
+  randomizationCap        Int      @default(0)
+  screeningAllocation     Int      @default(0)
+  randomizationAllocation Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  study Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Relations
+  subjects        Subject[]
+  userAssignments UserStudyAssignment[]
+  ipInventory     IPInventory[]
+  shipmentsTo     Shipment[]            @relation("ShipmentToSite")
+  shipmentsFrom   Shipment[]            @relation("ShipmentFromSite")
+  kitRequests     KitRequest[]
+  randomization   RandomizationEntry[]
+
+  @@unique([studyId, siteCode])
+  @@map("datatrial_sites")
+}
+
+model StudyArm {
+  id        String   @id @default(uuid())
+  studyId   String
+  armCode   String
+  armName   String
+  armType   String?
+  ratio     Int      @default(1)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  study Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Relations
+  subjects       Subject[]
+  kitDefinitions KitDefinition[]
+  randomization  RandomizationEntry[]
+  ipInventory    IPInventory[]
+
+  @@unique([studyId, armCode])
+  @@map("datatrial_study_arms")
+}
+
+// ==================== CRF BUILDER ====================
+
+model Visit {
+  id             String   @id @default(uuid())
+  studyId        String
+  visitCode      String
+  visitName      String
+  visitType      String
+  sequenceNumber Int
+  durationDays   Int      @default(0)
+  windowBefore   Int      @default(0)
+  windowAfter    Int      @default(0)
+  isSchedulable  Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  study Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Relations
+  visitForms    VisitForm[]
+  subjectVisits SubjectVisit[]
+
+  @@unique([studyId, visitCode])
+  @@map("datatrial_visits")
+}
+
+model CRFForm {
+  id             String   @id @default(uuid())
+  studyId        String
+  formCode       String
+  formName       String
+  formType       String?
+  isRepeating    Boolean  @default(false)
+  isLogForm      Boolean  @default(false)
+  sequenceNumber Int?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  study Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Relations
+  fields     CRFField[]
+  visitForms VisitForm[]
+  crfData    CRFData[]
+
+  @@unique([studyId, formCode])
+  @@map("datatrial_crf_forms")
+}
+
+model VisitForm {
+  id             String  @id @default(uuid())
+  visitId        String
+  formId         String
+  isRequired     Boolean @default(false)
+  sequenceNumber Int?
+
+  visit Visit   @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  form  CRFForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, formId])
+  @@map("datatrial_visit_forms")
+}
+
+model CRFField {
+  id             String   @id @default(uuid())
+  formId         String
+  fieldCode      String
+  fieldLabel     String
+  fieldType      String
+  dataType       String?
+  isRequired     Boolean  @default(false)
+  isReadonly     Boolean  @default(false)
+  isHidden       Boolean  @default(false)
+  defaultValue   String?
+  placeholder    String?
+  helpText       String?
+  minValue       Float?
+  maxValue       Float?
+  minLength      Int?
+  maxLength      Int?
+  regexPattern   String?
+  decimalPlaces  Int?
+  unit           String?
+  sequenceNumber Int
+  rowNumber      Int      @default(1)
+  columnNumber   Int      @default(1)
+  colspan        Int      @default(1)
+  lovListId      String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  form    CRFForm  @relation(fields: [formId], references: [id], onDelete: Cascade)
+  lovList LOVList? @relation(fields: [lovListId], references: [id])
+
+  // Relations
+  fieldValues     CRFFieldValue[]
+  queriesOnField  Query[]
+  editCheckSource EditCheck[] @relation("EditCheckSource")
+  editCheckTarget EditCheck[] @relation("EditCheckTarget")
+
+  @@unique([formId, fieldCode])
+  @@map("datatrial_crf_fields")
+}
+
+model LOVList {
+  id        String   @id @default(uuid())
+  studyId   String
+  listCode  String
+  listName  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  study Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Relations
+  items  LOVItem[]
+  fields CRFField[]
+
+  @@unique([studyId, listCode])
+  @@map("datatrial_lov_lists")
+}
+
+model LOVItem {
+  id             String   @id @default(uuid())
+  listId         String
+  itemCode       String
+  itemValue      String
+  sequenceNumber Int?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  list LOVList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, itemCode])
+  @@map("datatrial_lov_items")
+}
+
+model EditCheck {
+  id                  String   @id @default(uuid())
+  studyId             String
+  checkCode           String
+  checkName           String
+  checkType           String
+  sourceFieldId       String?
+  targetFieldId       String?
+  conditionExpression String?
+  errorMessage        String
+  severity            String   @default("error")
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  study       Study     @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  sourceField CRFField? @relation("EditCheckSource", fields: [sourceFieldId], references: [id])
+  targetField CRFField? @relation("EditCheckTarget", fields: [targetFieldId], references: [id])
+
+  @@unique([studyId, checkCode])
+  @@map("datatrial_edit_checks")
+}
+
+// ==================== SUBJECT & DATA ====================
+
+model Subject {
+  id                    String    @id @default(uuid())
+  studyId               String
+  siteId                String
+  screeningNumber       String
+  randomizationNumber   String?
+  subjectInitials       String?
+  status                String    @default("screened")
+  screeningDate         DateTime?
+  randomizationDate     DateTime?
+  discontinuationDate   DateTime?
+  discontinuationReason String?
+  armId                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  createdById           String?
+
+  study     Study     @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  site      Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  arm       StudyArm? @relation(fields: [armId], references: [id])
+  createdBy User?     @relation("SubjectCreator", fields: [createdById], references: [id])
+
+  // Relations
+  subjectVisits SubjectVisit[]
+  queries       Query[]
+  ipInventory   IPInventory[]
+  randomization RandomizationEntry[]
+
+  @@unique([studyId, screeningNumber])
+  @@map("datatrial_subjects")
+}
+
+model SubjectVisit {
+  id                String    @id @default(uuid())
+  subjectId         String
+  visitId           String
+  visitDate         DateTime?
+  scheduledDate     DateTime?
+  status            String    @default("not_started")
+  isUnscheduled     Boolean   @default(false)
+  unscheduledNumber Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  visit   Visit   @relation(fields: [visitId], references: [id])
+
+  // Relations
+  crfData CRFData[]
+
+  @@map("datatrial_subject_visits")
+}
+
+model CRFData {
+  id             String    @id @default(uuid())
+  subjectVisitId String
+  formId         String
+  repeatNumber   Int       @default(1)
+  status         String    @default("incomplete")
+  submittedAt    DateTime?
+  submittedById  String?
+  sdvAt          DateTime?
+  sdvById        String?
+  dmReviewedAt   DateTime?
+  dmReviewedById String?
+  qaReviewedAt   DateTime?
+  qaReviewedById String?
+  piReviewedAt   DateTime?
+  piReviewedById String?
+  lockedAt       DateTime?
+  lockedById     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  subjectVisit SubjectVisit @relation(fields: [subjectVisitId], references: [id], onDelete: Cascade)
+  form         CRFForm      @relation(fields: [formId], references: [id])
+  submittedBy  User?        @relation("CRFSubmitter", fields: [submittedById], references: [id])
+  sdvBy        User?        @relation("CRFSDV", fields: [sdvById], references: [id])
+  dmReviewedBy User?        @relation("CRFDMReview", fields: [dmReviewedById], references: [id])
+  lockedBy     User?        @relation("CRFLocker", fields: [lockedById], references: [id])
+
+  // Relations
+  fieldValues CRFFieldValue[]
+  queries     Query[]
+
+  @@map("datatrial_crf_data")
+}
+
+model CRFFieldValue {
+  id                String   @id @default(uuid())
+  crfDataId         String
+  fieldId           String
+  fieldValue        String?
+  previousValue     String?
+  changeReason      String?
+  isSystemPopulated Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  updatedById       String?
+
+  crfData   CRFData  @relation(fields: [crfDataId], references: [id], onDelete: Cascade)
+  field     CRFField @relation(fields: [fieldId], references: [id])
+  updatedBy User?    @relation(fields: [updatedById], references: [id])
+
+  @@unique([crfDataId, fieldId])
+  @@map("datatrial_crf_field_values")
+}
+
+// ==================== QUERY MANAGEMENT ====================
+
+model Query {
+  id             String    @id @default(uuid())
+  queryNumber    String    @unique
+  subjectId      String
+  crfDataId      String?
+  fieldId        String?
+  queryType      String
+  queryCategory  String?
+  status         String    @default("open")
+  queryText      String
+  responseText   String?
+  resolutionText String?
+  raisedById     String
+  raisedByRole   String?
+  raisedAt       DateTime  @default(now())
+  respondedById  String?
+  respondedAt    DateTime?
+  closedById     String?
+  closedAt       DateTime?
+  reopenedById   String?
+  reopenedAt     DateTime?
+  reopenCount    Int       @default(0)
+
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  crfData     CRFData?  @relation(fields: [crfDataId], references: [id])
+  field       CRFField? @relation(fields: [fieldId], references: [id])
+  raisedBy    User      @relation("QueryRaiser", fields: [raisedById], references: [id])
+  respondedBy User?     @relation("QueryResponder", fields: [respondedById], references: [id])
+  closedBy    User?     @relation("QueryCloser", fields: [closedById], references: [id])
+
+  // Relations
+  history QueryHistory[]
+
+  @@map("datatrial_queries")
+}
+
+model QueryHistory {
+  id        String   @id @default(uuid())
+  queryId   String
+  action    String
+  actionBy  String
+  actionAt  DateTime @default(now())
+  oldStatus String?
+  newStatus String?
+  comment   String?
+
+  query Query @relation(fields: [queryId], references: [id], onDelete: Cascade)
+
+  @@map("datatrial_query_history")
+}
+
+// ==================== IWRS / IP MANAGEMENT ====================
+
+model KitDefinition {
+  id            String   @id @default(uuid())
+  studyId       String
+  kitTypeCode   String
+  kitTypeName   String
+  armId         String?
+  tabletsPerKit Int?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  study Study    @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  arm   StudyArm? @relation(fields: [armId], references: [id])
+
+  // Relations
+  ipInventory IPInventory[]
+
+  @@unique([studyId, kitTypeCode])
+  @@map("datatrial_kit_definitions")
+}
+
+model IPInventory {
+  id               String    @id @default(uuid())
+  studyId          String
+  kitDefinitionId  String
+  kitNumber        String    @unique
+  batchNumber      String?
+  manufactureDate  DateTime?
+  expiryDate       DateTime?
+  locationType     String
+  siteId           String?
+  subjectId        String?
+  armId            String?
+  status           String    @default("available")
+  receivedAt       DateTime?
+  dispensedAt      DateTime?
+  dispensedById    String?
+  returnedAt       DateTime?
+  tabletsReturned  Int?
+  tabletsDispensed Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  kitDefinition KitDefinition @relation(fields: [kitDefinitionId], references: [id])
+  site          Site?         @relation(fields: [siteId], references: [id])
+  subject       Subject?      @relation(fields: [subjectId], references: [id])
+  dispensedBy   User?         @relation("IPDispenser", fields: [dispensedById], references: [id])
+  arm           StudyArm?     @relation(fields: [armId], references: [id])
+
+  // Relations
+  shipmentItems ShipmentItem[]
+
+  @@map("datatrial_ip_inventory")
+}
+
+model Shipment {
+  id                   String    @id @default(uuid())
+  shipmentNumber       String    @unique
+  studyId              String
+  shipmentType         String
+  fromSiteId           String?
+  toSiteId             String?
+  status               String    @default("created")
+  shippedDate          DateTime?
+  expectedDeliveryDate DateTime?
+  actualDeliveryDate   DateTime?
+  trackingNumber       String?
+  carrier              String?
+  temperatureExcursion Boolean   @default(false)
+  comments             String?
+  createdById          String?
+  createdAt            DateTime  @default(now())
+  dispatchedById       String?
+  dispatchedAt         DateTime?
+  receivedById         String?
+  receivedAt           DateTime?
+
+  study        Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  fromSite     Site? @relation("ShipmentFromSite", fields: [fromSiteId], references: [id])
+  toSite       Site? @relation("ShipmentToSite", fields: [toSiteId], references: [id])
+  createdBy    User? @relation("ShipmentCreator", fields: [createdById], references: [id])
+  dispatchedBy User? @relation("ShipmentDispatcher", fields: [dispatchedById], references: [id])
+  receivedBy   User? @relation("ShipmentReceiver", fields: [receivedById], references: [id])
+
+  // Relations
+  items ShipmentItem[]
+
+  @@map("datatrial_shipments")
+}
+
+model ShipmentItem {
+  id                String  @id @default(uuid())
+  shipmentId        String
+  kitId             String
+  status            String?
+  receivedCondition String?
+  comments          String?
+
+  shipment Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  kit      IPInventory @relation(fields: [kitId], references: [id])
+
+  @@map("datatrial_shipment_items")
+}
+
+model KitRequest {
+  id                String    @id @default(uuid())
+  requestNumber     String    @unique
+  studyId           String
+  siteId            String
+  requestedById     String
+  requestedAt       DateTime  @default(now())
+  quantityRequested Int
+  status            String    @default("pending")
+  approvedById      String?
+  approvedAt        DateTime?
+  declineReason     String?
+  comments          String?
+
+  study       Study @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  site        Site  @relation(fields: [siteId], references: [id])
+  requestedBy User  @relation("KitRequester", fields: [requestedById], references: [id])
+  approvedBy  User? @relation("KitApprover", fields: [approvedById], references: [id])
+
+  @@map("datatrial_kit_requests")
+}
+
+model RandomizationEntry {
+  id                  String    @id @default(uuid())
+  studyId             String
+  randomizationNumber String
+  armId               String
+  siteId              String?
+  isUsed              Boolean   @default(false)
+  usedAt              DateTime?
+  subjectId           String?
+  sequenceNumber      Int?
+
+  study   Study    @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  arm     StudyArm @relation(fields: [armId], references: [id])
+  site    Site?    @relation(fields: [siteId], references: [id])
+  subject Subject? @relation(fields: [subjectId], references: [id])
+
+  @@unique([studyId, randomizationNumber])
+  @@map("datatrial_randomization_entries")
+}
+
+// ==================== AUDIT & COMPLIANCE ====================
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  tableName     String
+  recordId      String
+  action        String
+  oldValues     String?
+  newValues     String?
+  changedFields String?
+  changeReason  String?
+  userId        String?
+  userEmail     String?
+  userRole      String?
+  ipAddress     String?
+  userAgent     String?
+  sessionId     String?
+  createdAt     DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([tableName, recordId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("datatrial_audit_logs")
+}
+
+model ESignature {
+  id               String   @id @default(uuid())
+  recordType       String
+  recordId         String
+  signatureMeaning String
+  signedById       String
+  signedAt         DateTime @default(now())
+  userEmail        String
+  userFullName     String
+  ipAddress        String?
+  signatureHash    String
+
+  signedBy User @relation(fields: [signedById], references: [id])
+
+  @@map("datatrial_esignatures")
+}

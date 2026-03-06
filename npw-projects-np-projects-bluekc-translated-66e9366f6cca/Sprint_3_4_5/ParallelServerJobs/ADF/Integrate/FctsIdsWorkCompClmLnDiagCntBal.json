@@ -1,0 +1,373 @@
+{
+  "name": "FctsIdsWorkCompClmLnDiagCntBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyWorkCompClmLnDiagToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_src AS (SELECT clmLnDiag.CLM_ID AS TRGT_CLM_ID, clmLnDiag.CLM_LN_SEQ_NO AS TRGT_CLM_LN_SEQ_NO, clmLnDiag.SRC_SYS_CD AS TRGT_SRC_SYS_CD, clmLnDiag.CLM_LN_DIAG_ORDNL_CD AS TRGT_CLM_LN_DIAG_ORDNL_CD, bal.CLM_ID, bal.CLM_LN_SEQ_NO, bal.CLM_LN_DIAG_ORDNL_CD, bal.SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_WorkCompOwner}.WORK_COMPNSTN_CLM_LN_DIAG clmLnDiag FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_WorkCompOwner}.B_WORK_COMPNSTN_CLM_LN_DIAG bal ON clmLnDiag.SRC_SYS_CD = bal.SRC_SYS_CD AND clmLnDiag.CLM_ID = bal.CLM_ID AND clmLnDiag.CLM_LN_SEQ_NO = bal.CLM_LN_SEQ_NO AND clmLnDiag.CLM_LN_DIAG_ORDNL_CD = bal.CLM_LN_DIAG_ORDNL_CD WHERE clmLnDiag.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle}) SELECT * FROM cte_src",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "dummyTableForADFSource"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptWorkCompClmLnDiagXfrm",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyWorkCompClmLnDiagToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal_Research; SELECT TRGT_CLM_ID, TRGT_CLM_LN_SEQ_NO, TRGT_SRC_SYS_CD, TRGT_CLM_LN_DIAG_ORDNL_CD, CLM_ID, CLM_LN_SEQ_NO, CLM_LN_DIAG_ORDNL_CD, SRC_SYS_CD INTO @{pipeline().globalParameters.gbl_param_ids_staging}.JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal_Research FROM @{pipeline().globalParameters.gbl_param_ids_staging}.JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal WHERE TRGT_CLM_ID IS NULL OR TRGT_CLM_LN_SEQ_NO IS NULL OR TRGT_SRC_SYS_CD IS NULL OR TRGT_CLM_LN_DIAG_ORDNL_CD IS NULL OR CLM_ID IS NULL OR CLM_LN_SEQ_NO IS NULL OR CLM_LN_DIAG_ORDNL_CD IS NULL OR SRC_SYS_CD IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal_Notify; WITH cte AS (SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS rn FROM @{pipeline().globalParameters.gbl_param_ids_staging}.JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal) SELECT 'ROW COUNT BALANCING FACETS - IDS WORKERS COMP CLM LN DIAG OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal_Notify FROM cte WHERE rn=1 AND @{pipeline().parameters.ToleranceCd} = 'OUT'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyWorkCompClmLnDiagResearch",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptWorkCompClmLnDiagXfrm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "TRGT_CLM_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "TRGT_CLM_LN_SEQ_NO",
+                    "type": "Int32",
+                    "physicalType": "Integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "TRGT_SRC_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "TRGT_CLM_LN_DIAG_ORDNL_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "CLM_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "CLM_LN_SEQ_NO",
+                    "type": "Int32",
+                    "physicalType": "Integer"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "CLM_LN_DIAG_ORDNL_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 8
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/research')",
+              "param_filename": "@concat('FctsIdsWorkCompClmLnDiagResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyWorkCompClmLnDiagNotify",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptWorkCompClmLnDiagXfrm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "NOTIFICATION",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "JNQZ_TMP_FctsIdsWorkCompClmLnDiagCntBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/notify')",
+              "param_filename": "FctsIdsWorkCompClmBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\\\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ToleranceCd": {
+        "type": "string"
+      },
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/WorkersComp/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:  FctsIdsWorkCompClmBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target files are compared to see if there are any discrepancies \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                   ----------------------------------   ---------------------------------    -------------------------   \nAkhila Manickavelu         01/23/2017          5628-Work Comp        Originally Programmed                                        IntegrateDevl               Kalyan Neelam             2017-03-17\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - WORK_COMPNSTN_CLM_LN_DIAG"
+}

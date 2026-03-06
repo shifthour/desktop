@@ -1,0 +1,93 @@
+{
+  "name": "IdsEdwProvCatDExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsEdwProvCatDExtr_ToFile",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH cte_final AS (SELECT p.PROV_CAT_SK, p.PROV_CAT_CD, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, p.PROV_CAT_NM, CASE WHEN c.TRGT_CD IS NULL THEN ' ' ELSE c.TRGT_CD END AS PROV_CAT_TYP_CD, CASE WHEN c.TRGT_CD_NM IS NULL THEN ' ' ELSE c.TRGT_CD_NM END AS PROV_CAT_TYP_NM, p.WEB_SRCH_IN, p.USER_ID, p.LAST_UPDT_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, p.PROV_CAT_TYP_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_CAT AS p LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG AS c ON p.PROV_CAT_TYP_CD_SK = c.CD_MPPNG_SK AND c.SRC_DOMAIN_NM = 'PROVIDER CATEGORY TYPE' AND c.SRC_SYS_CD = 'UWS' ) SELECT * FROM cte_final",
+              "type": "Expression"
+            },
+            "partitionOption": "None",
+            "queryTimeout": "02:00:00"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PROV_CAT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "PROV_CAT_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/ProvCatD"
+    }
+  },
+  "Description": "COPYRIGHT 2005 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:     EdwProvCatExtr\n\nDESCRIPTION:  \n      \n\t        Pulls data from the IDS PROV_CAT table to the EDW PROV_CAT_D table.\nINPUTS:\n\t\tPROV_CAT\n  \n\nModification Log:\n\n DEVELOPER            DATE                 PROJECT          DESCRIPTION                              ENVIRONMENT          REVIEWER                 REVIEW\n   \n-----------------------------     ----------------------     --------------------        --------------------------------------------       -------------------------------    ------------------------------       --------------------\nTao Luo                     02/08/2006        Initial Development    \n\nLeandrew Moore       06/31/2013         P5114                         rewrite in parallel                  EnterpriseWrhsDevl     Jag Yelavarthi              2013-08-27     \nSantosh Bokka         05/14/2014         TFS 2363       Added 2 columns CRT_RUN_CYC_EXCTN_SK                   Kalyan Neelam             2014-05-23\n                                                                                   and LAST_UPDT_RUN_CYC_EXCTN_SK   EnterpriseNewDevl\n\nAnnotations:\nPull the matched set of products fron IDS and move to EDW.\nRead from source table PROV_CAT PROV_CAT from IDS.  Apply Run Cycle filters when applicable to get just the needed rows forward\nCode SK lookups for Denormalization\n\nOnce the SK is used for denormalization, do not carry over that information if it is not needed in the target table.\nThis is a load ready file conforms to the target table structure.\n\nWrite this into a Dataset if the data goes into a PKEY job otherwise write this info into a Sequential file\n\nPlease use Metadata available in Table definitions to support data Lineage."
+}

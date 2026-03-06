@@ -1,0 +1,114 @@
+{
+  "name": "UwsUwsCustSvcSubjAreaBalSumLoad",
+  "properties": {
+    "parameters": {
+      "Target": {
+        "type": "String"
+      },
+      "Subject": {
+        "type": "String"
+      },
+      "CurrDate": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "Int"
+      },
+      "UWSAcct": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "ScriptPreLoad",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.TMP_UwsUwsCustSvcSubjAreaBalSumLoad; WITH ROW_COUNT_CTE AS (SELECT TRGT_SYS_CD, SUBJ_AREA_NM, COUNT(*) AS ROW_COUNT FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM WHERE TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND SUBJ_AREA_NM = '@{pipeline().parameters.Subject}'), TBL_BAL_SUM_CTE AS (SELECT T.TRGT_SYS_CD, T.SUBJ_AREA_NM, T.BAL_DT, T.CLMN_SUM_TLRNC_CD, T.ROW_TO_ROW_TLRNC_CD, R.ROW_COUNT, ROW_NUMBER() OVER (ORDER BY T.BAL_DT ASC) AS rowpos FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM T JOIN ROW_COUNT_CTE R ON R.TRGT_SYS_CD = T.TRGT_SYS_CD AND R.SUBJ_AREA_NM = T.SUBJ_AREA_NM WHERE T.TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND T.SUBJ_AREA_NM = '@{pipeline().parameters.Subject}'), REC AS (SELECT TBL_BAL_SUM_CTE.TRGT_SYS_CD, TBL_BAL_SUM_CTE.SUBJ_AREA_NM, TBL_BAL_SUM_CTE.BAL_DT, TBL_BAL_SUM_CTE.rowpos, TBL_BAL_SUM_CTE.ROW_COUNT, TBL_BAL_SUM_CTE.CLMN_SUM_TLRNC_CD, TBL_BAL_SUM_CTE.ROW_TO_ROW_TLRNC_CD, CAST(0 AS INT) AS svPrevCount, '' AS svTempTlrncCd, 'Y' AS svTempRslvIn, 'Y' AS svTempRslvIncd FROM TBL_BAL_SUM_CTE WHERE rowpos = 1 UNION ALL SELECT T2.TRGT_SYS_CD, T2.SUBJ_AREA_NM, T2.BAL_DT, T2.rowpos, T2.ROW_COUNT, T2.CLMN_SUM_TLRNC_CD, T2.ROW_TO_ROW_TLRNC_CD, REC.svPrevCount + 1, CASE WHEN CONVERT(VARCHAR(10), T2.BAL_DT, 120) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN (T2.CLMN_SUM_TLRNC_CD = 'BAL' OR T2.CLMN_SUM_TLRNC_CD = 'NA') AND (T2.ROW_TO_ROW_TLRNC_CD = 'BAL' OR T2.ROW_TO_ROW_TLRNC_CD = 'NA') AND REC.svTempTlrncCd <> 'OUT' AND REC.svTempTlrncCd <> 'IN' THEN 'BAL' WHEN (T2.CLMN_SUM_TLRNC_CD = 'BAL' OR T2.CLMN_SUM_TLRNC_CD = 'IN' OR T2.ROW_TO_ROW_TLRNC_CD = 'BAL' OR T2.ROW_TO_ROW_TLRNC_CD = 'IN') AND REC.svTempTlrncCd <> 'OUT' THEN 'IN' ELSE 'OUT' END END, CASE WHEN CONVERT(VARCHAR(10), T2.BAL_DT, 120) = '@{pipeline().parameters.CurrDate}' THEN REC.svTempRslvIn ELSE CASE WHEN (T2.CLMN_SUM_TLRNC_CD = 'BAL' OR T2.CLMN_SUM_TLRNC_CD = 'IN' OR T2.ROW_TO_ROW_TLRNC_CD = 'BAL' OR T2.ROW_TO_ROW_TLRNC_CD = 'IN') AND REC.svTempRslvIncd <> 'OUT' THEN 'Y' ELSE 'N' END END, CASE WHEN CONVERT(VARCHAR(10), T2.BAL_DT, 120) = '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN (T2.CLMN_SUM_TLRNC_CD = 'BAL' OR T2.CLMN_SUM_TLRNC_CD = 'NA') AND (T2.ROW_TO_ROW_TLRNC_CD = 'BAL' OR T2.ROW_TO_ROW_TLRNC_CD = 'NA') AND REC.svTempRslvIncd <> 'OUT' AND REC.svTempRslvIncd <> 'IN' THEN 'BAL' WHEN (T2.CLMN_SUM_TLRNC_CD = 'BAL' OR T2.CLMN_SUM_TLRNC_CD = 'IN' OR T2.ROW_TO_ROW_TLRNC_CD = 'BAL' OR T2.ROW_TO_ROW_TLRNC_CD = 'IN') AND REC.svTempRslvIncd <> 'OUT' THEN 'IN' ELSE 'OUT' END END FROM REC JOIN TBL_BAL_SUM_CTE T2 ON T2.rowpos = REC.rowpos + 1 AND T2.TRGT_SYS_CD = REC.TRGT_SYS_CD AND T2.SUBJ_AREA_NM = REC.SUBJ_AREA_NM WHERE REC.rowpos < (SELECT MAX(rowpos) FROM TBL_BAL_SUM_CTE)), FINAL AS (SELECT TOP 1 '@{pipeline().parameters.Target}' AS TRGT_SYS_CD, '@{pipeline().parameters.Subject}' AS SUBJ_AREA_NM, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_BAL_DT, REC.svTempTlrncCd AS TLRNC_CD, REC.svTempRslvIn AS PREV_ISSUE_CRCTD_IN, @{pipeline().parameters.ExtrRunCycle} AS TRGT_RUN_CYC_NO, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS CRT_DTM, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_UPDT_DTM, '@{pipeline().parameters.UWSAcct}' AS USER_ID FROM REC WHERE rowpos = ROW_COUNT ORDER BY rowpos DESC) SELECT * INTO @{pipeline().globalParameters.gbl_param_edw_staging}.TMP_UwsUwsCustSvcSubjAreaBalSumLoad FROM FINAL",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_Upsert_SubjAreaBalSum",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptPreLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "TRGT_SYS_CD",
+                "SUBJ_AREA_NM"
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "TMP_UwsUwsCustSvcSubjAreaBalSumLoad"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "SUBJ_AREA_BAL_SUM"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/CustSvc/EdwLoads/Balancing"
+    }
+  },
+  "Description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:   IdsProdBalCntl\n\nPROCESSING:\n                  \n                The Job loads the SUBJECT_AREA_BAL_SUM table after the balancing control job is done for a given Subject Area              \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/19/2007          3264                              Originally Programmed                          devlEDW10               Steph Goddard            10/08/2007   \n\nArchana Palivela              01/27/2013          5114                              rewrite in parallel                                   Enterprisewarehouse  Bhoomi Dasari            2/26/2014\n\nAnnotations:\nJob Name: UwsUwsCustSvcSubjAreaBalSumLoad\nExtraction From Table Balance Summary table for a given subject area and target system and loading into the Subject Area Balance Summary table\nRead all the Data from UWS TBL_BAL_SUM TBL_BAL_SUM Table; Pull records based on SOURCE AND  SUBJECT\nTBL_BAL_SUM  lookups\nLeft Join to pull the MemberCounts \nJoin Keys:\nSOURCE AND SUBJECT\nDefaults and Null Handling\nUpdate then Insert the SUBJ_AREA_BAL_SUM Data."
+}

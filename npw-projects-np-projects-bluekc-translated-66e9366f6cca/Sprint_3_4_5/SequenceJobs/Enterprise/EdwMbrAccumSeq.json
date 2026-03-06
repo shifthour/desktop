@@ -1,0 +1,529 @@
+{
+  "name": "EdwMbrAccumSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/Seq"
+    },
+    "parameters": {
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EDWRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "IDSRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EDWRunCycleDate": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "DeleteCntSubPca": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_SubPca",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsSubPcaExtr'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsSubPcaExtr",
+              "type": "ExecutePipeline",
+              "userProperties": [],
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwSubPcaFExtr",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "EDWRunCycle": {
+                    "value": "@pipeline().parameters.EDWRunCycle",
+                    "type": "Expression"
+                  },
+                  "EDWRunCycleDate": {
+                    "value": "@pipeline().parameters.EDWRunCycleDate",
+                    "type": "Expression"
+                  },
+                  "IDSRunCycle": {
+                    "value": "@pipeline().parameters.IDSRunCycle",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "UnixFileRecCnt_SubPcaDelCnt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_SubPca",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/UnixFileRecCnt')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "UnixFileRecCnt_a1": "/load",
+            "UnixFileRecCnt_a2": "*IdsEdwSubPcaFDel*",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "EnvProjectPath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FileName": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Set_DeleteCntSubPca",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "UnixFileRecCnt_SubPcaDelCnt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "DeleteCntSubPca",
+          "value": {
+            "value": "@string(activity('UnixFileRecCnt_SubPcaDelCnt').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "If_10B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Set_DeleteCntSubPca",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'ConcatSubPcaDel'), false), greater(int(variables('DeleteCntSubPca')), 0))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "ConcatSubPcaDel",
+              "type": "DatabricksNotebook",
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "dependsOn": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'prepare_files')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "inputFolder": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_container_integrate, '/', pipeline().globalParameters.gbl_param_environment, '/load')",
+                    "type": "Expression"
+                  },
+                  "filePrefix1": "IdsEdwSubPcaFDel",
+                  "filePrefix2": "IdsEdwSubPcaFDel",
+                  "SORTKEY_PK": "1,6",
+                  "SORTKEY_TS": "1,6",
+                  "EnvProjectPath": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "IdsEdwSubPcaFDel",
+              "type": "ExecutePipeline",
+              "userProperties": [],
+              "dependsOn": [
+                {
+                  "activity": "ConcatSubPcaDel",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwSubPcaFDel",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_10E",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_10B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'RmSubPca'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "BkupSubPca",
+              "type": "DatabricksNotebook",
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "dependsOn": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/load/EdwSubPcaDel.uniq",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/load/processed/EdwSubPca.del.",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "enterprise"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_LoadSubPca",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_10E",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(contains(split(string(pipeline().parameters.ExclusionList), ';'), 'IdsEdwSubPcaFLoad'), false)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwSubPcaFLoad",
+              "type": "ExecutePipeline",
+              "userProperties": [],
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwSubPcaFLoad",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "EDWOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+                    "type": "Expression"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Job_Activity_429",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "userProperties": [],
+        "policy": {
+          "secureInput": false
+        },
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "EdwMbrAccumSeq_1",
+            "type": "PipelineReference"
+          },
+          "parameters": {
+            "ExclusionList": {
+              "value": "@pipeline().parameters.ExclusionList",
+              "type": "Expression"
+            },
+            "RunID": {
+              "value": "@pipeline().parameters.RunID",
+              "type": "Expression"
+            },
+            "EDWRunCycle": {
+              "value": "@pipeline().parameters.EDWRunCycle",
+              "type": "Expression"
+            },
+            "IDSRunCycle": {
+              "value": "@pipeline().parameters.IDSRunCycle",
+              "type": "Expression"
+            },
+            "EDWRunCycleDate": {
+              "value": "@pipeline().parameters.EDWRunCycleDate",
+              "type": "Expression"
+            },
+            "EDWOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+              "type": "Expression"
+            },
+            "edw_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "ids_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            }
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Job_Activity_430",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "userProperties": [],
+        "policy": {
+          "secureInput": false
+        },
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "EdwMbrAccumSeq_2",
+            "type": "PipelineReference"
+          },
+          "parameters": {
+            "ExclusionList": {
+              "value": "@pipeline().parameters.ExclusionList",
+              "type": "Expression"
+            },
+            "RunID": {
+              "value": "@pipeline().parameters.RunID",
+              "type": "Expression"
+            },
+            "EDWRunCycle": {
+              "value": "@pipeline().parameters.EDWRunCycle",
+              "type": "Expression"
+            },
+            "IDSRunCycle": {
+              "value": "@pipeline().parameters.IDSRunCycle",
+              "type": "Expression"
+            },
+            "EDWRunCycleDate": {
+              "value": "@pipeline().parameters.EDWRunCycleDate",
+              "type": "Expression"
+            },
+            "EDWOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+              "type": "Expression"
+            },
+            "edw_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "ids_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            }
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Job_Activity_431",
+        "type": "ExecutePipeline",
+        "dependsOn": [],
+        "userProperties": [],
+        "policy": {
+          "secureInput": false
+        },
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "EdwMbrAccumSeq_3",
+            "type": "PipelineReference"
+          },
+          "parameters": {
+            "ExclusionList": {
+              "value": "@pipeline().parameters.ExclusionList",
+              "type": "Expression"
+            },
+            "RunID": {
+              "value": "@pipeline().parameters.RunID",
+              "type": "Expression"
+            },
+            "EDWRunCycle": {
+              "value": "@pipeline().parameters.EDWRunCycle",
+              "type": "Expression"
+            },
+            "IDSRunCycle": {
+              "value": "@pipeline().parameters.IDSRunCycle",
+              "type": "Expression"
+            },
+            "EDWRunCycleDate": {
+              "value": "@pipeline().parameters.EDWRunCycleDate",
+              "type": "Expression"
+            },
+            "EDWOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWOwner",
+              "type": "Expression"
+            },
+            "edw_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+              "type": "Expression"
+            },
+            "IDSOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "type": "Expression"
+            },
+            "ids_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+              "type": "Expression"
+            }
+          },
+          "waitOnCompletion": true
+        }
+      }
+    ]
+  }
+}

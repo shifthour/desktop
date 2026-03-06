@@ -1,0 +1,383 @@
+{
+  "name": "IdsJobCompleteCntl",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/Balancing"
+    },
+    "parameters": {
+      "DataStageJobNamesList": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CompleteCnt": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "JobLinkCount_a1": {
+        "type": "String",
+        "defaultValue": "IdsJobCompleteExtr"
+      },
+      "JobLinkCount_a2": {
+        "type": "String",
+        "defaultValue": "Trans2"
+      },
+      "JobLinkCount_a3": {
+        "type": "String",
+        "defaultValue": "Output"
+      },
+      "CurrentJobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "FORMAT_DATE",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FORMAT.DATE')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "pInDate": "string('@DATE')",
+            "pSource": "DATE",
+            "pSourceFormat": "CURRENT",
+            "pOutFormat": "CCYY-MM-DD"
+          }
+        }
+      },
+      {
+        "name": "Set_CurrDate",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "FORMAT_DATE",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "CurrDate",
+          "value": {
+            "value": "@string(activity('FORMAT_DATE').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Set_JobName",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Set_CurrDate",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "JobName",
+          "value": {
+            "value": "@pipeline().Pipeline",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "StartLoop",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "Set_JobName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "items": {
+            "value": "@split(pipeline().parameters.DataStageJobNamesList, ',')",
+            "type": "Expression"
+          },
+          "activities": [
+            {
+              "name": "Set_CurrentJobName",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "CurrentJobName",
+                "value": {
+                  "value": "@item()",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "IdsJobCompleteExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_CurrentJobName",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Balancing/JobComplete/IdsJobCompleteExtr')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CurrDate": {
+                    "value": "@variables('CurrDate')",
+                    "type": "Expression"
+                  },
+                  "JobName1": {
+                    "value": "@variables('CurrentJobName')",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "JobLinkCount",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "IdsJobCompleteExtr",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/JobLinkCount')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "JobLinkCount_a1": {
+                    "value": "@variables('JobLinkCount_a1')",
+                    "type": "Expression"
+                  },
+                  "JobLinkCount_a2": {
+                    "value": "@variables('JobLinkCount_a2')",
+                    "type": "Expression"
+                  },
+                  "JobLinkCount_a3": {
+                    "value": "@variables('JobLinkCount_a3')",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  },
+                  "file_path": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "EnvProjectPath": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "delimiter": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "quote": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "header": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "nullValue": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "table_nm": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "schema": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Set_CompleteCnt",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "JobLinkCount",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "CompleteCnt",
+                "value": {
+                  "value": "@string(activity('JobLinkCount').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "CheckCount",
+              "type": "IfCondition",
+              "dependsOn": [
+                {
+                  "activity": "Set_CompleteCnt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "userProperties": [],
+              "typeProperties": {
+                "expression": {
+                  "value": "@not(equals(variables('CompleteCnt'),'0'))",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
+                  {
+                    "name": "Email",
+                    "type": "ExecutePipeline",
+                    "dependsOn": [],
+                    "policy": {
+                      "secureInput": false
+                    },
+                    "userProperties": [],
+                    "typeProperties": {
+                      "pipeline": {
+                        "referenceName": "Email_Notification",
+                        "type": "PipelineReference"
+                      },
+                      "waitOnCompletion": true,
+                      "parameters": {
+                        "recipients": {
+                          "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                          "type": "Expression"
+                        },
+                        "subject": {
+                          "value": "@concat('IDS ', variables('CurrentJobName'), ' Job has Not Completed Today')",
+                          "type": "Expression"
+                        },
+                        "body": "See attached file for job information.",
+                        "blobFilenames": {
+                          "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/', variables('CurrentJobName'),'Complete.txt')",
+                          "type": "Expression"
+                        },
+                        "fromemail": {
+                          "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                          "type": "Expression"
+                        },
+                        "containerName": {
+                          "value": "@pipeline().globalParameters.gbl_param_container_integrate",
+                          "type": "Expression"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "ifFalseActivities": []
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

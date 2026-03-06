@@ -1,0 +1,223 @@
+{
+  "name": "IdsEdwSubSbsdyDDel",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_SubSbsdy_Stg",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.tempSubSbsdyD_TMP_IdsEdwSubSbsdyDDel",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SUB_UNIQ_KEY",
+                  "type": "Int64",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "SUB_SBSDY_TYP_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "CLS_PLN_PROD_CAT_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "SUB_SBSDY_EFF_DT_SK",
+                  "type": "String",
+                  "physicalType": "CHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "EdwSubSbsdyDel.uniq",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "tempSubSbsdyD_TMP_IdsEdwSubSbsdyDDel"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Delete_SubSbsdyD",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_SubSbsdy_Stg",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte AS (SELECT SUB_UNIQ_KEY, SUB_SBSDY_TYP_CD, CLS_PLN_PROD_CAT_CD, SUB_SBSDY_EFF_DT_SK, SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_edw_staging}.tempSubSbsdyD_TMP_IdsEdwSubSbsdyDDel) DELETE T FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.SUB_SBSDY_D T JOIN cte ON T.SUB_UNIQ_KEY = cte.SUB_UNIQ_KEY AND T.SUB_SBSDY_TYP_CD = cte.SUB_SBSDY_TYP_CD AND T.CLS_PLN_PROD_CAT_CD = cte.CLS_PLN_PROD_CAT_CD AND T.SUB_SBSDY_EFF_DT_SK = cte.SUB_SBSDY_EFF_DT_SK AND T.SRC_SYS_CD = cte.SRC_SYS_CD",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Delete_SubSbsdyD",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "EdwSubSbsdyDel.uniq",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/SubSbsdyD"
+    },
+    "annotations": []
+  },
+  "Description": "COPYRIGHT 2014 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:  EdwMbrNoDriverSeq\n            \n\nPROCESSING:   Delete IDS Sub Subsidy Change Data Capture rows.   \n\n\nMODIFICATIONS:\nDeveloper                Date                 \tProject/Altiris #\t                 Change Description\t         Development Project\tCode Reviewer\tDate Reviewed       \n------------------              --------------------     \t------------------------\t                 ---------------------------------------------------     --------------------------------\t-------------------------------\t----------------------------       \nKalyan Neelam          2014-03-25            5235 ACA                                  Initial Programming                           EnterpriseNewDevl        Bhoomi Dasari          03/28/2014\n\nAnnotations:\nRead Delete File created in the IDS Job IdsSubSbsdyDel\nCopy Stage for buffer and column rename\nApply deletes to the EDW SUB_SBSDY_D Table."
+}

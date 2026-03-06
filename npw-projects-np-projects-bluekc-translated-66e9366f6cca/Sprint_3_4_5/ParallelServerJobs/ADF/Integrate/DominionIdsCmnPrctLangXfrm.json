@@ -1,0 +1,251 @@
+{
+  "name": "DominionIdsCmnPrctLangXfrm",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      },
+      "SrcSysCdSk": {
+        "type": "Int"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "DominionProvFile": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_landing_to_tmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABB10_TMP_DominionIdsCmnPrctLangXfrm",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/landing')",
+              "param_filename": "@{pipeline().parameters.DominionProvFile}",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABB10_TMP_DominionIdsCmnPrctLangXfrm"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform_CmnPrctLang",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_landing_to_tmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABB11_TMP_DominionIdsCmnPrctLangXfrm; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABB12_TMP_DominionIdsCmnPrctLangXfrm; WITH raw AS ( SELECT dbo.trim_default(Provider_Identifier) AS Provider_Identifier, dbo.trim_default(Provider_Address_Identifier) AS Provider_Address_Identifier, dbo.trim_default(Language_Description) AS Lang_Desc_Raw FROM @{pipeline().globalParameters.gbl_param_ids_staging}.ABB10_TMP_DominionIdsCmnPrctLangXfrm ), lang_split AS ( SELECT r.Provider_Identifier, r.Provider_Address_Identifier, s.value AS LvLang, ROW_NUMBER() OVER (PARTITION BY r.Provider_Identifier + r.Provider_Address_Identifier ORDER BY (SELECT NULL)) AS LvLangSeqNo FROM raw r CROSS APPLY string_split(r.Lang_Desc_Raw, ',') s ) SELECT r.Provider_Identifier + r.Provider_Address_Identifier + ';' + CAST(l.LvLangSeqNo as varchar(10)) + ';' + '@{pipeline().parameters.SrcSysCd}' AS PRI_NAT_KEY_STRING, '@{pipeline().parameters.RunIDTimeStamp}' AS FIRST_RECYC_TS, 0 AS CMN_PRCT_LANG_SK, r.Provider_Identifier + r.Provider_Address_Identifier AS CMN_PRCT_ID, l.LvLangSeqNo AS LANG_SEQ_NO, '@{pipeline().parameters.SrcSysCd}' AS SRC_SYS_CD, 0 AS CRT_RUN_CYC_EXCTN_SK, 0 AS LAST_UPDT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK, dbo.trim_default(UPPER(l.LvLang)) AS LANG_DESC, 'FACETS' AS CMN_PRCT_LKP_SRC_SYS_CD_FACETS, 'DOMINION' AS CMN_PRCT_LKP_SRC_SYS_CD_VCAC INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ABB11_TMP_DominionIdsCmnPrctLangXfrm FROM lang_split l JOIN raw r ON r.Provider_Identifier = l.Provider_Identifier AND r.Provider_Address_Identifier = l.Provider_Address_Identifier; SELECT @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK, r.Provider_Identifier + r.Provider_Address_Identifier AS CMN_PRCT_ID, l.LvLangSeqNo AS LANG_SEQ_NO INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ABB12_TMP_DominionIdsCmnPrctLangXfrm FROM lang_split l JOIN raw r ON r.Provider_Identifier = l.Provider_Identifier AND r.Provider_Address_Identifier = l.Provider_Address_Identifier;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_ds_CMN_PRCT_LANG",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_CmnPrctLang",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".ds"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABB11_TMP_DominionIdsCmnPrctLangXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/ds')",
+              "param_filename": "CMN_PRCT_LANG.@{pipeline().parameters.SrcSysCd}.xfrm.@{pipeline().parameters.RunID}.ds"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_B_CMN_PRCT_LANG_dat",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_CmnPrctLang",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABB12_TMP_DominionIdsCmnPrctLangXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "B_CMN_PRCT_LANG.@{pipeline().parameters.SrcSysCd}.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/CmnPrctLang"
+    }
+  },
+  "Description": "COPYRIGHT 2020, 2022 BLUE CROSS/BLUE SHIELD OF KANSAS CITY\n \n\n\nJob Name :  DominionIdsCmnPrctLangXfrm\n\nCalling Job:  DominionProvExtrSeq\n \n                          \n\nPROCESSING:\n \n    Transformation rules applied on Extracted data information that is used to populate the IDS CMN_PRCT_LANG table\n  \n\nMODIFICATIONS:\n\nDeveloper                          Date                    Project/Altiris #                     Change Description                                                       Development Project               Code Reviewer                      Date Reviewed\n----------------------------------      -------------------      -----------------------------------           ---------------------------------------------------------                                 ----------------------------------              ---------------------------------               -------------------------\n   \nArpitha V                         01/30/2024              US 609431                                Original Programming                                                    IntegrateDev1                    Jeyaprasanna                          2024-02-20\n\nAnnotations:\nJobName: DominionIdsCmnPrctLangXfrm\n\nTranforamtion rules are applied on the data Extracted from Dominion Provider File\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns."
+}

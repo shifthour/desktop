@@ -1,0 +1,277 @@
+{
+  "name": "IdsInterPlnBillDtlRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CreateTempTables",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_src_trgt AS (SELECT SRC.INTER_PLN_BILL_DTL_ID AS SRC_INTER_PLN_BILL_DTL_ID,SRC.BUS_OWNER_ID AS SRC_BUS_OWNER_ID,SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK,TRGT.INTER_PLN_BILL_DTL_ID AS TRGT_INTER_PLN_BILL_DTL_ID,TRGT.BUS_OWNER_ID AS TRGT_BUS_OWNER_ID,TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_INTER_PLN_BILL_DTL AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.INTER_PLN_BILL_DTL AS TRGT ON TRGT.INTER_PLN_BILL_DTL_ID=SRC.INTER_PLN_BILL_DTL_ID AND TRGT.BUS_OWNER_ID=SRC.BUS_OWNER_ID AND TRGT.SRC_SYS_CD_SK=SRC.SRC_SYS_CD_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK=@{pipeline().parameters.ExtrRunCycle}) DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RESEARCH_TMP_IdsInterPlnBillDtlRowCntBal; SELECT SRC_INTER_PLN_BILL_DTL_ID,SRC_BUS_OWNER_ID,SRC_SRC_SYS_CD_SK,TRGT_INTER_PLN_BILL_DTL_ID,TRGT_BUS_OWNER_ID,TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RESEARCH_TMP_IdsInterPlnBillDtlRowCntBal FROM cte_src_trgt WHERE SRC_INTER_PLN_BILL_DTL_ID IS NULL OR SRC_BUS_OWNER_ID IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_INTER_PLN_BILL_DTL_ID IS NULL OR TRGT_BUS_OWNER_ID IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.NOTIFY_TMP_IdsInterPlnBillDtlRowCntBal; WITH cte_notify AS (SELECT CASE WHEN @{pipeline().parameters.ToleranceCd}='OUT' THEN 'ROW COUNT BALANCING FACETS - IDS INTER_PLN_BILL_DTL IS OUT OF TOLERANCE' END AS NOTIFICATION) SELECT NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.NOTIFY_TMP_IdsInterPlnBillDtlRowCntBal FROM cte_notify WHERE NOTIFICATION IS NOT NULL",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "CreateTempTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "SRC_INTER_PLN_BILL_DTL_ID",
+                    "type": "String",
+                    "physicalType": "varchar"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "SRC_BUS_OWNER_ID",
+                    "type": "String",
+                    "physicalType": "varchar"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "SRC_SRC_SYS_CD_SK",
+                    "type": "Int64",
+                    "physicalType": "int"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "TRGT_INTER_PLN_BILL_DTL_ID",
+                    "type": "String",
+                    "physicalType": "varchar"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "TRGT_BUS_OWNER_ID",
+                    "type": "String",
+                    "physicalType": "varchar"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "TRGT_SRC_SYS_CD_SK",
+                    "type": "Int64",
+                    "physicalType": "int"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "RESEARCH_TMP_IdsInterPlnBillDtlRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/research')",
+              "param_filename": "@concat('IdsInterPlnBillDtlResearch.dat.',pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyErrorNotificationFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "CreateTempTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "NOTIFICATION",
+                    "type": "String",
+                    "physicalType": "char"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "NOTIFY_TMP_IdsInterPlnBillDtlRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/notify')",
+              "param_filename": "InterPlnBillDtlBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\\\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Finance/InterPlanBillDtl/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on INTER_PLN_BILL_DTL and B_INTER_PLN_BILL_DTL tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                  DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                       DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam           2015-08-18        5212                               Initial Programming                                                                                IntegrateDev1\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - INTER_PLN_BILL_DTL"
+}

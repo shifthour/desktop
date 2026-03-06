@@ -1,0 +1,203 @@
+{
+  "name": "IdsClmLnCchgRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "string"
+      },
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "ScriptCreateTempTables",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal_Res; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal_Notf; SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS row_num, SRC.CLM_ID AS SRC_CLM_ID, SRC.CLM_LN_SEQ_NO AS SRC_CLM_LN_SEQ_NO, SRC.CLM_SRC_SYS_CD_SK AS SRC_CLM_SRC_SYS_CD_SK, SRC.PRCS_YR_MO_SK AS SRC_PRCS_YR_MO_SK, SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK, TRGT.CLM_ID AS TRGT_CLM_ID, TRGT.CLM_LN_SEQ_NO AS TRGT_CLM_LN_SEQ_NO, TRGT.CLM_SRC_SYS_CD_SK AS TRGT_CLM_SRC_SYS_CD_SK, TRGT.PRCS_YR_MO_SK AS TRGT_PRCS_YR_MO_SK, TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_CLM_LN_CCHG AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CLM_LN_CCHG AS TRGT ON TRGT.CLM_ID = SRC.CLM_ID AND TRGT.CLM_LN_SEQ_NO = SRC.CLM_LN_SEQ_NO AND TRGT.CLM_SRC_SYS_CD_SK = SRC.CLM_SRC_SYS_CD_SK AND TRGT.PRCS_YR_MO_SK = SRC.PRCS_YR_MO_SK AND TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle}; SELECT SRC_CLM_ID, SRC_CLM_LN_SEQ_NO, SRC_CLM_SRC_SYS_CD_SK, SRC_PRCS_YR_MO_SK, SRC_SRC_SYS_CD_SK, TRGT_CLM_ID, TRGT_CLM_LN_SEQ_NO, TRGT_CLM_SRC_SYS_CD_SK, TRGT_PRCS_YR_MO_SK, TRGT_SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal_Res FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal WHERE SRC_CLM_ID IS NULL OR SRC_CLM_LN_SEQ_NO IS NULL OR SRC_CLM_SRC_SYS_CD_SK IS NULL OR SRC_PRCS_YR_MO_SK IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_CLM_ID IS NULL OR TRGT_CLM_LN_SEQ_NO IS NULL OR TRGT_CLM_SRC_SYS_CD_SK IS NULL OR TRGT_PRCS_YR_MO_SK IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL; SELECT CAST('ROW COUNT BALANCING FACETS - IDS CLM_LN_CCHG IS OUT OF TOLERANCE' AS VARCHAR(100)) AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal_Notf WHERE EXISTS (SELECT 1 FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal WHERE row_num = 1) AND '@{pipeline().parameters.ToleranceCd}' = 'OUT';",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptCreateTempTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT SRC_CLM_ID, SRC_CLM_LN_SEQ_NO, SRC_CLM_SRC_SYS_CD_SK, SRC_PRCS_YR_MO_SK, SRC_SRC_SYS_CD_SK, TRGT_CLM_ID, TRGT_CLM_LN_SEQ_NO, TRGT_CLM_SRC_SYS_CD_SK, TRGT_PRCS_YR_MO_SK, TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal_Res",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A1_TMP_IdsClmLnCchgRowCntBal_Res"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','balancing/research')",
+              "param_filename": "IdsClmLnCchgResearch.dat.@{pipeline().parameters.RunID}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyNotifyFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptCreateTempTables",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT NOTIFICATION FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_IdsClmLnCchgRowCntBal_Notf",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A1_TMP_IdsClmLnCchgRowCntBal_Notf"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','balancing/notify')",
+              "param_filename": "IdsCchgBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/CCHG/ClmLnCCHG/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on CLM_LN_CCHG and B_CLM_LN_CCHG tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam          2015-08-25           5460                               Initial Programming                                                                               IntegrateDev2            Bhoomi Dasari              8/30/2015\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - CLM_LN_CCHG"
+}

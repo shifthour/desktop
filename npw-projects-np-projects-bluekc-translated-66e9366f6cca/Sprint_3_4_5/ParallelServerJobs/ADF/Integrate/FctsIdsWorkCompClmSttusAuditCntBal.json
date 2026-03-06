@@ -1,0 +1,289 @@
+{
+  "name": "FctsIdsWorkCompClmSttusAuditCntBal",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CA_Extract_WrkCmpClmSttusAdt",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT clmSttusAudit.CLM_ID AS TRGT_CLM_ID, clmSttusAudit.CLM_STTUS_AUDIT_SEQ_NO AS TRGT_CLM_STTUS_AUDIT_SEQ_NO, clmSttusAudit.SRC_SYS_CD AS TRGT_SRC_SYS_CD, bal.CLM_ID, bal.CLM_STTUS_AUDIT_SEQ_NO, bal.SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_WorkCompOwner}.WORK_COMPNSTN_CLM_STTUS_AUDIT clmSttusAudit FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_WorkCompOwner}.B_WORK_COMPNSTN_CLM_STTUS_AUDIT bal ON clmSttusAudit.SRC_SYS_CD = bal.SRC_SYS_CD AND clmSttusAudit.CLM_ID = bal.CLM_ID AND clmSttusAudit.CLM_STTUS_AUDIT_SEQ_NO = bal.CLM_STTUS_AUDIT_SEQ_NO WHERE clmSttusAudit.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle}",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal",
+              "type": "Expression"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_WorkCompOwner}",
+              "param_table": "WORK_COMPNSTN_CLM_STTUS_AUDIT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "SA_Transform_WrkCmpClmSttusAdt",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CA_Extract_WrkCmpClmSttusAdt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_RSCH; SELECT TRGT_CLM_ID, TRGT_CLM_STTUS_AUDIT_SEQ_NO, TRGT_SRC_SYS_CD, CLM_ID, CLM_STTUS_AUDIT_SEQ_NO, SRC_SYS_CD INTO @{pipeline().globalParameters.gbl_param_ids_staging}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_RSCH FROM @{pipeline().globalParameters.gbl_param_ids_staging}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal WHERE CLM_ID IS NULL OR TRGT_CLM_ID IS NULL OR CLM_STTUS_AUDIT_SEQ_NO IS NULL OR TRGT_CLM_STTUS_AUDIT_SEQ_NO IS NULL OR SRC_SYS_CD IS NULL OR TRGT_SRC_SYS_CD IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_NTFY; SELECT TOP 1 'ROW COUNT BALANCING FACETS - IDS WORKERS COMP CLM STTUS AUDIT OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_NTFY FROM (SELECT 1 AS col) AS dummy WHERE '@{pipeline().parameters.ToleranceCd}' = 'OUT'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CA_ResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "SA_Transform_WrkCmpClmSttusAdt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT TRGT_CLM_ID, TRGT_CLM_STTUS_AUDIT_SEQ_NO, TRGT_SRC_SYS_CD, CLM_ID, CLM_STTUS_AUDIT_SEQ_NO, SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_ids_staging}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_RSCH",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_RSCH"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/research')",
+              "param_filename": "FctsIdsWorkCompClmSttusAuditResearch.dat.@{pipeline().parameters.RunID}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CA_ErrorNotificationFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "SA_Transform_WrkCmpClmSttusAdt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT NOTIFICATION FROM @{pipeline().globalParameters.gbl_param_WorkCompOwner}.WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_NTFY",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "NOTIFICATION",
+                  "type": "String",
+                  "physicalType": "STRING"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_WorkCompOwner}",
+              "param_table": "WORKCMP_TMP_FctsIdsWorkCompClmSttusAuditCntBal_NTFY"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/balancing/notify')",
+              "param_filename": "FctsIdsWorkCompClmBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "runConcurrently": false,
+    "folder": {
+      "name": "Integrate/Jobs/WorkersComp/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:  FctsIdsWorkCompClmBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target files are compared to see if there are any discrepancies \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                         Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                   ----------------------------------   ---------------------------------    -------------------------   \nAkhila Manickavelu         01/25/2017          5628-Work Comp        Originally Programmed                                        IntegrateDev2              Kalyan Neelam             2017-03-17\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - WORK_COMPNSTN_CLM_STTUS_AUDIT"
+}

@@ -1,0 +1,195 @@
+{
+  "name": "ActivityFeeCommMatchPercent",
+  "properties": {
+    "parameters": {
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyFileToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.AA23_TMP_ActivityFeeCommMatchPercent",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'landing')",
+              "param_filename": "@concat('ActivityFeeCommMatchCheck_', pipeline().parameters.RunID, '.csv')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "AA23_TMP_ActivityFeeCommMatchPercent"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Aggregate",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.BB44_TMP_ActivityFeeCommMatchPercent;WITH Add_Constant AS (SELECT 'Totals and Match Percent:' AS Constant, INVOICE_QTY, TABLE_QTY FROM @{pipeline().globalParameters.gbl_param_ids_staging}.AA23_TMP_ActivityFeeCommMatchPercent),Aggregate_Constant AS (SELECT Constant, SUM(INVOICE_QTY) AS Invoice_Act_Mbr_Total, SUM(TABLE_QTY) AS EDW_Act_Mbr_Total FROM Add_Constant GROUP BY Constant),Trans_Match_Percent AS (SELECT Constant, ' ' AS Filler1, ' ' AS Filler2, ' ' AS Filler3, ' ' AS Filler4, Invoice_Act_Mbr_Total, EDW_Act_Mbr_Total, ((EDW_Act_Mbr_Total*1.0)/Invoice_Act_Mbr_Total)*100 AS Match_Percent FROM Aggregate_Constant) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.BB44_TMP_ActivityFeeCommMatchPercent FROM Trans_Match_Percent",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyAggrToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Aggregate",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".csv"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "BB44_TMP_ActivityFeeCommMatchPercent"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'landing')",
+              "param_filename": "@concat('ActivityFeeCommMatchCheck_', pipeline().parameters.RunID, '.csv')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/ActivityFeeAnalysis"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2020  Blue Cross/Blue Shield of Kansas City\n\nZENA JOBNAME:  OPTUM_EDW_ACTIVITY_FEE_ANALYSIS_REPORT_MONTHLY_000\n\nCONTROL JOB:  EdwActivityFeeRptCntl\n\nJOB NAME:  ActivityFeeCommMatchPercent\n\nDescription:  This job reads the output file from job ActivityFeeCommMatchCheck.  It adds the all the active members from the INVOICE_QTY and TABLE_QTY columns to compute the totals.  It uses those totals to compute the match percentage at the member level.  This row gets appended the same file to complete the ActivityFeeCommMatchCheck report. \n\nModifications:\n\nDeveloper                  Date            User Story       Change Description                                                                             Development Project    Code Reviewer            Date Reviewed\n-------------------------------   -----------------   ---------------------  ---------------------------------------------------------------------------------------------------------   ----------------------------------   ---------------------------------   -------------------------\nBill Schroeder            2022-01-31   US-486052     Initial Programming.\\(9)\\(9)\\(9)                                         IntegrateDev2              Raja Gummadi             02/17/2022\n\nAnnotations:\nThis job reads the output file from job ActivityFeeCommMatchCheck.  It adds the all the active members from the INVOICE_QTY and TABLE_QTY columns to compute the totals.  It uses those totals to compute the match percentage at the member level.  This row gets appended the same file to complete the ActivityFeeCommMatchCheck report."
+}

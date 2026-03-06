@@ -1,0 +1,85 @@
+{
+  "name": "IdsEdwFcltyBedDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwFcltyBedD",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_stage1 AS ( SELECT bed.FCLTY_BED_SK, COALESCE(srcsys.TRGT_CD,'UNK') AS raw_SRC_SYS_CD, bed.PROV_ID, bed.FCLTY_BED_TYP_CD_SK, bed.PROV_SK, bed.FCLTY_BED_CT, COALESCE(typ.TRGT_CD,'UNK') AS raw_FCLTY_BED_TYP_CD, COALESCE(typ.TRGT_CD_NM,'UNK') AS raw_FCLTY_BED_TYP_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.FCLTY_BED bed LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG srcsys ON bed.SRC_SYS_CD_SK = srcsys.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG typ ON bed.FCLTY_BED_TYP_CD_SK = typ.CD_MPPNG_SK ), cte_stage2 AS ( SELECT FCLTY_BED_SK, CASE WHEN dbo.trim_default(raw_SRC_SYS_CD) = '' THEN 'UNK' ELSE raw_SRC_SYS_CD END AS SRC_SYS_CD, PROV_ID, CASE WHEN dbo.trim_default(raw_FCLTY_BED_TYP_CD) = '' THEN 'UNK' ELSE raw_FCLTY_BED_TYP_CD END AS FCLTY_BED_TYP_CD, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, PROV_SK, FCLTY_BED_CT, CASE WHEN dbo.trim_default(raw_FCLTY_BED_TYP_NM) = '' THEN 'UNK' ELSE raw_FCLTY_BED_TYP_NM END AS FCLTY_BED_TYP_NM, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, FCLTY_BED_TYP_CD_SK FROM cte_stage1 ) SELECT FCLTY_BED_SK, SRC_SYS_CD, PROV_ID, FCLTY_BED_TYP_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, PROV_SK, FCLTY_BED_CT, FCLTY_BED_TYP_NM, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, FCLTY_BED_TYP_CD_SK FROM cte_stage2",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "FCLTY_BED"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Provider/EdwLoads/FcltyBedD/load')",
+              "param_filename": "FCLTY_BED_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/FcltyBedD"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nOliver Nielsen          09/12/2005                                             Originally Programmed\n\nArchana Palivela     06/18/2013        5114                              Originally Programmed( In parallel)                                                       EnterpriseWhseDevl     Peter Marshall              8/15/2013\n\nAnnotations:\nJob name: IdsEdwFcltyBedDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file.\nRead data from source table FCLTY_BED_D\nCode SK lookups for Denormalization\n\nLookup Keys:\nCD_MPPNG_SK\nFCLTY_BED_TYP_CD_SK\nReference Code Mapping Data for Code SK lookups\nWrite FCLTY_BED_D Data into a Sequential file for Load Ready Job."
+}

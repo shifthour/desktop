@@ -1,0 +1,93 @@
+{
+  "name": "IdsDmMbrshDmSubPcaExtr",
+  "properties": {
+    "parameters": {
+      "DataMartRunCycle": {
+        "type": "int"
+      },
+      "IDSRunCycle": {
+        "type": "int"
+      }
+    },
+    "activities": [
+      {
+        "name": "cp_IdsDmMbrshDmSubPcaExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "sqlReaderQuery": {
+              "value": "WITH cte_main AS ( SELECT COALESCE(CD1.TRGT_CD, 'UNK') AS SRC_SYS_CD, SUB_PCA.SUB_UNIQ_KEY, SUB_PCA.SUB_PCA_ACCUM_PFX_ID, SUB_PCA.PLN_YR_BEG_DT_SK, SUB_PCA.EFF_DT_SK, SUB_PCA.GRP_SK, SUB_PCA.SUB_SK, SUB_PCA.SUB_PCA_CAROVR_CALC_RULE_CD_SK, SUB_PCA.TERM_DT_SK, SUB_PCA.ALLOC_AMT, SUB_PCA.BAL_AMT, SUB_PCA.CAROVR_AMT, SUB_PCA.MAX_CAROVR_AMT, SUB_PCA.PD_AMT, GRP.GRP_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.SUB_PCA SUB_PCA JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.GRP GRP ON SUB_PCA.GRP_SK = GRP.GRP_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON SUB_PCA.SRC_SYS_CD_SK = CD1.CD_MPPNG_SK WHERE SUB_PCA.SUB_PCA_SK NOT IN (1,0) AND SUB_PCA.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle} ), cte_lkp AS ( SELECT CD_MPPNG_SK, COALESCE(TRGT_CD, 'UNK') AS TRGT_CD, COALESCE(TRGT_CD_NM, 'UNK') AS TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG ), cte_join AS ( SELECT cte_main.SRC_SYS_CD, cte_main.SUB_UNIQ_KEY, cte_main.SUB_PCA_ACCUM_PFX_ID, cte_main.PLN_YR_BEG_DT_SK, cte_main.EFF_DT_SK, cte_main.GRP_SK, cte_main.SUB_SK, cte_main.SUB_PCA_CAROVR_CALC_RULE_CD_SK, cte_main.TERM_DT_SK, cte_main.ALLOC_AMT, cte_main.BAL_AMT, cte_main.CAROVR_AMT, cte_main.MAX_CAROVR_AMT, cte_main.PD_AMT, cte_main.GRP_ID, cte_lkp.TRGT_CD AS SUB_PCA_CAROVR_CALC_RULE_CD, cte_lkp.TRGT_CD_NM AS SUB_PCA_CAROVR_CALC_RULE_NM FROM cte_main LEFT JOIN cte_lkp ON cte_main.SUB_PCA_CAROVR_CALC_RULE_CD_SK = cte_lkp.CD_MPPNG_SK ), cte_xfrm AS ( SELECT CASE WHEN dbo.trim_default(cte_join.SRC_SYS_CD) = '' THEN 'UNK' ELSE cte_join.SRC_SYS_CD END AS SRC_SYS_CD, cte_join.SUB_UNIQ_KEY, cte_join.SUB_PCA_ACCUM_PFX_ID, cte_join.PLN_YR_BEG_DT_SK, cte_join.EFF_DT_SK AS SUB_PCA_EFF_DT_SK, cte_join.GRP_SK, cte_join.GRP_ID, cte_join.SUB_SK, CASE WHEN cte_join.SUB_PCA_CAROVR_CALC_RULE_CD_SK < 2 THEN ' ' ELSE cte_join.SUB_PCA_CAROVR_CALC_RULE_CD END AS SUB_PCA_CAROVR_CALC_RULE_CD, CASE WHEN cte_join.SUB_PCA_CAROVR_CALC_RULE_CD_SK < 2 THEN ' ' ELSE cte_join.SUB_PCA_CAROVR_CALC_RULE_NM END AS SUB_PCA_CAROVR_CALC_RULE_NM, cte_join.ALLOC_AMT AS SUB_PCA_ALLOC_AMT, cte_join.BAL_AMT AS SUB_PCA_BAL_AMT, cte_join.CAROVR_AMT AS SUB_PCA_CAROVR_AMT, cte_join.MAX_CAROVR_AMT AS SUB_PCA_MAX_CAROVR_AMT, cte_join.PD_AMT AS SUB_PCA_PD_AMT, cte_join.TERM_DT_SK AS SUB_PCA_TERM_DT_SK, @{pipeline().parameters.DataMartRunCycle} AS LAST_UPDT_RUN_CYC_NO FROM cte_join ) SELECT * FROM cte_xfrm",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "SUB_PCA"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/WebDataMart/MbrAccum/SubPCA/load')",
+              "param_filename": "MBRSH_DM_SUB_PCA.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/MbrAccum/SubPCA"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2006, 2008 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    *\n\nProcessing:\n                    *\n\nControl Job Rerun Information: \n                    Previous Run Successful:    Restart, no other steps necessary\n                    Previous Run Aborted:         Restart, no other steps necessary\n\nModifications:                        \n                                              Project/                                                                                                 Code                  Date\nDeveloper        Date              Altiris #           Change Description                                                        Reviewer            Reviewed\n----------------------  -------------------   -------------------   ------------------------------------------------------------------------------------   ----------------------     -------------------   \nHugh Sisson    2006-10-23                          Original program\nHugh Sisson    2008-09-23    TTR-374        Added 2 new columns including 1 in the key                  Steph Goddard    09/25/2008\n\nNagesh Bandi  2013-07-23      #5114          Original Programming(Server to Parallel)                        Peter Marshall       10/22/2013\n\nAnnotations:\nCode SK lookups for Denormalization\n\nLookup Keys:\nSUB_PCA_CAROVR_CALC_RULE_CD_SK\nWrite SUB_PCA Data into a Sequential file for Load Job IdsDmMbrshDmSubPcaLoad.\nRead all the Data from IDS SUB_PCA Table,Apply Run Cycle filters to get just the needed rows forward.\nAdd Defaults and Null Handling.\nJob Name: IdsDmMbrshDmSubpcaExtr"
+}

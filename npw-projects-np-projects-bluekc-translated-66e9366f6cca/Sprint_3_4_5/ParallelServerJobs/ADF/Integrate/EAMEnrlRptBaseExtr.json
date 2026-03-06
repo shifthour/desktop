@@ -1,0 +1,95 @@
+{
+  "name": "EAMEnrlRptBaseExtr",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "parameters": {
+      "RUNID": {
+        "type": "String"
+      },
+      "CurrDt": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "EAMEnrlRptBaseExtr_Copy",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_base AS ( SELECT t.TransID AS TRANS_ID, t.TransCode AS TRANS_CODE, ts.Description AS TRANS_STATUS, t.MemCodNum AS MEMBER_CD_NUM, ISNULL(t.ReplyCodes,' ') AS CMS_RESEPONSE_CD, cd.ShortDefinition AS CMS_RESPONSE_SHORTDESC, m.MemberID AS MEMBER_ID, t.HIC AS MBI, t.PlanID AS PLAN_ID, p.PlanName AS PLAN_NM, t.PBPID AS PBP_ID, mi.LastName AS LAST_NAME, mi.FirstName AS FIRST_NAME, mi.MI AS MIDDLE_INIT, mi.SCC1 AS COUNTY_CD, mi.State AS STATE_CD, es.Description AS MEDIA_SOURCE, CASE WHEN t.TransCode!='76' THEN t.EffectiveDate ELSE ta.EffectiveDateAddress END AS EFF_DT, CASE WHEN m.ProgramSource<>2 THEN 'ACTIVE' ELSE 'CONVERTED ACTIVE' END AS MEMBER_STATUS, t.ApplicationDate AS PLAN_RECEIPT_DT, t.DateCreated AS TMG_RECEIPT_DT, t.ReceiptDate AS APPLICATION_DT, t.DateSubmitted AS CMS_SUBMISSION_DT, t.FinalResponseDate AS FINAL_RESPONSE_DT, l.txtCodeValue AS PROGRAM_SOURCE, t.CompleteDate AS RFI_COMPLETE_DT, r.Description AS DISENROLL_REASON, t.CMSResponse AS CMS_RESPONSE_TYPE, sr.Repname AS SALES_REP_NAME, sr.SalesRepID AS SALES_REP_ID, t.ForceDenyApp, t.Incomplete FROM @{pipeline().globalParameters.gbl_param_EAMOwner}.tbTransactions t JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbEENRLMembers m ON m.MemCodNum=t.MemCodNum JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbMemberInfo mi ON mi.MemCodNum=m.MemCodNum JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbPlans p ON t.PlanID=p.PlanID LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbTransactionAddress ta ON t.TransID=ta.TransID LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbTRRCode cd ON t.ReplyCodes=cd.Code LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbTransStatus ts ON t.TransStatus=ts.Status LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbEnrollmentSources es ON t.EnrollSource=es.EnrollSourceID LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbDisenrollReasons r ON r.DisenrolCode=CONVERT(varchar(20),t.DisenrollmentReason) LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbLookup l ON l.txtCode=t.ProgramSource AND l.txtTable='tbTransactions' AND l.txtColumn='ProgramSource' LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.tbENRLSpans sp ON t.MemCodNum=sp.MemCodNum AND t.PlanID=sp.PlanID AND t.PBPID=sp.Value AND t.EffectiveDate BETWEEN sp.StartDate AND sp.EndDate LEFT JOIN @{pipeline().globalParameters.gbl_param_EAMOwner}.SalesReps sr ON t.SalesRepID=sr.SalesRepID WHERE t.EffectiveDate>='2020-10-01' AND (t.ReceiptDate IS NULL OR t.ReceiptDate>='2020-10-01') ), cte_brules AS ( SELECT cte_base.*, LTRIM(RTRIM(COALESCE(cte_base.TRANS_CODE,''))) AS svTransCd, LTRIM(RTRIM(COALESCE(cte_base.TRANS_STATUS,''))) AS svTransStatus, LTRIM(RTRIM(COALESCE(cte_base.CMS_RESEPONSE_CD,''))) AS svCmsRespCd, LTRIM(RTRIM(COALESCE(cte_base.CMS_RESPONSE_SHORTDESC,''))) AS svCmsRespDesc, LTRIM(RTRIM(COALESCE(cte_base.MBI,''))) AS svMBI, LTRIM(RTRIM(COALESCE(cte_base.PLAN_ID,''))) AS svPlanID, LTRIM(RTRIM(COALESCE(cte_base.PLAN_NM,''))) AS svPlanName, LTRIM(RTRIM(COALESCE(cte_base.PBP_ID,''))) AS svPbpID, LTRIM(RTRIM(COALESCE(cte_base.LAST_NAME,''))) AS svLName, LTRIM(RTRIM(COALESCE(cte_base.FIRST_NAME,''))) AS svFName, LTRIM(RTRIM(COALESCE(cte_base.MIDDLE_INIT,''))) AS svMI, LTRIM(RTRIM(COALESCE(cte_base.COUNTY_CD,''))) AS svCnty, LTRIM(RTRIM(COALESCE(cte_base.STATE_CD,''))) AS svSt, LTRIM(RTRIM(COALESCE(cte_base.MEDIA_SOURCE,''))) AS svMediaSrc, LTRIM(RTRIM(COALESCE(cte_base.MEMBER_STATUS,''))) AS svMbrSts, LTRIM(RTRIM(COALESCE(cte_base.PROGRAM_SOURCE,''))) AS svPrgmSrc, LTRIM(RTRIM(COALESCE(cte_base.DISENROLL_REASON,''))) AS svDisEnrollRsn FROM cte_base ), cte_final AS ( SELECT cte_brules.TRANS_ID AS TRANS_ID, cte_brules.svTransCd AS TRANS_CODE, cte_brules.svTransStatus AS TRANS_STATUS, cte_brules.MEMBER_CD_NUM AS MEMBER_CD_NUM, cte_brules.svCmsRespCd AS CMS_RESPONSE_CD, cte_brules.svCmsRespDesc AS CMS_RESPONSE_SHORTDESC, LTRIM(RTRIM(cte_brules.MEMBER_ID)) AS MEMBER_ID, cte_brules.svMBI AS MBI, cte_brules.svPlanID AS PLAN_ID, cte_brules.svPlanName AS PLAN_NM, cte_brules.svPbpID AS PBP_ID, cte_brules.svLName AS LAST_NAME, cte_brules.svFName AS FIRST_NAME, cte_brules.svMI AS MIDDLE_INIT, cte_brules.svCnty AS COUNTY_CD, cte_brules.svSt AS STATE_CD, cte_brules.svMediaSrc AS MEDIA_SOURCE, CASE WHEN cte_brules.EFF_DT IS NULL THEN NULL ELSE CAST(cte_brules.EFF_DT AS date) END AS EFF_DT, NULL AS TERM_DT, cte_brules.svMbrSts AS MEMBER_STATUS, CASE WHEN cte_brules.PLAN_RECEIPT_DT IS NULL THEN NULL ELSE CAST(cte_brules.PLAN_RECEIPT_DT AS date) END AS PLAN_RECEIPT_DT, CASE WHEN cte_brules.TMG_RECEIPT_DT IS NULL THEN NULL ELSE CAST(cte_brules.TMG_RECEIPT_DT AS date) END AS TMG_RECEIPT_DT, CASE WHEN cte_brules.APPLICATION_DT IS NULL THEN NULL ELSE CAST(cte_brules.APPLICATION_DT AS date) END AS APPLICATION_DT, CASE WHEN cte_brules.CMS_SUBMISSION_DT IS NULL THEN NULL ELSE CAST(cte_brules.CMS_SUBMISSION_DT AS date) END AS CMS_SUBMISSION_DT, NULL AS CONFIRMED_ENROLLMENT_DT, NULL AS CONFIRMED_PLAN_CHANGE_DT, CASE WHEN cte_brules.FINAL_RESPONSE_DT IS NULL THEN NULL ELSE CAST(cte_brules.FINAL_RESPONSE_DT AS date) END AS FINAL_RESPONSE_DT, NULL AS ACK_ENROLLMENT_DT, cte_brules.svPrgmSrc AS PROGRAM_SOURCE, 'OEC / CMS' AS APPLICATION_DESC, NULL AS RFI_ENROLLMENT_DT, NULL AS NOTICE_RETIREE_DRUG_SUBSIDY_DT, NULL AS ENROLLMENT_DENIAL_DT, NULL AS ENROLLMENT_REJECTION_DT, NULL AS ACK_DISENROLL_DT, NULL AS RFI_DISENROLL_DT, NULL AS CONFIRMED_DISENROLL_DT, NULL AS DENIAL_DISENROLL_DT, NULL AS REJECTION_DISENROLL_DT, NULL AS CONFIRMED_DISENROLL_PASSIVE_DT, NULL AS CORRECTION_OF_DEATH_STATUS_DT, NULL AS INVOLUNTARY_DISENROLL_DT, NULL AS ACK_CANCEL_ENROLL_DT, NULL AS CONFIRMED_REINSTATEMENT_DT, NULL AS CONFIRMED_CANCEL_ENROLL_DT, NULL AS ACK_CANCEL_DISENROLL_DT, NULL AS ENROLLMENT_STATUS_UPDATE_DT, NULL AS DISENROLL_INCARCERATION_DT, NULL AS MBR_ID_CARD_DT, cte_brules.svDisEnrollRsn AS DISENROLL_REASON, CAST('@{pipeline().parameters.CurrDt}' AS date) AS PROCESS_RUN_DT, CASE WHEN LTRIM(RTRIM(COALESCE(cte_brules.CMS_RESPONSE_TYPE,'')))='' THEN NULL ELSE LTRIM(RTRIM(cte_brules.CMS_RESPONSE_TYPE)) END AS CMS_RESPONSE_TYPE, CASE WHEN LTRIM(RTRIM(COALESCE(cte_brules.SALES_REP_NAME,'')))='' THEN NULL ELSE LTRIM(RTRIM(cte_brules.SALES_REP_NAME)) END AS SALES_REP_NAME, cte_brules.SALES_REP_ID AS SALES_REP_ID, cte_brules.ForceDenyApp AS FRC_DNY_APP_IND, cte_brules.Incomplete AS INCMPLT_IND FROM cte_brules ), cte_rmdup AS ( SELECT cte_final.*, ROW_NUMBER() OVER (PARTITION BY cte_final.TRANS_ID ORDER BY cte_final.TRANS_ID) AS rn FROM cte_final ) SELECT TRANS_ID, TRANS_CODE, TRANS_STATUS, MEMBER_CD_NUM, CMS_RESPONSE_CD, CMS_RESPONSE_SHORTDESC, MEMBER_ID, MBI, PLAN_ID, PLAN_NM, PBP_ID, LAST_NAME, FIRST_NAME, MIDDLE_INIT, COUNTY_CD, STATE_CD, MEDIA_SOURCE, EFF_DT, TERM_DT, MEMBER_STATUS, PLAN_RECEIPT_DT, TMG_RECEIPT_DT, APPLICATION_DT, CMS_SUBMISSION_DT, CONFIRMED_ENROLLMENT_DT, CONFIRMED_PLAN_CHANGE_DT, FINAL_RESPONSE_DT, ACK_ENROLLMENT_DT, PROGRAM_SOURCE, APPLICATION_DESC, RFI_ENROLLMENT_DT, NOTICE_RETIREE_DRUG_SUBSIDY_DT, ENROLLMENT_DENIAL_DT, ENROLLMENT_REJECTION_DT, ACK_DISENROLL_DT, RFI_DISENROLL_DT, CONFIRMED_DISENROLL_DT, DENIAL_DISENROLL_DT, REJECTION_DISENROLL_DT, CONFIRMED_DISENROLL_PASSIVE_DT, CORRECTION_OF_DEATH_STATUS_DT, INVOLUNTARY_DISENROLL_DT, ACK_CANCEL_ENROLL_DT, CONFIRMED_REINSTATEMENT_DT, CONFIRMED_CANCEL_ENROLL_DT, ACK_CANCEL_DISENROLL_DT, ENROLLMENT_STATUS_UPDATE_DT, DISENROLL_INCARCERATION_DT, MBR_ID_CARD_DT, DISENROLL_REASON, PROCESS_RUN_DT, CMS_RESPONSE_TYPE, SALES_REP_NAME, SALES_REP_ID, FRC_DNY_APP_IND, INCMPLT_IND FROM cte_rmdup WHERE rn=1",
+              "type": "Expression"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "facets_primary",
+            "type": "LinkedServiceReference"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_facets_primary",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EAMOwner}",
+              "param_table": "tbTransactions"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/TraceabilityReporting/EnrollmetOperations/load')",
+              "param_filename": "@concat('EAM_ENRL_OPS_LOAD.',pipeline().parameters.RUNID,'.dat')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/TraceabilityReporting/EnrollmetOperations"
+    }
+  },
+  "Description": "Calling Job: EAMEnrollmentOpsRptCntl\n\nThis Job extracts data from EAM and other databases to attach the attributes for Enrollment Operations Reportcordingly.\nMODIFICATIONS:\n\n================================================================================================================================================================================================\nDeveloper                          Date                           Project/Altiris #                              Change Description                                                                                     \t\tDevelopment Project\t\tReviewer                     Review Date\n================================================================================================================================================================================================\nReddySanam               2021-03-03                  US352961                                        Original Programming                                                                                       \t\tIntegrateDev2\t\tJeyaprasanna\t2021-03-04\nReddy Sanam              2021-03-17                  US359435                                   Removed requirement specific filter Criteria for ER001 and ER002                       \tIntegrateDev2\t\tJeyaprasanna\t2021-03-19\n                                                                                                                             Updated the source Query to include also rows with t.receipt date is null\nReddy Sanam             2021-04-14                   US366274                                    Added additional field CMSResponse in the select query in odbc connector\t\t\t\tKen Bradmon\t2021-04-14    \n\nReddy                        2021-04-19                    US366274                                  Added SALES_REP_NAME and SALES_REP_ID in the source query                      IntegrateDev2                         Jeyaprasanna           2021-04-20\nReddy Sanam            2021-08-04                    US384030                                  Added 2 additional columns to metadata                                                                     IntegrateDev2                         Goutham K                2021-08-04    \n                                                                                                                            INCMPLT_IND, FRC_DNY_APP_IND\n\nAnnotations:\nThis Job extracts data from EAM and other databases to attach the attributes for Enrollment Operations Report\nWhen a member enrolls, retain the first trasaction id(lower number) since that record is conuted for Numbr of days for compliance\nRemove the Duplicates on TRANS_ID"
+}

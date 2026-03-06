@@ -1,0 +1,1088 @@
+schema,function_name,function_definition
+public,auto_seed_field_configs_on_company_create,"CREATE OR REPLACE FUNCTION public.auto_seed_field_configs_on_company_create()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    PERFORM seed_account_field_configurations(NEW.id);
+    RETURN NEW;
+END;
+$function$
+"
+public,create_notification,"CREATE OR REPLACE FUNCTION public.create_notification(p_user_id uuid DEFAULT NULL::uuid, p_company_id uuid DEFAULT NULL::uuid, p_title text DEFAULT NULL::text, p_message text DEFAULT NULL::text, p_type text DEFAULT 'info'::text, p_entity_type text DEFAULT NULL::text, p_entity_id uuid DEFAULT NULL::uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    notification_id UUID;
+BEGIN
+    INSERT INTO notifications (
+        user_id,
+        company_id,
+        title,
+        message,
+        type,
+        entity_type,
+        entity_id
+    ) VALUES (
+        p_user_id,
+        p_company_id,
+        p_title,
+        p_message,
+        p_type,
+        p_entity_type,
+        p_entity_id
+    ) RETURNING id INTO notification_id;
+    
+    RETURN notification_id;
+END;
+$function$
+"
+public,ensure_daily_stats,"CREATE OR REPLACE FUNCTION public.ensure_daily_stats()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    INSERT INTO jc_daily_stats (operator_id, stat_date)
+    VALUES (NEW.operator_id, CURRENT_DATE)
+    ON CONFLICT (operator_id, stat_date) DO NOTHING;
+    RETURN NEW;
+END;
+$function$
+"
+public,generate_account_id,"CREATE OR REPLACE FUNCTION public.generate_account_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF NEW.account_id IS NULL OR NEW.account_id = '' THEN
+        NEW.account_id := 'ACC-' || TO_CHAR(NOW(), 'YYYY') || '-' ||
+                          LPAD(NEXTVAL('accounts_seq')::TEXT, 4, '0');
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,generate_amc_number,"CREATE OR REPLACE FUNCTION public.generate_amc_number()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF NEW.amc_number IS NULL OR NEW.amc_number = '' THEN
+        NEW.amc_number := 'AMC-' || TO_CHAR(NOW(), 'YYYY') || '-' || 
+                         LPAD((
+                             SELECT COALESCE(MAX(CAST(SUBSTRING(amc_number FROM 'AMC-\d{4}-(\d+)') AS INTEGER)), 0) + 1
+                             FROM amc_contracts 
+                             WHERE amc_number ~ '^AMC-\d{4}-\d+$'
+                             AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())
+                         )::TEXT, 4, '0');
+    END IF;
+    
+    IF TG_OP = 'UPDATE' THEN
+        NEW.updated_at := NOW();
+    END IF;
+    
+    RETURN NEW;
+END;
+$function$
+"
+public,generate_contact_id,"CREATE OR REPLACE FUNCTION public.generate_contact_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  next_id INTEGER;
+  new_contact_id VARCHAR(50);
+BEGIN
+  -- Get the next sequence number for this company
+  SELECT COALESCE(MAX(CAST(SUBSTRING(contact_id FROM 6) AS INTEGER)), 0) + 1
+  INTO next_id
+  FROM contacts
+  WHERE company_id = NEW.company_id;
+
+  -- Generate the contact ID (e.g., CONT-001)
+  new_contact_id := 'CONT-' || LPAD(next_id::TEXT, 3, '0');
+
+  NEW.contact_id := new_contact_id;
+  RETURN NEW;
+END;
+$function$
+"
+public,generate_entry_number,"CREATE OR REPLACE FUNCTION public.generate_entry_number(p_entry_type character varying, p_company_id uuid)
+ RETURNS character varying
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_prefix VARCHAR;
+    v_year VARCHAR;
+    v_next_number INTEGER;
+    v_result VARCHAR;
+BEGIN
+    -- Set prefix based on entry type
+    v_prefix := CASE
+        WHEN p_entry_type = 'inward' THEN 'INW'
+        WHEN p_entry_type = 'outward' THEN 'OUT'
+        ELSE 'STK'
+    END;
+
+    -- Get current year
+    v_year := TO_CHAR(CURRENT_DATE, 'YYYY');
+
+    -- Get next number for this type and year (using table alias 'se')
+    SELECT COALESCE(MAX(CAST(SPLIT_PART(se.entry_number, '-', 3) AS INTEGER)), 0) + 1
+    INTO v_next_number
+    FROM stock_entries se
+    WHERE se.company_id = p_company_id
+    AND se.entry_type = p_entry_type
+    AND se.entry_number LIKE v_prefix || '-' || v_year || '-%';
+
+    -- Format: INW-2025-001 or OUT-2025-001
+    v_result := v_prefix || '-' || v_year || '-' || LPAD(v_next_number::TEXT, 3, '0');
+
+    RETURN v_result;
+END;
+$function$
+"
+public,generate_installation_number,"CREATE OR REPLACE FUNCTION public.generate_installation_number()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      IF NEW.installation_number IS NULL OR NEW.installation_number = '' THEN
+          NEW.installation_number := 'INST-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(NEXTVAL('installation_number_seq')::TEXT, 6, '0');
+      END IF;
+      RETURN NEW;
+  END;
+  $function$
+"
+public,get_deal_products,"CREATE OR REPLACE FUNCTION public.get_deal_products(deal_uuid uuid)
+ RETURNS TABLE(id uuid, product_id uuid, product_name text, quantity integer, price_per_unit numeric, total_amount numeric, notes text)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        dp.id,
+        dp.product_id,
+        dp.product_name,
+        dp.quantity,
+        dp.price_per_unit,
+        dp.total_amount,
+        dp.notes
+    FROM deal_products dp
+    WHERE dp.deal_id = deal_uuid
+    ORDER BY dp.created_at;
+END;
+$function$
+"
+public,get_lead_products,"CREATE OR REPLACE FUNCTION public.get_lead_products(lead_uuid uuid)
+ RETURNS TABLE(id uuid, product_id uuid, product_name text, quantity integer, price_per_unit numeric, total_amount numeric, notes text)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        lp.id,
+        lp.product_id,
+        lp.product_name,
+        lp.quantity,
+        lp.price_per_unit,
+        lp.total_amount,
+        lp.notes
+    FROM lead_products lp
+    WHERE lp.lead_id = lead_uuid
+    ORDER BY lp.created_at;
+END;
+$function$
+"
+public,get_next_assignee,"CREATE OR REPLACE FUNCTION public.get_next_assignee()
+ RETURNS uuid
+ LANGUAGE plpgsql
+AS $function$
+  DECLARE
+      next_user_id UUID;
+      last_user_id UUID;
+  BEGIN
+      -- Get the last assigned user
+      SELECT last_assigned_user_id INTO last_user_id
+      FROM flatrix_lead_rotation
+      WHERE id = '00000000-0000-0000-0000-000000000001';
+
+      -- Get the next active user in rotation (AGENT role only)
+      -- Order by created_at to maintain consistent order
+      SELECT id INTO next_user_id
+      FROM flatrix_users
+      WHERE is_active = true
+        AND role = 'AGENT'
+        AND (
+          -- If we have a last_user_id, get the next one after it
+          (last_user_id IS NOT NULL AND created_at > (SELECT created_at FROM flatrix_users WHERE id = last_user_id))
+          -- Or if last_user_id is null, get the first one
+          OR last_user_id IS NULL
+        )
+      ORDER BY created_at ASC
+      LIMIT 1;
+
+      -- If no user found (we've reached the end), loop back to the first user
+      IF next_user_id IS NULL THEN
+          SELECT id INTO next_user_id
+          FROM flatrix_users
+          WHERE is_active = true
+            AND role = 'AGENT'
+          ORDER BY created_at ASC
+          LIMIT 1;
+      END IF;
+
+      -- Update the rotation tracker
+      IF next_user_id IS NOT NULL THEN
+          UPDATE flatrix_lead_rotation
+          SET last_assigned_user_id = next_user_id,
+              last_assignment_at = NOW(),
+              total_assignments = total_assignments + 1,
+              updated_at = NOW()
+          WHERE id = '00000000-0000-0000-0000-000000000001';
+      END IF;
+
+      RETURN next_user_id;
+  END;
+  $function$
+"
+public,is_super_admin,"CREATE OR REPLACE FUNCTION public.is_super_admin()
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+  DECLARE
+    is_super BOOLEAN := false;
+  BEGIN
+    SELECT users.is_super_admin INTO is_super
+    FROM users
+    WHERE users.id = auth.uid()
+    LIMIT 1;
+
+    RETURN COALESCE(is_super, false);
+  EXCEPTION
+    WHEN others THEN
+      RETURN false;
+  END;
+  $function$
+"
+public,log_account_activity,"CREATE OR REPLACE FUNCTION public.log_account_activity()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO account_activities(account_id, user_id, activity_type, description, new_value)
+        VALUES (NEW.id, auth.uid(), 'created', 'Account created', to_jsonb(NEW));
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO account_activities(account_id, user_id, activity_type, description, old_value, new_value)
+        VALUES (NEW.id, auth.uid(), 'updated', 'Account updated', to_jsonb(OLD), to_jsonb(NEW));
+    END IF;
+    RETURN NEW;
+END;
+$function$
+"
+public,log_conversion_status_change,"CREATE OR REPLACE FUNCTION public.log_conversion_status_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      -- Only log if conversion_status actually changed
+      IF (OLD.conversion_status IS DISTINCT FROM NEW.conversion_status) THEN
+          INSERT INTO flatrix_conversion_history (
+              deal_id,
+              lead_id,
+              previous_status,
+              new_status,
+              changed_at,
+              conversion_date,
+              notes
+          ) VALUES (
+              NEW.id,
+              NEW.lead_id,
+              OLD.conversion_status,
+              NEW.conversion_status,
+              NOW(),
+              NEW.conversion_date,
+              CASE
+                  WHEN NEW.conversion_status = 'BOOKED' THEN 'Customer booked the flat'
+                  WHEN NEW.conversion_status = 'NOT_BOOKED' THEN 'Customer decided not to book'
+                  WHEN NEW.conversion_status = 'CANCELLED' THEN 'Booking was cancelled'
+                  WHEN NEW.conversion_status = 'PENDING' THEN 'Status reset to pending'
+                  ELSE 'Status changed'
+              END
+          );
+      END IF;
+
+      RETURN NEW;
+  END;
+  $function$
+"
+public,process_stock_entry_approval,"CREATE OR REPLACE FUNCTION public.process_stock_entry_approval()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_item RECORD;
+    v_quantity_change INTEGER;
+    v_quantity_before INTEGER;
+    v_quantity_after INTEGER;
+BEGIN
+    -- Only process when status changes to 'approved' or 'completed'
+    IF NEW.status IN ('approved', 'completed') AND OLD.status NOT IN ('approved', 'completed') THEN
+
+        -- Loop through all items in this stock entry
+        FOR v_item IN
+            SELECT * FROM stock_entry_items WHERE stock_entry_id = NEW.id
+        LOOP
+            -- Get current stock quantity
+            SELECT stock_quantity INTO v_quantity_before
+            FROM products
+            WHERE id = v_item.product_id;
+
+            -- Calculate quantity change based on entry type
+            IF NEW.entry_type = 'inward' THEN
+                v_quantity_change := v_item.quantity;
+            ELSIF NEW.entry_type = 'outward' THEN
+                v_quantity_change := -v_item.quantity;
+            ELSE
+                v_quantity_change := 0;
+            END IF;
+
+            -- Update product stock AND bin_location (for inward entries)
+            IF NEW.entry_type = 'inward' AND v_item.bin_location IS NOT NULL THEN
+                UPDATE products
+                SET stock_quantity = COALESCE(stock_quantity, 0) + v_quantity_change,
+                    bin_location = v_item.bin_location,
+                    updated_at = NOW()
+                WHERE id = v_item.product_id
+                RETURNING stock_quantity INTO v_quantity_after;
+            ELSE
+                UPDATE products
+                SET stock_quantity = COALESCE(stock_quantity, 0) + v_quantity_change,
+                    updated_at = NOW()
+                WHERE id = v_item.product_id
+                RETURNING stock_quantity INTO v_quantity_after;
+            END IF;
+
+            -- Create transaction record
+            INSERT INTO stock_transactions (
+                company_id,
+                product_id,
+                stock_entry_id,
+                stock_entry_item_id,
+                transaction_type,
+                transaction_date,
+                quantity_change,
+                quantity_before,
+                quantity_after,
+                unit_cost,
+                value_change,
+                reference_type,
+                reference_number,
+                performed_by,
+                remarks
+            ) VALUES (
+                NEW.company_id,
+                v_item.product_id,
+                NEW.id,
+                v_item.id,
+                NEW.entry_type,
+                NEW.entry_date,
+                v_quantity_change,
+                COALESCE(v_quantity_before, 0),
+                COALESCE(v_quantity_after, 0),
+                v_item.unit_price,
+                v_item.total_price * (CASE WHEN NEW.entry_type = 'inward' THEN 1 ELSE -1 END),
+                NEW.reference_type,
+                NEW.reference_number,
+                NEW.approved_by,
+                NEW.remarks
+            );
+
+        END LOOP;
+
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,reverse_product_stock,"CREATE OR REPLACE FUNCTION public.reverse_product_stock()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_quantity_change INTEGER;
+    v_stock_entry RECORD;
+BEGIN
+    -- Get stock entry details
+    SELECT * INTO v_stock_entry FROM stock_entries WHERE id = OLD.stock_entry_id;
+
+    -- Only reverse if stock entry was approved/completed
+    IF v_stock_entry.status NOT IN ('approved', 'completed') THEN
+        RETURN OLD;
+    END IF;
+
+    -- Calculate reverse quantity change
+    IF v_stock_entry.entry_type = 'inward' THEN
+        v_quantity_change := -OLD.quantity;
+    ELSIF v_stock_entry.entry_type = 'outward' THEN
+        v_quantity_change := OLD.quantity;
+    END IF;
+
+    -- Update product stock
+    UPDATE products
+    SET stock_quantity = stock_quantity + v_quantity_change
+    WHERE id = OLD.product_id;
+
+    RETURN OLD;
+END;
+$function$
+"
+public,reverse_stock_entry,"CREATE OR REPLACE FUNCTION public.reverse_stock_entry()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_item RECORD;
+    v_quantity_change INTEGER;
+BEGIN
+    -- Only reverse if entry was approved/completed
+    IF OLD.status IN ('approved', 'completed') THEN
+
+        -- Loop through all items and reverse the stock changes
+        FOR v_item IN
+            SELECT * FROM stock_entry_items WHERE stock_entry_id = OLD.id
+        LOOP
+            -- Calculate reverse quantity change
+            IF OLD.entry_type = 'inward' THEN
+                v_quantity_change := -v_item.quantity;
+            ELSIF OLD.entry_type = 'outward' THEN
+                v_quantity_change := v_item.quantity;
+            ELSE
+                v_quantity_change := 0;
+            END IF;
+
+            -- Update product stock (reverse the change)
+            UPDATE products
+            SET stock_quantity = COALESCE(stock_quantity, 0) + v_quantity_change,
+                updated_at = NOW()
+            WHERE id = v_item.product_id;
+
+        END LOOP;
+
+    END IF;
+
+    RETURN OLD;
+END;
+$function$
+"
+public,seed_account_field_configurations,"CREATE OR REPLACE FUNCTION public.seed_account_field_configurations(target_company_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Delete existing configurations for this company (if reseeding)
+    DELETE FROM account_field_configurations WHERE company_id = target_company_id;
+
+    -- ==========================================
+    -- MANDATORY FIELDS (9 fields - always enabled)
+    -- ==========================================
+
+    -- 1. Account ID (auto-generated)
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder, help_text
+    ) VALUES (
+        target_company_id, 'account_id', 'Account ID', 'text', true, true,
+        'basic_info', 1, 'Auto-generated', 'Unique system identifier'
+    );
+
+    -- 2. Account Name
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder
+    ) VALUES (
+        target_company_id, 'account_name', 'Account Name', 'text', true, true,
+        'basic_info', 2, 'Enter company name'
+    );
+
+    -- 3. Headquarters Address
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder
+    ) VALUES (
+        target_company_id, 'headquarters_address', 'Headquarters Address', 'textarea', true, true,
+        'addresses', 3, 'Enter HQ address'
+    );
+
+    -- 4. Main Phone
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder
+    ) VALUES (
+        target_company_id, 'main_phone', 'Main Phone', 'tel', true, true,
+        'contact', 4, '+91 9876543210'
+    );
+
+    -- 5. Customer Segment
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, field_options, help_text
+    ) VALUES (
+        target_company_id, 'customer_segment', 'Customer Segment', 'select', true, true,
+        'basic_info', 5,
+        '[""Government"", ""Academic"", ""Healthcare_Public"", ""Healthcare_Private"", ""Pharma"", ""Biotech"", ""Manufacturing"", ""Research_Private""]'::jsonb,
+        'Primary customer segment'
+    );
+
+    -- 6. Account Type
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, field_options, help_text
+    ) VALUES (
+        target_company_id, 'account_type', 'Account Type', 'select', true, true,
+        'basic_info', 6,
+        '[""Govt Industry"", ""Govt Institution"", ""Private Industry"", ""Private Institution""]'::jsonb,
+        'Primary business role'
+    );
+
+    -- 7. Account Industry (cascading dropdown)
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, field_options, help_text
+    ) VALUES (
+        target_company_id, 'acct_industry', 'Account Industry', 'select', true, true,
+        'basic_info', 7,
+        '[""Research"", ""Pharma Biopharma"", ""Chemicals Petrochemicals"", ""Healthcare Diagnostics"", ""Instrument Manufacturing"", ""Environmental Testing"", ""Education"", ""Forensics"", ""Testing Labs""]'::jsonb,
+        'Primary industry'
+    );
+
+    -- 8. Account Sub-Industry (dependent on industry)
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, help_text
+    ) VALUES (
+        target_company_id, 'acct_sub_industry', 'Account Sub-Industry', 'select_dependent', true, true,
+        'basic_info', 8,
+        'Specific sub-category'
+    );
+
+    -- 9. Account Status
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, field_options, help_text
+    ) VALUES (
+        target_company_id, 'account_status', 'Account Status', 'select', true, true,
+        'basic_info', 9,
+        '[""Active"", ""Inactive"", ""Prospect"", ""Customer"", ""Suspended""]'::jsonb,
+        'Current status'
+    );
+
+    -- ==========================================
+    -- OPTIONAL FIELDS (can be toggled by admin)
+    -- ==========================================
+
+    -- BASIC INFO SECTION (Additional)
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder
+    ) VALUES
+    (target_company_id, 'preferred_language', 'Preferred Language', 'select', false, true, 'basic_info', 10,
+        'Select language'),
+    (target_company_id, 'description', 'Description', 'textarea', false, true, 'basic_info', 11,
+        'Account description or notes');
+
+    -- Update field options for preferred_language
+    UPDATE account_field_configurations
+    SET field_options = '[""English"", ""Hindi"", ""Kannada"", ""Tamil"", ""Telugu"", ""Marathi""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'preferred_language';
+
+    -- ADDRESSES SECTION
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder, help_text
+    ) VALUES
+    (target_company_id, 'shipping_address', 'Shipping Address', 'textarea', false, true, 'addresses', 20,
+        'Complete shipping address', 'Shipping address'),
+    (target_company_id, 'shipping_street', 'Shipping Street', 'text', false, true, 'addresses', 21,
+        'Street line 1', 'Street address line 1'),
+    (target_company_id, 'shipping_street2', 'Shipping Street 2', 'text', false, true, 'addresses', 22,
+        'Street line 2', 'Street address line 2'),
+    (target_company_id, 'shipping_city', 'Shipping City', 'text', false, true, 'addresses', 23,
+        'City', 'Shipping city'),
+    (target_company_id, 'shipping_state', 'Shipping State', 'text', false, true, 'addresses', 24,
+        'State/Province', 'Shipping state'),
+    (target_company_id, 'shipping_country', 'Shipping Country', 'select', false, true, 'addresses', 25,
+        'Select country', 'Shipping country'),
+    (target_company_id, 'shipping_postal_code', 'Shipping Postal Code', 'text', false, true, 'addresses', 26,
+        'Postal/Zip code', 'Postal code'),
+
+    (target_company_id, 'billing_address', 'Billing Address', 'textarea', false, true, 'addresses', 30,
+        'Complete billing address', 'Billing address'),
+    (target_company_id, 'billing_street', 'Billing Street', 'text', false, true, 'addresses', 31,
+        'Street line 1', 'Billing street'),
+    (target_company_id, 'billing_street2', 'Billing Street 2', 'text', false, true, 'addresses', 32,
+        'Street line 2', 'Billing street line 2'),
+    (target_company_id, 'billing_city', 'Billing City', 'text', false, true, 'addresses', 33,
+        'City', 'Billing city'),
+    (target_company_id, 'billing_state', 'Billing State', 'text', false, true, 'addresses', 34,
+        'State/Province', 'Billing state'),
+    (target_company_id, 'billing_country', 'Billing Country', 'select', false, true, 'addresses', 35,
+        'Select country', 'Billing country'),
+    (target_company_id, 'billing_postal_code', 'Billing Postal Code', 'text', false, true, 'addresses', 36,
+        'Postal/Zip code', 'Billing postal code');
+
+    -- Update country options
+    UPDATE account_field_configurations
+    SET field_options = '[""India"", ""USA"", ""UK"", ""Singapore"", ""UAE"", ""Germany"", ""Australia""]'::jsonb
+    WHERE company_id = target_company_id AND field_name IN ('shipping_country', 'billing_country');
+
+    -- CONTACT SECTION
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder, help_text
+    ) VALUES
+    (target_company_id, 'primary_email', 'Primary Email', 'email', false, true, 'contact', 40,
+        'contact@company.com', 'Primary email'),
+    (target_company_id, 'preferred_contact_method', 'Preferred Contact Method', 'select', false, true, 'contact', 41,
+        'How to contact', 'Preferred contact method'),
+    (target_company_id, 'email_opt_in', 'Email Opt-In', 'select', false, true, 'contact', 42,
+        'Email opt-in status', 'Email marketing opt-in'),
+    (target_company_id, 'alternate_phone', 'Alternate Phone', 'tel', false, true, 'contact', 43,
+        'Alternate phone', 'Secondary phone'),
+    (target_company_id, 'website', 'Website', 'url', false, true, 'contact', 44,
+        'https://company.com', 'Website URL');
+
+    -- Update options for contact fields
+    UPDATE account_field_configurations
+    SET field_options = '[""Email"", ""Phone"", ""WhatsApp"", ""In-Person""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'preferred_contact_method';
+
+    UPDATE account_field_configurations
+    SET field_options = '[""Opted In"", ""Opted Out"", ""Not Set""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'email_opt_in';
+
+    -- BUSINESS DETAILS SECTION
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder, help_text
+    ) VALUES
+    (target_company_id, 'territory', 'Territory', 'select', false, true, 'business_details', 50,
+        'Sales territory', 'Sales region'),
+    (target_company_id, 'communication_frequency', 'Communication Frequency', 'select', false, true, 'business_details', 51,
+        'Frequency', 'Communication frequency'),
+    (target_company_id, 'communication_channel', 'Communication Channel', 'select', false, true, 'business_details', 52,
+        'Channel', 'Communication channel'),
+    (target_company_id, 'organization_size', 'Organization Size', 'select', false, true, 'business_details', 53,
+        'Employee count', 'Organization size'),
+    (target_company_id, 'vendor_qualification', 'Vendor Qualification', 'select', false, true, 'business_details', 54,
+        'Qualification status', 'Vendor qualification');
+
+    -- Update options for business fields
+    UPDATE account_field_configurations
+    SET field_options = '[""North"", ""South"", ""East"", ""West"", ""Central"", ""International""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'territory';
+
+    UPDATE account_field_configurations
+    SET field_options = '[""Weekly"", ""Bi-weekly"", ""Monthly"", ""Quarterly"", ""As Needed""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'communication_frequency';
+
+    UPDATE account_field_configurations
+    SET field_options = '[""Email"", ""Phone"", ""SMS"", ""WhatsApp"", ""In-Person"", ""Video Call""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'communication_channel';
+
+    UPDATE account_field_configurations
+    SET field_options = '[""1-50"", ""51-200"", ""201-500"", ""501-1000"", ""1000+""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'organization_size';
+
+    UPDATE account_field_configurations
+    SET field_options = '[""Qualified"", ""Not Qualified"", ""In Progress"", ""Not Required""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'vendor_qualification';
+
+    -- FINANCIAL SECTION
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder, help_text
+    ) VALUES
+    (target_company_id, 'tax_id_number', 'Tax ID Number', 'text', false, true, 'financial', 60,
+        'Tax ID', 'Tax identification number'),
+    (target_company_id, 'gstin', 'GSTIN', 'text', false, true, 'financial', 61,
+        'GST Number', 'GST identification'),
+    (target_company_id, 'pan_number', 'PAN Number', 'text', false, true, 'financial', 62,
+        'PAN', 'Permanent Account Number'),
+    (target_company_id, 'cin', 'CIN', 'text', false, true, 'financial', 63,
+        'Corporate ID', 'Corporate Identification Number'),
+    (target_company_id, 'udyam_registration', 'Udyam Registration', 'text', false, true, 'financial', 64,
+        'Udyam Number', 'MSME registration'),
+    (target_company_id, 'gem_seller_id', 'GeM Seller ID', 'text', false, true, 'financial', 65,
+        'GeM ID', 'Government e-Marketplace ID'),
+    (target_company_id, 'tax_classification', 'Tax Classification', 'select', false, true, 'financial', 66,
+        'Tax status', 'Tax classification'),
+    (target_company_id, 'preferred_currency', 'Preferred Currency', 'select', false, true, 'financial', 67,
+        'Currency', 'Preferred currency'),
+    (target_company_id, 'revenue_currency', 'Revenue Currency', 'select', false, true, 'financial', 68,
+        'Currency', 'Revenue currency'),
+    (target_company_id, 'annual_revenue', 'Annual Revenue', 'number', false, true, 'financial', 69,
+        '0', 'Annual revenue'),
+    (target_company_id, 'acc_budget_capacity', 'Budget Capacity', 'number', false, true, 'financial', 70,
+        '0', 'Budget capacity'),
+    (target_company_id, 'payment_terms', 'Payment Terms', 'select', false, true, 'financial', 71,
+        'Terms', 'Payment terms'),
+    (target_company_id, 'credit_limit', 'Credit Limit', 'number', false, true, 'financial', 72,
+        '0', 'Credit limit'),
+    (target_company_id, 'credit_status', 'Credit Status', 'select', false, true, 'financial', 73,
+        'Status', 'Credit status');
+
+    -- Update options for financial fields
+    UPDATE account_field_configurations
+    SET field_options = '[""Taxable"", ""Tax Exempt"", ""GST Registered"", ""Composition Scheme""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'tax_classification';
+
+    UPDATE account_field_configurations
+    SET field_options = '[""INR"", ""USD"", ""EUR"", ""GBP"", ""SGD"", ""AED""]'::jsonb
+    WHERE company_id = target_company_id AND field_name IN ('preferred_currency', 'revenue_currency');
+
+    UPDATE account_field_configurations
+    SET field_options = '[""Net 30"", ""Net 45"", ""Net 60"", ""Advance"", ""COD"", ""Custom""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'payment_terms';
+
+    UPDATE account_field_configurations
+    SET field_options = '[""Good"", ""Under Review"", ""Suspended"", ""Blocked""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'credit_status';
+
+    -- ADVANCED SECTION
+    INSERT INTO account_field_configurations (
+        company_id, field_name, field_label, field_type, is_mandatory, is_enabled,
+        field_section, display_order, placeholder, help_text
+    ) VALUES
+    (target_company_id, 'academic_affiliation', 'Academic Affiliation', 'text', false, true, 'advanced', 80,
+        'Academic institution', 'Academic affiliation'),
+    (target_company_id, 'grant_funding_source', 'Grant Funding Source', 'text', false, true, 'advanced', 81,
+        'Funding sources', 'Grant funding'),
+    (target_company_id, 'regulatory_authority', 'Regulatory Authority', 'text', false, true, 'advanced', 82,
+        'Regulatory body', 'Regulatory authority'),
+    (target_company_id, 'procurement_cycle', 'Procurement Cycle', 'select', false, true, 'advanced', 83,
+        'Cycle', 'Procurement cycle');
+
+    -- Update options for advanced fields
+    UPDATE account_field_configurations
+    SET field_options = '[""Monthly"", ""Quarterly"", ""Bi-Annually"", ""Annually"", ""As Needed""]'::jsonb
+    WHERE company_id = target_company_id AND field_name = 'procurement_cycle';
+
+END;
+$function$
+"
+public,update_account_modified_fields,"CREATE OR REPLACE FUNCTION public.update_account_modified_fields()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.last_modified_date := NOW();
+    NEW.last_modified_by_id := auth.uid();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_activities_updated_at,"CREATE OR REPLACE FUNCTION public.update_activities_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = TIMEZONE('utc'::text, NOW());
+    RETURN NEW;
+END;
+$function$
+"
+public,update_amc_contracts_updated_at,"CREATE OR REPLACE FUNCTION public.update_amc_contracts_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_cases_updated_at,"CREATE OR REPLACE FUNCTION public.update_cases_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_company_user_count,"CREATE OR REPLACE FUNCTION public.update_company_user_count()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+  BEGIN
+      IF TG_OP = 'INSERT' THEN
+          UPDATE companies
+          SET current_users = current_users + 1
+          WHERE id = NEW.company_id;
+          RETURN NEW;
+      ELSIF TG_OP = 'DELETE' THEN
+          UPDATE companies
+          SET current_users = current_users - 1
+          WHERE id = OLD.company_id;
+          RETURN OLD;
+      END IF;
+      RETURN NULL;
+  END;
+  $function$
+"
+public,update_complaints_updated_at,"CREATE OR REPLACE FUNCTION public.update_complaints_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$function$
+"
+public,update_deal_products,"CREATE OR REPLACE FUNCTION public.update_deal_products(deal_uuid uuid, products_data jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    product_item JSONB;
+BEGIN
+    -- Delete existing products for this deal
+    DELETE FROM deal_products WHERE deal_id = deal_uuid;
+    
+    -- Insert new products
+    FOR product_item IN SELECT * FROM jsonb_array_elements(products_data)
+    LOOP
+        INSERT INTO deal_products (
+            deal_id,
+            product_id,
+            product_name,
+            quantity,
+            price_per_unit,
+            notes
+        ) VALUES (
+            deal_uuid,
+            (product_item->>'product_id')::UUID,
+            product_item->>'product_name',
+            (product_item->>'quantity')::INTEGER,
+            (product_item->>'price_per_unit')::DECIMAL(15,2),
+            product_item->>'notes'
+        );
+    END LOOP;
+END;
+$function$
+"
+public,update_deals_updated_at,"CREATE OR REPLACE FUNCTION public.update_deals_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_document_folders_updated_at,"CREATE OR REPLACE FUNCTION public.update_document_folders_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_documents_updated_at,"CREATE OR REPLACE FUNCTION public.update_documents_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_folder_stats,"CREATE OR REPLACE FUNCTION public.update_folder_stats()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    -- Update folder statistics could be added here if needed
+    RETURN COALESCE(NEW, OLD);
+END;
+$function$
+"
+public,update_installations_updated_at,"CREATE OR REPLACE FUNCTION public.update_installations_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_lead_products,"CREATE OR REPLACE FUNCTION public.update_lead_products(lead_uuid uuid, products_data jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    product_item JSONB;
+BEGIN
+    -- Delete existing products for this lead
+    DELETE FROM lead_products WHERE lead_id = lead_uuid;
+    
+    -- Insert new products
+    FOR product_item IN SELECT * FROM jsonb_array_elements(products_data)
+    LOOP
+        INSERT INTO lead_products (
+            lead_id,
+            product_id,
+            product_name,
+            quantity,
+            price_per_unit,
+            notes
+        ) VALUES (
+            lead_uuid,
+            (product_item->>'product_id')::UUID,
+            product_item->>'product_name',
+            (product_item->>'quantity')::INTEGER,
+            (product_item->>'price_per_unit')::DECIMAL(15,2),
+            product_item->>'notes'
+        );
+    END LOOP;
+END;
+$function$
+"
+public,update_product_stock,"CREATE OR REPLACE FUNCTION public.update_product_stock()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_quantity_change INTEGER;
+    v_stock_entry RECORD;
+    v_quantity_before INTEGER;
+    v_quantity_after INTEGER;
+BEGIN
+    -- Get stock entry details
+    SELECT * INTO v_stock_entry FROM stock_entries WHERE id = NEW.stock_entry_id;
+
+    -- Only process if stock entry is approved/completed
+    IF v_stock_entry.status NOT IN ('approved', 'completed') THEN
+        RETURN NEW;
+    END IF;
+
+    -- Get current stock quantity
+    SELECT stock_quantity INTO v_quantity_before FROM products WHERE id = NEW.product_id;
+
+    -- Calculate quantity change based on entry type
+    IF v_stock_entry.entry_type = 'inward' THEN
+        v_quantity_change := NEW.quantity;
+    ELSIF v_stock_entry.entry_type = 'outward' THEN
+        v_quantity_change := -NEW.quantity;
+    END IF;
+
+    -- Update product stock
+    UPDATE products
+    SET stock_quantity = stock_quantity + v_quantity_change
+    WHERE id = NEW.product_id
+    RETURNING stock_quantity INTO v_quantity_after;
+
+    -- Create transaction record
+    INSERT INTO stock_transactions (
+        company_id,
+        product_id,
+        stock_entry_id,
+        stock_entry_item_id,
+        transaction_type,
+        quantity_change,
+        quantity_before,
+        quantity_after,
+        unit_cost,
+        value_change,
+        reference_type,
+        reference_number,
+        performed_by,
+        remarks
+    ) VALUES (
+        v_stock_entry.company_id,
+        NEW.product_id,
+        NEW.stock_entry_id,
+        NEW.id,
+        v_stock_entry.entry_type,
+        v_quantity_change,
+        v_quantity_before,
+        v_quantity_after,
+        NEW.unit_price,
+        NEW.total_price * (CASE WHEN v_stock_entry.entry_type = 'inward' THEN 1 ELSE -1 END),
+        v_stock_entry.reference_type,
+        v_stock_entry.reference_number,
+        v_stock_entry.created_by,
+        v_stock_entry.remarks
+    );
+
+    RETURN NEW;
+END;
+$function$
+"
+public,update_quotations_updated_at,"CREATE OR REPLACE FUNCTION public.update_quotations_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$function$
+"
+public,update_solutions_updated_at,"CREATE OR REPLACE FUNCTION public.update_solutions_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"
+public,update_stock_entry_totals,"CREATE OR REPLACE FUNCTION public.update_stock_entry_totals()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    UPDATE stock_entries
+    SET
+        total_quantity = (
+            SELECT COALESCE(SUM(quantity), 0)
+            FROM stock_entry_items
+            WHERE stock_entry_id = COALESCE(NEW.stock_entry_id, OLD.stock_entry_id)
+        ),
+        total_value = (
+            SELECT COALESCE(SUM(total_price), 0)
+            FROM stock_entry_items
+            WHERE stock_entry_id = COALESCE(NEW.stock_entry_id, OLD.stock_entry_id)
+        )
+    WHERE id = COALESCE(NEW.stock_entry_id, OLD.stock_entry_id);
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$function$
+"
+public,update_updated_at_column,"CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$function$
+"

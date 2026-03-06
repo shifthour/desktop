@@ -1,0 +1,259 @@
+{
+  "name": "IdsEdwCustSvcFLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_CUST_SVC_F_to_stage",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.CUST_SVC_F_TMP_IdsEdwCustSvcFLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "CUST_SVC_SK",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "CUST_SVC_ID",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_DT_SK",
+                  "type": "String",
+                  "physicalType": "char"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_DT_SK",
+                  "type": "String",
+                  "physicalType": "char"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "CUST_SVC_AGE",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "CUST_SVC_CT",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 9
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                  "type": "Int32",
+                  "physicalType": "int"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "CUST_SVC_F.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "CUST_SVC_F_TMP_IdsEdwCustSvcFLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_merge_CUST_SVC_F",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_CUST_SVC_F_to_stage",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          },
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH src AS ( SELECT * FROM @{pipeline().globalParameters.gbl_param_edw_staging}.CUST_SVC_F_TMP_IdsEdwCustSvcFLoad ) MERGE INTO @{pipeline().globalParameters.gbl_param_EDWOwner}.CUST_SVC_F AS tgt USING src ON tgt.CUST_SVC_SK = src.CUST_SVC_SK WHEN MATCHED THEN UPDATE SET tgt.SRC_SYS_CD = src.SRC_SYS_CD, tgt.CUST_SVC_ID = src.CUST_SVC_ID, tgt.LAST_UPDT_RUN_CYC_EXCTN_DT_SK = src.LAST_UPDT_RUN_CYC_EXCTN_DT_SK, tgt.CUST_SVC_AGE = src.CUST_SVC_AGE, tgt.CUST_SVC_CT = src.CUST_SVC_CT, tgt.LAST_UPDT_RUN_CYC_EXCTN_SK = src.LAST_UPDT_RUN_CYC_EXCTN_SK WHEN NOT MATCHED BY TARGET THEN INSERT (CUST_SVC_SK, SRC_SYS_CD, CUST_SVC_ID, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CUST_SVC_AGE, CUST_SVC_CT, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK) VALUES (src.CUST_SVC_SK, src.SRC_SYS_CD, src.CUST_SVC_ID, src.CRT_RUN_CYC_EXCTN_DT_SK, src.LAST_UPDT_RUN_CYC_EXCTN_DT_SK, src.CUST_SVC_AGE, src.CUST_SVC_CT, src.CRT_RUN_CYC_EXCTN_SK, src.LAST_UPDT_RUN_CYC_EXCTN_SK); DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.CUST_SVC_F_TMP_IdsEdwCustSvcFLoad;",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Move_File_After_Load",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Script_merge_CUST_SVC_F",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "CUST_SVC_F.dat",
+              "type": "Expression"
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/CustSvc/EdwLoads/CustSvcF"
+    }
+  },
+  "description": "MODIFICATIONS:\n                                                                                                                                             DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                DESCRIPTION                        ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     -------------------            ----------------------------------------          ------------------------------    ------------------------------       --------------------\nBhupinder Kaur          12/18/2013        5114                       Original Programming               EnterpriseWrhsDevl       Jag Yelavarthi            2014-01-29\n\nAnnotations:\nRead Load File created in the IdsEdwCustSvcFExtr Job\nCopy Stage for buffer\nUpdate then Insert the CUST_SVC_F Data.\nLoad rejects are redirected into a Reject file\nJob Name: IdsEdwCustSvcFLoad"
+}

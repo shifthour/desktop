@@ -1,0 +1,253 @@
+{
+  "name": "CblTalnIdsIndvBeMaraRsltXfrm",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyFrom_ds_INDV_BE_MARA_RSLT_Extr_to_T1Tmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "ParquetReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.T1_TMP_CblTalnIdsIndvBeMaraRsltXfrm",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_adls_container}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/ds')",
+              "param_filename": "@concat('INDV_BE_MARA_RSLT.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "T1_TMP_CblTalnIdsIndvBeMaraRsltXfrm"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFrom_ds_INDV_BE_MARA_RSLT_Extr_to_T1Tmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.T2_TMP_CblTalnIdsIndvBeMaraRsltXfrm; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.T3_TMP_CblTalnIdsIndvBeMaraRsltXfrm; WITH cte_strip AS ( SELECT LTRIM(RTRIM(MBR_ID)) AS MBR_ID, LTRIM(RTRIM(MDL_NM)) AS MDL_NM, TOT_SCORE, RX_SCORE, MED_SCORE, IP_SCORE, OP_SCORE, PHYS_SCORE, ER_SCORE, OTHR, AGE, LTRIM(RTRIM(GNDR)) AS GNDR, EXPSR_MO, PRIOR_CST_TOT, PRIOR_CST_MED, PRIOR_CST_RX, CATLCD, UNCATLCD, CATNDC, UNCATNDC, VRSN_ID FROM @{pipeline().globalParameters.gbl_param_ids_staging}.T1_TMP_CblTalnIdsIndvBeMaraRsltXfrm ), cte_business_rules AS ( SELECT cte_strip.*, '@{pipeline().parameters.SrcSysCd}' + ';' + cte_strip.MBR_ID + ';' + cte_strip.MDL_NM + ';' + '@{pipeline().parameters.YearMo}' AS PRI_NAT_KEY_STRING, '@{pipeline().parameters.RunIDTimeStamp}' AS FIRST_RECYC_TS, 0 AS INDV_BE_MARA_RSLT_SK, CAST(cte_strip.MBR_ID AS DECIMAL(18,0)) AS INDV_BE_KEY, cte_strip.MDL_NM AS MDL_ID, '@{pipeline().parameters.SrcSysCd}' AS SRC_SYS_CD, '@{pipeline().parameters.YearMo}' AS PRCS_YR_MO_SK, 0 AS CRT_RUN_CYC_EXCTN_SK, 0 AS LAST_UPDT_RUN_CYC_EXCTN_SK, '@{pipeline().parameters.SrcSysCdSk}' AS SRC_SYS_CD_SK FROM cte_strip ) SELECT PRI_NAT_KEY_STRING, FIRST_RECYC_TS, INDV_BE_MARA_RSLT_SK, INDV_BE_KEY, MDL_ID, SRC_SYS_CD, PRCS_YR_MO_SK, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, SRC_SYS_CD_SK, GNDR, PRIOR_CST_MED, PRIOR_CST_RX, PRIOR_CST_TOT, CATLCD, UNCATLCD, EXPSR_MO, CATNDC, UNCATNDC, AGE, ER_SCORE, IP_SCORE, MED_SCORE, OTHR, OP_SCORE, RX_SCORE, PHYS_SCORE, TOT_SCORE, VRSN_ID INTO @{pipeline().globalParameters.gbl_param_ids_staging}.T2_TMP_CblTalnIdsIndvBeMaraRsltXfrm FROM cte_business_rules; SELECT INDV_BE_KEY, MDL_ID, PRCS_YR_MO_SK, SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.T3_TMP_CblTalnIdsIndvBeMaraRsltXfrm FROM cte_business_rules;",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CopyTo_ds_INDV_BE_MARA_RSLT_Xfrm",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "T2_TMP_CblTalnIdsIndvBeMaraRsltXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/ds')",
+              "param_filename": "@concat('INDV_BE_MARA_RSLT.', pipeline().parameters.SrcSysCd, '.xfrm.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyTo_B_INDV_BE_MARA_RSLT",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "T3_TMP_CblTalnIdsIndvBeMaraRsltXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "@concat('B_INDV_BE_MARA_RSLT.', pipeline().parameters.SrcSysCd, '.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "string",
+        "defaultValue": "FACETS"
+      },
+      "SrcSysCdSk": {
+        "type": "string",
+        "defaultValue": "1581"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "RunIDTimeStamp": {
+        "type": "string"
+      },
+      "FileName": {
+        "type": "string"
+      },
+      "YearMo": {
+        "type": "string"
+      }
+    },
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/MARA/IndvBeMaraRslt"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:\n\nPROCESSING:\n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #               Change Description                             Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRaja Gummadi                  03/04/2015      5460                                Originally Programmed                            IntegrateNewDevl        Kalyan Neelam             2015-03-06\nRaja Gummadi                  03/24/2015      5460                                Balancing snapshot append instead      IntegrateNewDevl        Kalyan Neealm             2015-03-25\n                                                                                                           of overwirte \n\nManasa Andru                 2017-07-03         TFS - 19484                Added YearMo parameter and passed it to   IntegrateDev1          Kalyan Neelam              2017-07-03\n                                                                                                  PRCS_YR_MO_SK in the Xfrm_BusinessRules stage.\n\nKrishnakanth                   2017-09-13         30001                     Changed the value of                                      IntegrateDev2            Kalyan Neelam              2017-09-13\n    Manivannan                                                                          PRI_NAT_KEY_STRING to YearMo \n                                                                                                  (one of the key) instead of deriving from filename.\n\nVenkatesh Babu             2020-11-01                                              Added VRSN_ID                                      IntegrateDev2              Jeyaprasanna               2020-11-12\nMunnangi\n\nAnnotations:\nJobName: CblTalnIndvBeMaraRsltXfrm\n\nStrip field function and Tranforamtion rules are applied on the data Extracted from inboundfile\n\n11-06-2020: Added VRSN_ID Source to Target\nStrip Carriage Return, Line Feed, and Tab.\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns."
+}

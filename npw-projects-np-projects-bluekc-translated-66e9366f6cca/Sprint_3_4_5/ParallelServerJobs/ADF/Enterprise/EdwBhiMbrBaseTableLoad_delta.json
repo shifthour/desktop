@@ -1,0 +1,79 @@
+{
+  "name": "EdwBhiMbrBaseTableLoad_delta",
+  "properties": {
+    "parameters": {
+      "StartDate": {
+        "type": "string"
+      },
+      "EndDate": {
+        "type": "string"
+      },
+      "LastRunCycBegin": {
+        "type": "string"
+      },
+      "LastRunCycEnd": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_EdwBhiMbrBaseTableLoad_delta",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH CTE_BASE AS ( SELECT mbrEnr.PROD_ID, mbrEnr.MBR_UNIQ_KEY, mbr.MBR_INDV_BE_KEY, mbr.MBR_BRTH_DT_SK, COALESCE(mbr.MBR_HOME_ADDR_ZIP_CD_5,' ') AS MBR_HOME_ADDR_ZIP_CD_5, CASE WHEN (mbr.MBR_HOME_ADDR_ST_CD) IN('AK','AL','AR','AZ','CA','CO','CT','DC','DE','FL','GA','HI','IA','ID','IL','IN','KS','KY','LA','MA','MD','ME','MI','MN','MO','MS','MT','NC','ND','NE','NH','NJ','NM','NV','NY','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VA','VT','WA','WI','WV','WY') THEN 'US' WHEN mbr.MBR_HOME_ADDR_ST_CD IN('NA','UNK','AA','AE','AP') THEN 'UN' ELSE mbr.MBR_HOME_ADDR_ST_CD END AS NATION, CASE WHEN mbr.MBR_HOME_ADDR_ST_CD IN('AK','AL','AR','AZ','CA','CO','CT','DC','DE','FL','GA','HI','IA','ID','IL','IN','KS','KY','LA','MA','MD','ME','MI','MN','MO','MS','MT','NC','ND','NE','NH','NJ','NM','NV','NY','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VA','VT','WA','WI','WV','WY') THEN ( SELECT CASE WHEN fips.CNTY_FIPS_NO IS NOT NULL THEN mbr.MBR_HOME_ADDR_ST_CD + fips.CNTY_FIPS_NO ELSE '     ' END FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.FIPS_D fips WHERE fips.ST_CD = mbr.MBR_HOME_ADDR_ST_CD AND fips.CNTY_NM = mbr.MBR_HOME_ADDR_CNTY_NM ) ELSE '     ' END AS COUNTY, mbr.MBR_GNDR_CD, grp.PRNT_GRP_ID, mbrEnr.GRP_ID, mbrEnr.SUBGRP_ID, mbr.MBR_RELSHP_CD, mbr2.MBR_UNIQ_KEY AS MBR_UNIQ_KEY_2, mbrEnr.CLS_ID, prd.PROD_MNTL_HLTH_COV_IN, prd.PROD_DRUG_COV_IN, prd.PROD_HLTH_COV_IN, prd.PROD_SH_NM_DLVRY_METH_CD, prd.PROD_ABBR, mbrEnr.MBR_ENR_EFF_DT_SK, mbrEnr.MBR_ENR_TERM_DT_SK, prd.PROD_SH_NM, mbr.MBR_HOME_ADDR_ST_CD, mbrEnr.PROD_SK FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_ENR_D mbrEnr, @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_D mbr, @{pipeline().globalParameters.gbl_param_EDWOwner}.GRP_D grp, @{pipeline().globalParameters.gbl_param_EDWOwner}.PROD_D prd, @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_D mbr2, ( SELECT DISTINCT mbrEnr.MBR_SK FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_ENR_D mbrEnr, @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_D mbr, @{pipeline().globalParameters.gbl_param_EDWOwner}.GRP_D grp WHERE mbrEnr.MBR_SK = mbr.MBR_SK AND mbrEnr.GRP_SK = grp.GRP_SK AND mbrEnr.MBR_ENR_ELIG_IN = 'Y' AND mbrEnr.MBR_ENR_CLS_PLN_PROD_CAT_CD = 'MED' AND mbrEnr.MBR_ENR_TERM_DT_SK >= '@{pipeline().parameters.StartDate}' AND mbrEnr.PROD_SH_NM IN ('PCB','PC','BCARE','BLUE-ACCESS','BLUE-SELECT','BLUESELECT+','HP','BMADVH','BMADVP') AND mbrEnr.CLS_ID <> 'MHIP' AND mbrEnr.GRP_ID NOT IN ('10023000','10024000') AND grp.PRNT_GRP_ID <> '650600000' AND mbrEnr.LAST_UPDT_RUN_CYC_EXCTN_DT_SK >= '@{pipeline().parameters.LastRunCycBegin}' AND mbrEnr.LAST_UPDT_RUN_CYC_EXCTN_DT_SK <= '@{pipeline().parameters.LastRunCycEnd}' UNION SELECT DISTINCT mbrCob.MBR_SK FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_ENR_D mbrEnr, @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_COB_D mbrCob, @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_D mbr, @{pipeline().globalParameters.gbl_param_EDWOwner}.GRP_D grp WHERE mbrEnr.MBR_SK = mbr.MBR_SK AND mbrEnr.GRP_SK = grp.GRP_SK AND mbrEnr.MBR_SK = mbrCob.MBR_SK AND mbrEnr.MBR_ENR_ELIG_IN = 'Y' AND mbrEnr.MBR_ENR_CLS_PLN_PROD_CAT_CD = 'MED' AND mbrEnr.MBR_ENR_TERM_DT_SK >= '@{pipeline().parameters.StartDate}' AND mbrEnr.PROD_SH_NM IN ('PCB','PC','BCARE','BLUE-ACCESS','BLUE-SELECT','BLUESELECT+','HP','BMADVH','BMADVP') AND mbrEnr.CLS_ID <> 'MHIP' AND mbrEnr.GRP_ID NOT IN ('10023000','10024000') AND grp.PRNT_GRP_ID <> '650600000' AND mbrCob.MBR_COB_TERM_DT_SK >= '@{pipeline().parameters.StartDate}' AND mbrCob.LAST_UPDT_RUN_CYC_EXCTN_DT_SK >= '@{pipeline().parameters.LastRunCycBegin}' AND mbrCob.LAST_UPDT_RUN_CYC_EXCTN_DT_SK <= '@{pipeline().parameters.LastRunCycEnd}' ) A WHERE mbrEnr.MBR_SK = mbr.MBR_SK AND mbrEnr.MBR_SK = A.MBR_SK AND mbr.SUB_MBR_SK = mbr2.MBR_SK AND mbrEnr.GRP_SK = grp.GRP_SK AND mbrEnr.PROD_SK = prd.PROD_SK AND mbrEnr.MBR_ENR_ELIG_IN = 'Y' AND mbrEnr.MBR_ENR_CLS_PLN_PROD_CAT_CD = 'MED' AND mbrEnr.PROD_SH_NM IN ('PCB','PC','BCARE','BLUE-ACCESS','BLUE-SELECT','BLUESELECT+','HP','BMADVH','BMADVP') AND mbrEnr.CLS_ID <> 'MHIP' AND mbrEnr.GRP_ID NOT IN ('10023000','10024000') AND grp.PRNT_GRP_ID <> '650600000' AND mbrEnr.MBR_ENR_TERM_DT_SK >= '@{pipeline().parameters.StartDate}' ), CTE_TRANSFORM AS ( SELECT '240' AS BHI_HOME_PLN_ID, (CTE_BASE.PROD_ID + REPLICATE(' ',15 - LEN(CTE_BASE.PROD_ID))) AS HOME_PLN_PROD_ID, (CTE_BASE.MBR_UNIQ_KEY + REPLICATE(' ',22 - LEN(CTE_BASE.MBR_UNIQ_KEY))) AS MBR_ID, CASE WHEN CTE_BASE.MBR_INDV_BE_KEY=0 THEN (CTE_BASE.MBR_UNIQ_KEY + REPLICATE(' ',22 - LEN(CTE_BASE.MBR_UNIQ_KEY))) ELSE CAST(CTE_BASE.MBR_INDV_BE_KEY AS VARCHAR(22)) END AS CONSIS_MBR_ID, 'FCTS ' AS TRACEABILITY_FLD, CASE WHEN LEN(CTE_BASE.MBR_BRTH_DT_SK)=0 OR CTE_BASE.MBR_BRTH_DT_SK='NA' OR CTE_BASE.MBR_BRTH_DT_SK='UNK' THEN REPLICATE(' ',8) ELSE REPLACE(CTE_BASE.MBR_BRTH_DT_SK,'-','') END AS MBR_DOB, CASE WHEN CTE_BASE.MBR_HOME_ADDR_ZIP_CD_5 IS NULL THEN REPLICATE(' ',5) WHEN dbo.trim_default(CTE_BASE.MBR_HOME_ADDR_ZIP_CD_5)='' THEN REPLICATE(' ',5) WHEN dbo.trim_default(CTE_BASE.MBR_HOME_ADDR_ZIP_CD_5)='00000' THEN REPLICATE(' ',5) WHEN dbo.trim_default(CTE_BASE.MBR_HOME_ADDR_ZIP_CD_5)='99999' THEN REPLICATE(' ',5) WHEN ISNUMERIC(dbo.trim_default(CTE_BASE.MBR_HOME_ADDR_ZIP_CD_5))=1 AND CAST(dbo.trim_default(CTE_BASE.MBR_HOME_ADDR_ZIP_CD_5) AS INT)=0 THEN REPLICATE(' ',5) ELSE CTE_BASE.MBR_HOME_ADDR_ZIP_CD_5 END AS MBR_CUR_PRI_ZIP_CD, CASE WHEN CTE_BASE.NATION='US' THEN 'US' WHEN CTE_BASE.NATION IS NULL THEN 'UN' ELSE CTE_BASE.NATION END AS MBR_S_CUR_CTRY, CASE WHEN CTE_BASE.COUNTY IS NULL THEN REPLICATE(' ',5) ELSE CTE_BASE.COUNTY END AS MBR_S_CUR_CNTY, CASE WHEN LEN(CTE_BASE.MBR_GNDR_CD)=0 OR CTE_BASE.MBR_GNDR_CD IN('NA','UNK','UNKGNDR') THEN 'U' ELSE CTE_BASE.MBR_GNDR_CD END AS MBR_GNDR, CASE WHEN CTE_BASE.GRP_ID='10025000' THEN 'BLU' ELSE 'NON' END AS MBR_CONFITY_CD, (CTE_BASE.PRNT_GRP_ID + REPLICATE(' ',14 - LEN(CTE_BASE.PRNT_GRP_ID))) AS ACCT, (CTE_BASE.GRP_ID + REPLICATE(' ',14 - LEN(CTE_BASE.GRP_ID))) AS GRP_ID, (CTE_BASE.SUBGRP_ID + REPLICATE(' ',10 - LEN(CTE_BASE.SUBGRP_ID))) AS SUBGRP_ID, dbo.trim_custom(CTE_BASE.MBR_ENR_EFF_DT_SK,'-','A') AS COV_BEG_DT, dbo.trim_custom(CTE_BASE.MBR_ENR_TERM_DT_SK,'-','A') AS COV_END_DT, CASE WHEN CTE_BASE.MBR_RELSHP_CD='SUB' THEN '18' WHEN CTE_BASE.MBR_RELSHP_CD='SPOUSE' THEN '01' WHEN CTE_BASE.MBR_RELSHP_CD='DPNDT' THEN '19' ELSE 'G8' END AS MBR_RELSHP, (CTE_BASE.PROD_ID + REPLICATE(' ',15 - LEN(CTE_BASE.PROD_ID))) AS HOME_PLN_PROD_ID_SUB, (CTE_BASE.MBR_UNIQ_KEY_2 + REPLICATE(' ',22 - LEN(CTE_BASE.MBR_UNIQ_KEY_2))) AS SUB_ID, CASE WHEN CTE_BASE.GRP_ID IN('10000000','10001000','10003000') THEN 'ACT' WHEN LEFT(CTE_BASE.CLS_ID,1)='R' THEN 'RET' WHEN LEFT(CTE_BASE.CLS_ID,1)='C' THEN 'COB' ELSE 'ACT' END AS ENR_ELIG_STTUS, 'X' AS MBR_MED_COB_CD, 'X' AS MBR_PDX_COB_CD, 'X' AS DEDCT_CAT, CASE WHEN CTE_BASE.PROD_MNTL_HLTH_COV_IN='Y' THEN 'B ' ELSE 'N ' END AS MHCD_ENR_BNF, CTE_BASE.PROD_DRUG_COV_IN AS PDX_BNF_IN, CTE_BASE.PROD_MNTL_HLTH_COV_IN AS MHCD_BNF_IN, CTE_BASE.PROD_HLTH_COV_IN AS MED_BNF_IN, CTE_BASE.PROD_HLTH_COV_IN AS HOSP_BNF_IN, CTE_BASE.PROD_SH_NM_DLVRY_METH_CD AS BHI_NTWK_CAT_FCLTY, CTE_BASE.PROD_SH_NM_DLVRY_METH_CD AS BHI_NTWK_CAT_PROF, CTE_BASE.PROD_ABBR AS PLN_NTWK_CAT_FCLTY, CTE_BASE.PROD_ABBR AS PLN_NTWK_CAT_PROF, CASE WHEN CTE_BASE.PROD_DRUG_COV_IN='Y' THEN 'N' ELSE 'X' END AS PDX_CARVE_OUT_SUBMSN_IN, 'XX' AS PDX_BNF_TIERS, CTE_BASE.MBR_UNIQ_KEY, CTE_BASE.MBR_ENR_EFF_DT_SK, CTE_BASE.MBR_ENR_TERM_DT_SK, CTE_BASE.PROD_SK, CTE_BASE.PROD_SH_NM FROM CTE_BASE ) SELECT * FROM CTE_TRANSFORM",
+              "type": "Expression"
+            },
+            "partitionOption": "None",
+            "queryTimeout": "02:00:00"
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_EDWOwner}.W_BHI_MBR_ENR",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {}
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "W_BHI_MBR_ENR"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/BHI/Member/Member_COM"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2013 Blue Cross/Blue Shield of Kansas City\n\nJOB NAME:  EdwBhiMbrBaseTableLoad\n\n\nDESCRIPTION:  Extract member data to be sent to BCBSA for BHI (Blue Health Intelligence)\n\n\nCALLED BY:  EdwBhiMemExtrSeq\n\nHASH FILES:  \n\n\nRERUN INFORMATION: \n\n             PREVIOUS RUN SUCCESSFUL:   Nothing to reset. \n             PREVIOUS RUN ABORTED:         Nothing to reset, just restart.\n\n\nMODIFICATIONS:\n\nDeveloper                 Date                    Project/Ticket #\\(9)           Change Description\\(9)\\(9)\\(9)              Development Project\\(9)      Code Reviewer\\(9)        Date Reviewed       \n------------------               -------------------         ---------------------------\\(9)           -----------------------------------------------------------------------            --------------------------------\\(9)      -------------------------         -------------------------    \nPraveen Annam        2013-07-22          5115 BHI                               Original programming                                                  EnterpriseNewDevl           Kalyan Neelam          2013-11-13                                 \nPraveen Annam        2013-05-06          5115 BHI                               Modified  with Delta Changes for SQL                        EnterpriseNewDevl            Kalyan Neelam          2014-05-12     \n\nMichael Harmon       2015-03-23           INC0156427                          Added 'BLUESELECT+' to WHERE clauses             EnterpriseCurDevl\n                                                                                                            for PROD_SH_NM \n\nKrishnakanth M         2018-04-04              TFS19405                         Changed the auto commit mode to \"ON\"                   EnterpriseDev2                 Jaideep Mankala       04/05/2018\n\nMohan Karnati         2020-07-20             US-252543                          Including High Performance n/w  in product short \n                                                                                                           name while  extracting in the source query                EnterpriseDev1                Hugh Sisson              2020-08-18 \n\nHari Krishna Rao Yadav  2021-03-24    US-361796                          Added filter conditon for PROD_SH_NM in Query      EnterpriseSITF                 Jeyaprasanna          2021-04-20\n\nAnnotations:\nBHI Member Extract \nInitial file: 2010-01-01 to 2012-12-31\n\nIncremental file monthly\nWrites to a common control totals file\nExtract & code all fields except those related to COB\nCreate dataset for further processing"
+}

@@ -1,0 +1,93 @@
+{
+  "name": "EAMEnrlRptTCSExtr",
+  "properties": {
+    "parameters": {
+      "RUNID": {
+        "type": "String"
+      },
+      "CurrDt": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "cp_EAMEnrlRptTCSExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH SRC AS ( SELECT DISTINCT MFST.MEMBER_ID, MFST.FIRSTNAME, MFST.LASTNAME, MFST.ECIT_CREATE_DT, MFST.TMPL_ID, TMRV.PLCE_ID FROM @{pipeline().globalParameters.gbl_param_TCSOwner}.TZCC_MFST_MANIFEST MFST JOIN @{pipeline().globalParameters.gbl_param_TCSOwner}.TZCS_TMRV_REVISIONS TMRV ON MFST.TMPL_ID = TMRV.TMPL_ID ), CTE AS ( SELECT ISNULL(LTRIM(RTRIM(MEMBER_ID)), '') AS MEMBER_ID, ISNULL(LTRIM(RTRIM(FIRSTNAME)), '') AS FIRST_NAME, ISNULL(LTRIM(RTRIM(LASTNAME)), '') AS LAST_NAME, ECIT_CREATE_DT, ISNULL(LTRIM(RTRIM(TMPL_ID)), '') AS TEMPLATE_ID, ISNULL(LTRIM(RTRIM(PLCE_ID)), '') AS PLACE_ID, CONVERT(DATETIME,@concat('@{pipeline().parameters.CurrDt}',' 00:00:00'),120) AS PROCESS_RUN_DT FROM SRC ) SELECT * FROM CTE",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_TCSOwner}",
+              "param_table": "TZCC_MFST_MANIFEST"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/TraceabilityReporting/EnrollmetOperations/load')",
+              "param_filename": "@concat('EAM_ENRL_OPS_TCSDATA_LOAD.',pipeline().parameters.RUNID,'.dat')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/TraceabilityReporting/EnrollmetOperations"
+    }
+  },
+  "Description": "Calling Job: EAMEnrollmentOpsRptCntl\n\nThis Job extracts data from TCS db and load to EAM table which will be used to update the base table.\nMODIFICATIONS:\n\n================================================================================================================================================================================================\nDeveloper                          Date                           Project/Altiris #                              Change Description                                                                                      Development Project                         Reviewer                     Review Date\n================================================================================================================================================================================================\nReddySanam               2021-03-17                  US359435                                        Original Programming                                                                                       IntegrateDev2                               Jeyaprasanna                 2021-03-19\n\nAnnotations:\nThis Job extracts data from TCSCOMPDB and loads to EAM database table"
+}

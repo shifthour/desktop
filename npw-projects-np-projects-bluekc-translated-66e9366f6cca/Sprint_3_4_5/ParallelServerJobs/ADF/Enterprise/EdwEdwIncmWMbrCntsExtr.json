@@ -1,0 +1,88 @@
+{
+  "name": "EdwEdwIncmWMbrCntsExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_EdwEdwIncmWMbrCntsExtr_1",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH Step1 AS (SELECT CNT.PROD_ID, CNT.ACTVTY_YR_MO_SK, CNT.CLS_SK, CNT.CLS_PLN_SK, CNT.GRP_SK, CNT.PROD_SK, CNT.SUBGRP_SK, CAST(SUM(CNT.MBR_CT) AS DECIMAL(6,1)) AS MBR_CT, CNT.CLS_ID, CNT.CLS_PLN_ID, CNT.GRP_ID, CNT.SUBGRP_ID FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_RCST_CT_F CNT GROUP BY CNT.PROD_ID, CNT.ACTVTY_YR_MO_SK, CNT.CLS_SK, CNT.CLS_PLN_SK, CNT.GRP_SK, CNT.PROD_SK, CNT.SUBGRP_SK, CNT.CLS_ID, CNT.CLS_PLN_ID, CNT.GRP_ID, CNT.SUBGRP_ID), StepNA AS (SELECT 'NA' AS PROD_ID, 'NA' AS ACTVTY_YR_MO_SK, 1 AS CLS_SK, 1 AS CLS_PLN_SK, 1 AS GRP_SK, 1 AS PROD_SK, 1 AS SUBGRP_SK, 1 AS MBR_CT, 'NA' AS CLS_ID, 'NA' AS CLS_PLN_ID, 'NA' AS GRP_ID, 'NA' AS SUBGRP_ID), StepUNK AS (SELECT 'UNK' AS PROD_ID, 'UNK' AS ACTVTY_YR_MO_SK, 0 AS CLS_SK, 0 AS CLS_PLN_SK, 0 AS GRP_SK, 0 AS PROD_SK, 0 AS SUBGRP_SK, 0 AS MBR_CT, 'UNK' AS CLS_ID, 'UNK' AS CLS_PLN_ID, 'UNK' AS GRP_ID, 'UNK' AS SUBGRP_ID) SELECT * FROM Step1 UNION ALL SELECT * FROM StepNA UNION ALL SELECT * FROM StepUNK",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "MBR_RCST_CT_F"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "W_MBR_RCST.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {},
+    "annotations": [],
+    "runtimeConfiguration": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Income/EdwLoads/Driver"
+    }
+  },
+  "Description": "****************************************************************************************************************************************************************************\nCOPYRIGHT 2006 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:     EdwIncmWMbrCntsExtr\n\nDESCRIPTION:  \n  Pulls summarized counts from edw ids  MBR_RCST_CT_F and loads to  W_MBR_RCST\n  W_MBR_RCST is replaced during load.      \n\nINPUTS:\n                       \n                EDW:   MBR_RCST_CT_F\n            \nTRANSFORMS:  \n                  TRIM all the fields that are extracted or used in lookups\n                           \nPROCESSING:\n                  Summarize all member counts by group, subgroup, class, class plan and product.   used for income allocations\n \n\nOUTPUTS: \n                  An EDW load file.  \n\n\nMODIFICATIONS:\n              Sharon Andrew 02/07/2005  - Originally Programmed\n\n\nMODIFICATIONS:\n\nDeveloper           Date                 Project/Altiris #                                      Change Description                                                                                                        Project                                    Code Reviewer           Date Reviewed       \n------------------        --------------------     ------------------------                                       -----------------------------------------------------------------------                                                                ----------                                    -------------------------------   ----------------------------      \nKimberly Doty     2010-10-04        TTR 551                                               Modified column MBR_CT from Decimal 6 to Decimal 32 to accommodate                EnterpriseNewDevl                   Steph Goddard           10/01/2010\n                                                                                                                  DataStage's use of decimal 31 when summing a decimal field\nSyed Husseini    2013-10-02        5114                                                      Newly Programmed                                                                                                     EnterpriseWrhsDevl                  Peter Marshall             12/10/2013\n\nAnnotations:\nPulls summarized counts from EDW MBR_RCST_CT_F and loads to  W_MBR_RCST\n\nJob Name:\nEdwIncmWMbrCntsExtr"
+}

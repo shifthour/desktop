@@ -1,0 +1,216 @@
+{
+  "name": "EdwEdwCustSvcTaskFundFBal",
+  "properties": {
+    "parameters": {
+      "ExtrRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "script_Extract_Transform",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scriptPath": null,
+          "scriptLinkedService": null,
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.X123_TMP_EdwEdwCustSvcTaskFundFBal",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "SELECT CUST_SVC_TASK_FUND_F.SRC_SYS_CD,CUST_SVC_TASK_FUND_F.CUST_SVC_ID,CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_SEQ_NO,CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_CSTM_DTL_CD,CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_CSTM_DTL_UNIQ_ID,CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_RTRN_CHK_AMT INTO @{pipeline().globalParameters.gbl_param_edw_staging}.X123_TMP_EdwEdwCustSvcTaskFundFBal FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.CUST_SVC_TASK_FUND_F CUST_SVC_TASK_FUND_F FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.B_CUST_SVC_TASK_FUND_F B_CUST_SVC_TASK_FUND_F ON CUST_SVC_TASK_FUND_F.SRC_SYS_CD = B_CUST_SVC_TASK_FUND_F.SRC_SYS_CD AND CUST_SVC_TASK_FUND_F.CUST_SVC_ID = B_CUST_SVC_TASK_FUND_F.CUST_SVC_ID AND CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_SEQ_NO = B_CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_SEQ_NO AND CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_CSTM_DTL_CD = B_CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_CSTM_DTL_CD AND CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_CSTM_DTL_UNIQ_ID = B_CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_CSTM_DTL_UNIQ_ID WHERE CUST_SVC_TASK_FUND_F.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_RTRN_CHK_AMT <> B_CUST_SVC_TASK_FUND_F.CUST_SVC_TASK_RTRN_CHK_AMT",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.X123_TMP_EdwEdwCustSvcTaskFundFBal_Notify",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "SELECT TOP 1 'COLUMN SUM BALANCING IDS - EDW CUST SVC TASK FUND F OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_edw_staging}.X123_TMP_EdwEdwCustSvcTaskFundFBal_Notify FROM @{pipeline().globalParameters.gbl_param_edw_staging}.X123_TMP_EdwEdwCustSvcTaskFundFBal",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "cpy_ResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "script_Extract_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "X123_TMP_EdwEdwCustSvcTaskFundFBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/research')",
+              "param_filename": "@concat('IdsEdwCustSvcTaskFundFClmnSumResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "cpy_NotificationFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "script_Extract_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "X123_TMP_EdwEdwCustSvcTaskFundFBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/notify')",
+              "param_filename": "CustSvcBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/CustSvc/EdwLoads/CustSvcTaskFundF/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:          IdsEdwCustSvcTaskFundFBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target tables are compared on the specified column to see if there are any discrepancies\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               08/02/2007          3264                              Originally Programmed                         devlEDW10                Steph Goddard            10/21/2007              \n\nArchana Palivela               12/06/2013          5114                               Rewrite in Parallel                        EnterpriseWhseDevl          Jag Yelavarthi              2014-02-26\n\nAnnotations:\nRows with Failed Comparison on Specified columns\nDetail file for on-call to research errors\nJob: EdwEdwCustSvcTaskFundFBal\nFile checked later for rows and email to on-call\nCopy stage used to remove duplicates and create one record for the Notification file.\nPull all the Missing Records from\nCUST_SVC_TASK_FUND_F\nB_CUST_SVC_TASK_FUND_F"
+}

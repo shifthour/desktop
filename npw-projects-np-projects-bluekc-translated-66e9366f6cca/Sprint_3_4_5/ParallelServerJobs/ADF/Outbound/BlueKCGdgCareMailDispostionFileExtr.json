@@ -1,0 +1,308 @@
+{
+  "name": "BlueKCGdgCareMailDispostionFileExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_CommTrnsmsn2Temp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT C.COMM_SK, C.COMM_ID as FileIdentifier, C.COMM_FILE_NM as OriginalFilename, C.COMM_TMPLT_NM as TemplateName, C.COMM_SENT_DTM as FilePrintDate, C.COMM_JOB_ID as JobNumber, null as DocumentPageCount, C.COMM_STTUS_CD, CAST(C.IMG_ID as varchar(40)) as IMG_ID, SUBSTRING(LTRIM(RTRIM(C.IMG_ID)),1,2) as SourceCode, T.VIEW_ID as VIEW_ID FROM @{pipeline().globalParameters.gbl_param_CommTrnsmsnOwner}.[COMM] C Inner Join [COMM_TRNSMSN].[dbo].[COMM_TMPLT_RECPNT_TRNSMSN_TYP] T ON C.COMM_TMPLT_NM = T.COMM_TMPLT_RECPNT_TRNSMSN_TYP_NM WHERE C.COMM_TMPLT_NM not like '%_FAC' AND C.COMM_TMPLT_NM not like '%_RPRV' AND C.COMM_TMPLT_NM not like '%_SPRV' AND ((C.COMM_TRGT_SYS_MDUL_CD='NXTPG' AND C.COMM_TYP_CD IN ('MAILRSPNS','MAILACK') AND C.COMM_STTUS_CD IN ('SUCCESS','FAILED','NO-PDF','PDFRCVD')) OR (C.COMM_TRGT_SYS_MDUL_CD='NXTPG' AND C.COMM_TYP_CD IN ('ALTRSTAFILE','AGPAHUBFILE') AND C.COMM_STTUS_CD='ERROR'))",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_BlueKCGdgCareMailDispostionFileExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "dummy",
+              "param_table": "dummy"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z1_TMP_BlueKCGdgCareMailDispostionFileExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform_xfm",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_CommTrnsmsn2Temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_GC; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_AG; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_MAILDISP; WITH cte1 AS (SELECT *, CASE WHEN COMM_STTUS_CD='SUCCESS' THEN 'Mail Successful' ELSE 'Mail Failed' END AS StageVar_Status FROM @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_BlueKCGdgCareMailDispostionFileExtr), cte2 AS (SELECT *, 'No provider data was found' AS StageVar_ErrorMessage FROM cte1) SELECT FileIdentifier, OriginalFilename, CASE WHEN COMM_STTUS_CD IN ('ERROR','FAILED') THEN NULL ELSE FilePrintDate END AS FilePrintDate, JobNumber, DocumentPageCount, CASE WHEN COMM_STTUS_CD='ERROR' THEN '' ELSE dbo.trim_default(REPLACE(@{pipeline().parameters.PerceptiveURL}, 'replace', VIEW_ID)) + '%27' + IMG_ID + '%27>' + TemplateName + '-' + StageVar_Status + '</a>' END AS Link, CASE WHEN COMM_STTUS_CD='ERROR' THEN StageVar_ErrorMessage ELSE StageVar_Status END AS [Status] INTO @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_GC FROM cte2 WHERE SourceCode='GC'; SELECT REPLACE(FileIdentifier,'AG','') AS FileIdentifier, OriginalFilename, CASE WHEN COMM_STTUS_CD IN ('ERROR','FAILED') THEN NULL ELSE CAST(LEFT(dbo.trim_default(FilePrintDate),10) AS datetime) END AS FilePrintDate, JobNumber, DocumentPageCount, CASE WHEN COMM_STTUS_CD='ERROR' THEN '' ELSE dbo.trim_default(REPLACE(@{pipeline().parameters.PerceptiveURL}, 'replace', VIEW_ID)) + '%27' + IMG_ID + '%27>' + TemplateName + '-' + StageVar_Status + '</a>' END AS Link, CASE WHEN COMM_STTUS_CD='ERROR' THEN StageVar_ErrorMessage ELSE StageVar_Status END AS [Status] INTO @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_AG FROM cte2 WHERE SourceCode='AG'; SELECT COMM_SK, FileIdentifier AS COMM_ID, 'COMMTRNSMSN' AS COMM_SRC_SYS_CD, CASE WHEN SourceCode='GC' THEN 'ALTRSTA' WHEN SourceCode='AG' THEN 'AGPAHUB' ELSE '' END AS COMM_TRGT_SYS_CD, 'SUCCESS' AS COMM_STTUS_CD, 'MAILDSPSTN' AS COMM_TYP_CD, 'Mail Disposition Successful' AS COMM_STTUS_CMNT_TX, GETDATE() AS LAST_UPDT_DTM INTO @{pipeline().globalParameters.gbl_param_ids_staging}.Z1_TMP_MAILDISP FROM cte2",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_GC2File",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_xfm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt",
+              "firstRowAsHeader": true
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z1_TMP_GC"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/external')",
+              "param_filename": "@concat(pipeline().parameters.AHOutboundFile,'_',pipeline().parameters.RunID,'.txt')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_AG2File",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_xfm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z1_TMP_AG"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/external')",
+              "param_filename": "@concat(pipeline().parameters.AGOutboundFile,'_',pipeline().parameters.RunID,'.txt')",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_MailDisp2File",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_xfm",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Z1_TMP_MAILDISP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/external')",
+              "param_filename": "GuidingCare_MailDispstion_Update.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "PerceptiveURL": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "AHOutboundFile": {
+        "type": "string"
+      },
+      "AGOutboundFile": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2017 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY : NextPageBlueKCGdgCareRspnsDsptSeq\n\n\nPROCESSING : Job creates Mail Disposition file for AH\n\nMODIFICATIONS :\n\nDeveloper                               Date                         Project                                   Change Description            Development Project          Code Reviewer                   Date Reviewed       \n------------------------------              ------------------        ----------------------             ---------------------------------------       ------------------------------\\(9)----------------------------------         -------------------------------        \nBharani Chalamalasetty      04/01/2020             Fullfillment                       Original Programming               OutboundDev3                    Jaideep Mankala              04/27/2020\n\nBharani Chalamalasetty      07/20/2020            US243985                Updated to Fetch Failed records      OutboundDev3                   Jaideep Mankala                 07/22/2020\n\nBharani Chalamalasetty      05/18/2021           US243985               Added MAILACK and PDF status in filters     OutboundDev3                   Jaideep Mankala      05/19/2021   \n\nSaranya A                                2021-10-14           US396204          Modified logic to populate URL Link column    OutboundDev3    Jaideep Mankala         10/15/2021    \n\\(9)\\(9)\\(9)\\(9)\\(9)                \nSaranya A                          2022-03-15               US502007            Replace DataSets with Sequential file                    OutboundDev3                    Jaideep Mankala                03/16/2022     \n\\(9)\\(9)\\(9)\\(9)\\(9)\n\nAnnotations:\nDSJobStartTimestamp used instead of Timestamp variable as rows need to be updated with new timestamp."
+}

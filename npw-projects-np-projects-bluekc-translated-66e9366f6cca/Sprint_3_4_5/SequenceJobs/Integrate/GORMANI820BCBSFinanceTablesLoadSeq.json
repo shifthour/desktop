@@ -1,0 +1,911 @@
+{
+  "name": "GORMANI820BCBSFinanceTablesLoadSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/PYMT Load/I820/Seq"
+    },
+    "parameters": {
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EmailNotify820": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "PrvMtDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunTS": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "GormPolFile": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "GormProgFile": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "var_Chk_PgmPaymtAmt_Valid_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_Chk_Pol_File_Avail_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_If_1B_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_If_1B_Continuation_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_Chk_Errors_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_Chk_Errors_Continuation_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "I820CMSEnrPaymtAmtPolAmtValExtr",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/PYMT Load/I820/I820CmsPaymtFileLoad/I820CMSEnrPaymtAmtPolAmtValExtr')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "RunID": {
+              "value": "@pipeline().parameters.RunID",
+              "type": "Expression"
+            },
+            "BCBSFINOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_BCBSFINOwner",
+              "type": "Expression"
+            },
+            "bcbsfin_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_BCBSFINSecret",
+              "type": "Expression"
+            },
+            "PrvMtDate": {
+              "value": "@pipeline().parameters.PrvMtDate",
+              "type": "Expression"
+            },
+            "GormPolicyFile": {
+              "value": "@pipeline().parameters.GormPolFile",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "ExCmd_PgmPaymtAmtVal_Bfr",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "I820CMSEnrPaymtAmtPolAmtValExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/.csv",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "integrate"
+          }
+        }
+      },
+      {
+        "name": "Chk_PgmPaymtAmt_Valid_switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "ExCmd_PgmPaymtAmtVal_Bfr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(greater(int(activity('ExCmd_PgmPaymtAmtVal_Bfr').output.runOutput),1),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_Chk_PgmPaymtAmt_Valid_branch_true",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_Chk_PgmPaymtAmt_Valid_branch",
+                    "value": {
+                      "value": "1",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "Email_Notify_PgmPaymtAmt_Valid",
+                  "type": "ExecutePipeline",
+                  "dependsOn": [
+                    {
+                      "activity": "var_Chk_PgmPaymtAmt_Valid_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "pipeline": {
+                      "referenceName": "Email_Notification",
+                      "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                      "recipients": {
+                        "value": "@pipeline().parameters.EmailNotify820",
+                        "type": "Expression"
+                      },
+                      "subject": "CMS to BCBS Finance Load Program amount Validation Failed.",
+                      "body": "SUM_PAYMENT_AMOUNT is not equal to TOTAL_POLICY_AMOUNT Before Load",
+                      "blobFilenames": {
+                        "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/landing/',pipeline().parameters.GormPolFile)",
+                        "type": "Expression"
+                      },
+                      "fromemail": {
+                        "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                        "type": "Expression"
+                      },
+                      "containerName": {
+                        "value": "@pipeline().globalParameters.gbl_param_container_raw",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_Chk_PgmPaymtAmt_Valid_branch_false",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_Chk_PgmPaymtAmt_Valid_branch",
+                "value": {
+                  "value": "0",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Chk_Pol_File_Avail_switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "Chk_PgmPaymtAmt_Valid_switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(not(contains(pipeline().parameters.ExclusionList,'I820CMSPaymtFlExtr')),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_Chk_Pol_File_Avail_branch_true",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_Chk_Pol_File_Avail_branch",
+                    "value": {
+                      "value": "1",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "I820CMSPaymtFlExtr",
+                  "type": "ExecutePipeline",
+                  "dependsOn": [
+                    {
+                      "activity": "var_Chk_Pol_File_Avail_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "pipeline": {
+                      "referenceName": "I820CMSPaymtFlExtr",
+                      "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                      "RunID": {
+                        "value": "@pipeline().parameters.RunID",
+                        "type": "Expression"
+                      },
+                      "GormPolicyFile": {
+                        "value": "@pipeline().parameters.GormPolFile",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "I820CMSPaymtFlLoad",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "I820CMSPaymtFlExtr",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/PYMT Load/I820/I820CmsPaymtFileLoad/I820CMSPaymtFlLoad')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "BCBSFINOwner": {
+                        "value": "@pipeline().globalParameters.gbl_param_BCBSFINOwner",
+                        "type": "Expression"
+                      },
+                      "bcbsfin_secret_name": {
+                        "value": "@pipeline().globalParameters.gbl_param_BCBSFINSecret",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_Chk_Pol_File_Avail_branch_false",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_Chk_Pol_File_Avail_branch",
+                "value": {
+                  "value": "0",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1B_switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "Chk_Pol_File_Avail_switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(not(contains(pipeline().parameters.ExclusionList,'I820CMSAcaPgmPaymtExtr')),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_If_1B_branch_true",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_If_1B_branch",
+                    "value": {
+                      "value": "1",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "I820CMSAcaPgmPaymtExtr",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "var_If_1B_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/PYMT Load/I820/I820CmsAcaPgmPaymtLoad/I820CMSAcaPgmPaymtExtr')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "IDSOwner": {
+                        "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                        "type": "Expression"
+                      },
+                      "ids_secret_name": {
+                        "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                        "type": "Expression"
+                      },
+                      "RunID": {
+                        "value": "@pipeline().parameters.RunID",
+                        "type": "Expression"
+                      },
+                      "GormProgFile": {
+                        "value": "@pipeline().parameters.GormProgFile",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "I820CMSAcaPgmPaymtLoad",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "I820CMSAcaPgmPaymtExtr",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/PYMT Load/I820/I820CmsAcaPgmPaymtLoad/I820CMSAcaPgmPaymtLoad')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "BCBSFINOwner": {
+                        "value": "@pipeline().globalParameters.gbl_param_BCBSFINOwner",
+                        "type": "Expression"
+                      },
+                      "bcbsfin_secret_name": {
+                        "value": "@pipeline().globalParameters.gbl_param_BCBSFINSecret",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_If_1B_branch_false",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_If_1B_branch",
+                "value": {
+                  "value": "0",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1B_Continuation_switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "If_1B_switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(and(and(or(equals(variables('var_Chk_PgmPaymtAmt_Valid_branch'),'1'),equals(variables('var_Chk_PgmPaymtAmt_Valid_branch'),'0')),or(equals(variables('var_Chk_Pol_File_Avail_branch'),'1'),equals(variables('var_Chk_Pol_File_Avail_branch'),'0'))),equals(variables('var_If_1B_branch'),'1')),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_If_1B_Continuation_branch_true",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_If_1B_Continuation_branch",
+                    "value": {
+                      "value": "1",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "ExCmd_Valencia_Error_Report_Cnt",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "var_If_1B_Continuation_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "src_file_with_path": {
+                        "value": "/.csv",
+                        "type": "Expression"
+                      },
+                      "command": "cat",
+                      "project": "integrate"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_If_1B_Continuation_branch_false",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_If_1B_Continuation_branch",
+                "value": {
+                  "value": "0",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Chk_Errors_switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "If_1B_Continuation_switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(greater(int(activity('ExCmd_Valencia_Error_Report_Cnt').output.runOutput),1),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_Chk_Errors_branch_true",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_Chk_Errors_branch",
+                    "value": {
+                      "value": "1",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "FTP_lan_DtlError",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "var_Chk_Errors_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/FTP')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "MACHINE": "o_lib",
+                      "FTPCMD": "put",
+                      "LOCALPATH": "/landing",
+                      "LOCALFILENAME": {
+                        "value": "@concat('Cms_Error_Report_',pipeline().parameters.RunID,'.csv')",
+                        "type": "Expression"
+                      },
+                      "REMOTEPATH": "/library/library/IPG/PHI09/Dedicated/EDI/EDI_Accounts/ACA_CMS/Production/SFG/820_Prod_Valencia_Extract",
+                      "REMOTEFILENAME": {
+                        "value": "@concat('Cms_Error_Report_',pipeline().parameters.RunID,'.csv')",
+                        "type": "Expression"
+                      },
+                      "GlobalEnvironment": {
+                        "value": "@pipeline().globalParameters.gbl_param_environment",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "Email_Notify",
+                  "type": "ExecutePipeline",
+                  "dependsOn": [
+                    {
+                      "activity": "FTP_lan_DtlError",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "pipeline": {
+                      "referenceName": "Email_Notification",
+                      "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                      "recipients": {
+                        "value": "@pipeline().parameters.EmailNotify820",
+                        "type": "Expression"
+                      },
+                      "subject": "Cms Error Report Notification",
+                      "body": "Please check the attached Valencia Error Report file. The file has new PAYMENT_TYPE codes in the source file GORMAN.820.PROGRAM.CSV which are not present in IDS.CD_MPPNG table.The Valencia Error Report file can also be found at the LAN Location \n(/library/library/IPG/PHI09/Dedicated/EDI/EDI_Accounts/ACA_CMS/Production/SFG/820_Prod_Valencia_Extract). Once new PAYMENT_TYPE are validated please place the validated file in LAN Location and request _IS_SCHED to Run the job from the beginning.\n\n",
+                      "blobFilenames": {
+                        "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/landing/Cms_Error_Report_',pipeline().parameters.RunID,'.csv')",
+                        "type": "Expression"
+                      },
+                      "fromemail": {
+                        "value": "@pipeline().globalParameters.gbl_param_fromemail",
+                        "type": "Expression"
+                      },
+                      "containerName": {
+                        "value": "@pipeline().globalParameters.gbl_param_container_raw",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_Chk_Errors_branch_false",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_Chk_Errors_branch",
+                "value": {
+                  "value": "0",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Chk_Errors_Continuation_switch",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "Chk_Errors_switch",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "value": "@if(and(and(and(or(equals(variables('var_Chk_PgmPaymtAmt_Valid_branch'),'1'),equals(variables('var_Chk_PgmPaymtAmt_Valid_branch'),'0')),or(equals(variables('var_Chk_Pol_File_Avail_branch'),'1'),equals(variables('var_Chk_Pol_File_Avail_branch'),'0'))),or(equals(variables('var_If_1B_branch'),'1'),equals(variables('var_If_1B_branch'),'0'))),equals(variables('var_If_1B_Continuation_branch'),'1')),'1','0')",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "var_Chk_Errors_Continuation_branch_true",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_Chk_Errors_Continuation_branch",
+                    "value": {
+                      "value": "1",
+                      "type": "Expression"
+                    }
+                  }
+                },
+                {
+                  "name": "I820CMSEnrPaymtDtlUpdtPolLoad",
+                  "type": "DatabricksNotebook",
+                  "dependsOn": [
+                    {
+                      "activity": "var_Chk_Errors_Continuation_branch_true",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "timeout": "12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "linkedServiceName": {
+                    "referenceName": "shareddatabricks",
+                    "type": "LinkedServiceReference"
+                  },
+                  "typeProperties": {
+                    "notebookPath": {
+                      "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/PYMT Load/I820/I820CmsEnrPaymtDtlLoad/I820CMSEnrPaymtDtlUpdtPolLoad')",
+                      "type": "Expression"
+                    },
+                    "baseParameters": {
+                      "BCBSFINOwner": {
+                        "value": "@pipeline().globalParameters.gbl_param_BCBSFINOwner",
+                        "type": "Expression"
+                      },
+                      "bcbsfin_secret_name": {
+                        "value": "@pipeline().globalParameters.gbl_param_BCBSFINSecret",
+                        "type": "Expression"
+                      },
+                      "PrvMtDate": {
+                        "value": "@pipeline().parameters.PrvMtDate",
+                        "type": "Expression"
+                      },
+                      "RunTS": {
+                        "value": "@pipeline().parameters.RunTS",
+                        "type": "Expression"
+                      },
+                      "GormPolicyFile": {
+                        "value": "@pipeline().parameters.GormPolFile",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "var_Chk_Errors_Continuation_branch_false",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_Chk_Errors_Continuation_branch",
+                "value": {
+                  "value": "0",
+                  "type": "Expression"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

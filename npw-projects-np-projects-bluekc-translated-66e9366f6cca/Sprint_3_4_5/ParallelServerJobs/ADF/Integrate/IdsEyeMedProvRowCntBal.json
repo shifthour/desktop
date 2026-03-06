@@ -1,0 +1,192 @@
+{
+  "name": "IdsEyeMedProvRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "ScriptPreprocess",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal; SELECT PROV.SRC_SYS_CD_SK as TRGT_SRC_SYS_CD_SK,PROV.PROV_ID as TRGT_PROV_ID,B_PROV.SRC_SYS_CD_SK as SRC_SRC_SYS_CD_SK,B_PROV.PROV_ID as SRC_PROV_ID INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG MPPNG,@{pipeline().globalParameters.gbl_param_IDSOwner}.PROV PROV FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.B_PROV B_PROV ON PROV.SRC_SYS_CD_SK = B_PROV.SRC_SYS_CD_SK AND PROV.PROV_ID = B_PROV.PROV_ID WHERE PROV.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND PROV.SRC_SYS_CD_SK = MPPNG.CD_MPPNG_SK AND MPPNG.TRGT_CD = 'EYEMED'; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal_Research; SELECT TRGT_SRC_SYS_CD_SK,TRGT_PROV_ID,SRC_SRC_SYS_CD_SK,SRC_PROV_ID INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal_Research FROM @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal WHERE TRGT_SRC_SYS_CD_SK IS NULL OR TRGT_PROV_ID IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR SRC_PROV_ID IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal_Notify; SELECT TOP 1 'ROW COUNT BALANCING EYEMED - IDS PROV OUT OF TOLERANCE' as NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal_Notify FROM @{pipeline().globalParameters.gbl_param_ids_staging}.ZJDA_TMP_IdsEyeMedProvRowCntBal WHERE '@{pipeline().parameters.ToleranceCd}'='OUT';",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyToResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptPreprocess",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ZJDA_TMP_IdsEyeMedProvRowCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/research')",
+              "param_filename": "@concat('EyeMedIdsProvResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyToNotifyFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptPreprocess",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ZJDA_TMP_IdsEyeMedProvRowCntBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/notify')",
+              "param_filename": "EyeMedProvidersBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/Prov/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:       EyeMedIdsProviderBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target files are compared to see if there are any discrepancies \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                          Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                    ----------------------------------   ---------------------------------    -------------------------   \nMadhavan B                    2018-03-26          5744                              Initial Programming                                             IntegrateDev2              Kalyan Neelam             2018-04-05\n\nAnnotations:\nEyeMed - IDS Provider Row Count Errors\nFile checked later for rows and email to on-call\nDetail file for on-call to research errors\nRows with Failed Comparison on Specified columns"
+}

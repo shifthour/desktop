@@ -1,0 +1,123 @@
+{
+  "name": "IdsEdwProvAcrdtnDExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "script_IdsEdwProvAcrdtnDExtr",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.XYZ_TMP_IdsEdwProvAcrdtnDExtr;WITH T1 AS (SELECT PROV_ACRDTN_SK,SRC_SYS_CD_SK,PROV_ID,PROV_ACRDTN_SEQ_NO,CRT_RUN_CYC_EXCTN_SK,LAST_UPDT_RUN_CYC_EXCTN_SK,PROV_SK,PROV_ACRDTN_CRTF_DT_SK,PROV_ACRDTN_EXPRTN_DT_SK,PROV_ACRDTN_RECRTF_DT_SK,PROV_ACRDTN_DESC,PROV_ACRDTN_STTUS_DESC FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_ACRDTN WHERE LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle}),T2 AS (SELECT CD_MPPNG_SK,COALESCE(TRGT_CD,'UNK') AS TRGT_CD,COALESCE(TRGT_CD_NM,'UNK') AS TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG),T3 AS (SELECT T1.PROV_ACRDTN_SK,T2.TRGT_CD AS raw_SRC_SYS_CD,T1.PROV_ID,T1.PROV_ACRDTN_SEQ_NO,T1.CRT_RUN_CYC_EXCTN_SK,T1.LAST_UPDT_RUN_CYC_EXCTN_SK,T1.PROV_SK,T1.PROV_ACRDTN_CRTF_DT_SK,T1.PROV_ACRDTN_EXPRTN_DT_SK,T1.PROV_ACRDTN_RECRTF_DT_SK,T1.PROV_ACRDTN_DESC,T1.PROV_ACRDTN_STTUS_DESC FROM T1 LEFT JOIN T2 ON T1.SRC_SYS_CD_SK=T2.CD_MPPNG_SK),T4 AS (SELECT T3.PROV_ACRDTN_SK,CASE WHEN T3.raw_SRC_SYS_CD IS NULL OR LEN(T3.raw_SRC_SYS_CD)=0 THEN 'NA' ELSE T3.raw_SRC_SYS_CD END AS SRC_SYS_CD,T3.PROV_ID,T3.PROV_ACRDTN_SEQ_NO,'@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK,'@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,T3.PROV_SK,T3.PROV_ACRDTN_CRTF_DT_SK,T3.PROV_ACRDTN_DESC,T3.PROV_ACRDTN_EXPRTN_DT_SK,T3.PROV_ACRDTN_RECRTF_DT_SK,T3.PROV_ACRDTN_STTUS_DESC,T3.CRT_RUN_CYC_EXCTN_SK,@{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM T3) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.XYZ_TMP_IdsEdwProvAcrdtnDExtr FROM T4",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "cpy_IdsEdwProvAcrdtnDExtr_toDat",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "script_IdsEdwProvAcrdtnDExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "XYZ_TMP_IdsEdwProvAcrdtnDExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/DataWarehouse/Provider/EdwLoads/ProvAcrdtnD/load')",
+              "param_filename": "PROV_ACRDTN_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "String"
+      },
+      "IDSRunCycle": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Provider/EdwLoads/ProvAcrdtnD"
+    }
+  },
+  "Description": "COPYRIGHT 2008 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:   EdwProvExtrSeq\n\nPROCESSING:\n                  \n                The Job extracts data from the IDS PROV_ACRDTN table and loads the EDW table\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada             2008-05-30          3526                             Originally Programmed                          devlEDW                          Steph Goddard          06/04/2008\nShiva Devagiri                 07/08/2013        5114                             Converted from server to parallel version  EnterpriseWrhsDevl     Peter Marshall             09/3/2013\n\nAnnotations:\nCode SK lookups for Denormalization\n\nLookup Keys:\nCD_MPPNG_SK\nProvIpaRelshpTermRsnCdSk\nWrite PROV_ACRDTN Data into a Sequential file for Load Job IdsEdwProvAcrdtnDLoad.\nRead all the Data from IDS PROV_ACRDTN Table; Pull records based on LAST_UPDT_RUN_CYC_EXCTN_SK.\nAdd Defaults and Null Handling.\nJob Name: IdsEdwProvAcrdtnDExtr"
+}

@@ -1,0 +1,123 @@
+{
+  "name": "IdsEdwProdCmpntDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      },
+      "IDSRunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_Create_TMP_IdsEdwProdCmpntDExtr",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.S1_TMP_IdsEdwProdCmpntDExtr; WITH cte AS ( SELECT P.PROD_CMPNT_SK, COALESCE(SIGNALCD.TRGT_CD,'UNK') AS SRC_SYS_CD, P.PROD_ID, P.PROD_CMPNT_TYP_CD_SK, P.PROD_CMPNT_EFF_DT_SK, P.PROD_SK, P.PROD_CMPNT_PFX_ID, P.PROD_CMPNT_TERM_DT_SK, M2.TRGT_CD AS TYP_TRGT_CD, M2.TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PROD_CMPNT P LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG SIGNALCD ON P.SRC_SYS_CD_SK = SIGNALCD.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG M2 ON P.PROD_CMPNT_TYP_CD_SK = M2.CD_MPPNG_SK WHERE P.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.IDSRunCycle} ), cte_xfm AS ( SELECT PROD_CMPNT_SK, CASE WHEN dbo.trim_default(SRC_SYS_CD) = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, PROD_ID, CASE WHEN dbo.trim_default(TYP_TRGT_CD) = '' THEN 'UNK' ELSE TYP_TRGT_CD END AS PROD_CMPNT_TYP_CD, PROD_CMPNT_EFF_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, PROD_SK, PROD_CMPNT_PFX_ID, PROD_CMPNT_TERM_DT_SK, CASE WHEN dbo.trim_default(TRGT_CD_NM) = '' THEN 'UNK' ELSE TRGT_CD_NM END AS PROD_CMPNT_TYP_NM, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, PROD_CMPNT_TYP_CD_SK FROM cte ) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.S1_TMP_IdsEdwProdCmpntDExtr FROM cte_xfm",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_IdsEdwProdCmpntDExtr_ToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Create_TMP_IdsEdwProdCmpntDExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "S1_TMP_IdsEdwProdCmpntDExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "PROD_CMPNT_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/ProdCmpntD"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                Project/                                                                                                                                  Code                   Date\nDeveloper           Date              Altiris #     Change Description                                                                                                Reviewer            Reviewed\n-------------------------  -------------------   -------------   ----------------------------------------------------------------------------------------------------------------------------   -------------------------  -------------------\n\tHugh Sisson    11-14-2005   Original Program \n                SANdrew          12-14-2005   Changed #$IDSInstance#  to  #$IDSOwner|#\n                SAndrew          12-14-2005    project 1756  -  SAndrew          11-14-2006   Prodject 1756 - standardized Run Cycle logix .  \n\n\n\nPete Cundy                    09/16/2009    3556                            Modified Where Clause                         devlEDWnew          Steph Goddard      10/07/2009\n\nDeveloper                          Date               Project/Altiris #               Change Description                                                                            Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------                                                      ---------------------------------   ---------------------------------    -------------------------   \nJudy Reynolds               02-02-2011      TTR_904                         Changed length of PRODUCT_ID field from Char 8 to                         EnterpriseNewDevl        Steph Goddard            02/03/2011\n                                                                                                       varchar 20\n\n                                                                    \nBalkarn Gill               06/03/2013        5114                              Create Load File for EDW Table PROD_CMPNT_D                             EnterpriseWhseDevl        Peter Marshall               8/8/2013\n\nAnnotations:\nRead from source table ProdCmpnt from IDS.  Apply Run Cycle filters when applicable to get just the needed rows forward\nJob Name: IdsEdwProdCmpntDExtr\nReference Code Mapping Data for Code SK lookups\nCode SK lookups for Denormalization\n\nLookup Keys:\nPROD_CMPNT_TYP_CD_SK\nAdd Defaults and Null Handling.\nWrite PROD_CMPNT_D Data into a Sequential file for Load Job IdsEdwProdCmpmtDLoad."
+}

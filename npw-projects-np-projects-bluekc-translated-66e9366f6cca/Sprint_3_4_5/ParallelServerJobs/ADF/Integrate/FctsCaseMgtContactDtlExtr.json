@@ -1,0 +1,89 @@
+{
+  "name": "FctsCaseMgtContactDtlExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_FctsCaseMgtContactDtlExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_in AS (SELECT DISTINCT CMCM_ID, CMCT_SEQ_NO, CMLG_SEQ_NO, CMLG_INPUT_DTM, CMLG_MCTR_CALL, CMLG_TEXT, CMLG_METHOD, CMLG_USID FROM @{pipeline().globalParameters.gbl_param_FacetsOwner}.CMC_CMLG_LOG) SELECT RTRIM(LTRIM(cte_in.CMCM_ID)) + ';' + CAST(cte_in.CMLG_SEQ_NO AS VARCHAR(10)) + ';' + dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS PRI_NAT_KEY_STRING, @{pipeline().parameters.RunIDTimeStamp} AS FIRST_RECYC_TS, dbo.trim_default(@{pipeline().parameters.SrcSysCd}) AS SRC_SYS_CD, RTRIM(LTRIM(cte_in.CMCM_ID)) AS CASE_MGT_ID, cte_in.CMCT_SEQ_NO AS CNTCT_SEQ_NO, cte_in.CMLG_SEQ_NO AS LOG_SEQ_NO, cte_in.CMLG_INPUT_DTM AS LOG_DTM, dbo.trim_default(cte_in.CMLG_TEXT) AS LOG_SUM_TX, dbo.trim_default(cte_in.CMLG_MCTR_CALL) AS CMLG_MCTR_CALL, dbo.trim_default(cte_in.CMLG_METHOD) AS CMLG_METHOD, dbo.trim_default(cte_in.CMLG_USID) AS CMLG_USID FROM cte_in",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "ParquetWriteSettings"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "facets",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_facets",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_FacetsOwner}",
+              "param_table": "CMC_CMLG_LOG"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "'@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/MedMgt/MedMgt/CMContactDetail')'",
+              "param_filename": "'CASE_MGT_CNTCT_DTL_LOG.@{pipeline().parameters.SrcSysCd}.extr.@{pipeline().parameters.RunID}.ds'"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "RunIDTimeStamp": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/MedMgt/MedMgt/CMContactDetail"
+    }
+  },
+  "Description": "Called By: FctsMedMgtCntl\n\n\nProcess : Extract Case Mgt Status data from Facets to DataSet which is processed and loaded to CASE_MGT_CNTCT table\n\n\nModifications:                        \n                                             \t\t  Project/                                                                                                    \t \t\t Code                     Date\nDeveloper         \tDate             \t Altiris #     \tChange Description                                                   \t\t\t Reviewer             Reviewed\n-----------------------  \t-------------------   \t-------------   \t-----------------------------------------------------------------------------   \t\t\t-------------------------    -------------------\nAkash Parsha       2019-09-28                 US140165                Extract Case Mgt Contact Detail Log data from Facets to DataSet               Jaideep Mankala           10/10/2019\nPrabhu ES            2022-03-07              S2S Remediation         MSSQL ODBC conn params added - IntegrateDev5                                      Manasa Andru                2022-06-14\n\nAnnotations:\nJobName: FctsCaseMgtContactDtlExtr\n\n\nExtract data fromCASE_MGT_CNTCT_DTL_LOG facets\ntable to load into IDS"
+}

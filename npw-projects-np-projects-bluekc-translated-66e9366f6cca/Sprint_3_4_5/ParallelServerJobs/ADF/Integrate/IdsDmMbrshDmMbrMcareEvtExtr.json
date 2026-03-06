@@ -1,0 +1,81 @@
+{
+  "name": "IdsDmMbrshDmMbrMcareEvtExtr",
+  "properties": {
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "Int"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyMbrshDmMbrMcareEvt",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH CTE_EVT AS (SELECT EVT.MBR_MCARE_EVT_SK, COALESCE(CD_S.TRGT_CD,'UNK') AS SRC_SYS_CD, EVT.MBR_UNIQ_KEY, EVT.MBR_MCARE_EVT_CD_SK, EVT.EFF_DT_SK, EVT.CRT_RUN_CYC_EXCTN_SK, EVT.LAST_UPDT_RUN_CYC_EXCTN_SK, EVT.MBR_SK, EVT.TERM_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR_MCARE_EVT EVT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.W_MBR_DM_DRVR DRVR ON EVT.MBR_UNIQ_KEY=DRVR.KEY_VAL_INT LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD_S ON EVT.SRC_SYS_CD_SK=CD_S.CD_MPPNG_SK WHERE EVT.MBR_MCARE_EVT_SK NOT IN(0,1)), CTE_MCARE AS (SELECT CD_MPPNG_SK, COALESCE(TRGT_CD,'UNK') AS TRGT_CD, COALESCE(TRGT_CD_NM,'UNK') AS TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG), CTE_OUT AS (SELECT CTE_EVT.MBR_UNIQ_KEY, CTE_EVT.EFF_DT_SK, CTE_EVT.MBR_SK, CTE_EVT.TERM_DT_SK, CTE_EVT.SRC_SYS_CD, COALESCE(CTE_MCARE.TRGT_CD,'UNK') AS MBR_MCARE_EVT_CD, COALESCE(CTE_MCARE.TRGT_CD_NM,'UNK') AS MBR_MCARE_EVT_NM FROM CTE_EVT LEFT JOIN CTE_MCARE ON CTE_EVT.MBR_MCARE_EVT_CD_SK=CTE_MCARE.CD_MPPNG_SK), CTE_TF AS (SELECT CASE WHEN LEN(RTRIM(LTRIM(EFF_DT_SK)))=0 OR EFF_DT_SK IS NULL OR RTRIM(LTRIM(EFF_DT_SK)) IN('UNK','NA') THEN '1753-01-01' ELSE EFF_DT_SK END AS svDefaultEffDate, CASE WHEN LEN(RTRIM(LTRIM(TERM_DT_SK)))=0 OR TERM_DT_SK IS NULL OR RTRIM(LTRIM(TERM_DT_SK)) IN('UNK','NA') THEN '2199-12-31' ELSE TERM_DT_SK END AS svDefaultTermDt, MBR_UNIQ_KEY, EFF_DT_SK, MBR_SK, TERM_DT_SK, SRC_SYS_CD, MBR_MCARE_EVT_CD, MBR_MCARE_EVT_NM FROM CTE_OUT), FINAL AS (SELECT CASE WHEN SRC_SYS_CD IS NULL THEN ' ' ELSE SRC_SYS_CD END AS SRC_SYS_CD, MBR_UNIQ_KEY, CASE WHEN MBR_MCARE_EVT_CD IS NULL THEN ' ' ELSE MBR_MCARE_EVT_CD END AS MBR_MCARE_EVT_CD, CONVERT(DATETIME,svDefaultEffDate,120) AS EFF_DT, MBR_SK, CONVERT(DATETIME,svDefaultTermDt,120) AS TERM_DT, CASE WHEN MBR_MCARE_EVT_NM IS NULL THEN ' ' ELSE MBR_MCARE_EVT_NM END AS MBR_MCARE_EVT_NM, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_NO FROM CTE_TF) SELECT * FROM FINAL",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "MBR_MCARE_EVT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/WebDataMart/Member/MbrshDmMbrMcareEvt/load')",
+              "param_filename": "MBRSH_DM_MBR_MCARE_EVT.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Member/MbrshDmMbrMcareEvt"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nPROCESSING:\n                    Extracts from IDS and pulls to the Data Marts.  Perform no changes with the data.\n\n\nMODIFICATIONS:\nDeveloper                Date                 Project/Altiris #                                   Change Description                                                                     Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------                                   -----------------------------------------------------------------------                             --------------------------------       -------------------------------   ----------------------------       \nRalph Tucker          6/02/2009        Web Realign 3500                             New ETL                                                                                     devlIDSNew                   Steph Goddard          06/05/2009\nBhoomi D                07/14/2009      3500                                                   Changed SQL to incorporate LastUpdtRunCycle in                     devlIDSnew                   Steph Goddard           07/15/2009\n                                                                                                                    Mbr delete process\n                                                                                                                           \n\n\n\n\n\nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------       ------------------------------       --------------------\nShiva Devagiri           07/28/2013       5114                            Create Load File for EDW Table MBRSHP_DM_MCARE_EVT             EnterpriseWrhseDevl   Peter Marshall               10/22/2013\n               \nPooja Sunkara           07/30/2014      5345                           Changed Load file name from MBRSH_DM_MCARE_EVT.dat to \n                                                                                               MBRSH_DM_MBR_MCARE_EVT.dat                                                    IntegrateNewDevl          Jag Yelavarthi             2014-08-01\n\nAnnotations:\nRead from source table MBR_MCARE_EVT  from IDS.\nJob Name: IdsDmMbrshDmMbrMcareEvtExtr\nReference Code Mapping Data for Code SK lookups\nAdd Defaults and Null Handling.\nWrite MBRSHP_DM_MCARE_EVT Data into a Sequential file for Load Job IdsDmMbrshpDmMbrMcareEvtLoad.\nCode SK lookups for Denormalization\n\nLookup Keys:\nMBR_MCARE_EVT_CD_SK"
+}

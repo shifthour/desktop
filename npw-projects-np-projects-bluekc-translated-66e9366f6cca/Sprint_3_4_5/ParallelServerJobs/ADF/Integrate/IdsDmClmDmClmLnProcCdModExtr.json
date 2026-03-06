@@ -1,0 +1,118 @@
+{
+  "name": "IdsDmClmDmClmLnProcCdModExtr",
+  "properties": {
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_IdsDmClmDmClmLnProcCdModExtr",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scriptType": "NonQuery",
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ABC_TMP_IdsDmClmDmClmLnProcCdModExtr; WITH cte_src as (select mod.clm_id, mod.clm_ln_seq_no, coalesce(cd.trgt_cd, 'UNK') as src_sys_cd, mod.clm_ln_proc_cd_mod_ordnl_cd_sk, mod.proc_cd_mod_tx from @{pipeline().globalParameters.gbl_param_IDSOwner}.clm_ln clmln join @{pipeline().globalParameters.gbl_param_IDSOwner}.w_webdm_etl_drvr extr on clmln.src_sys_cd_sk = extr.src_sys_cd_sk and clmln.clm_id = extr.clm_id join @{pipeline().globalParameters.gbl_param_IDSOwner}.clm_ln_proc_cd_mod mod on mod.clm_ln_sk = clmln.clm_ln_sk left join @{pipeline().globalParameters.gbl_param_IDSOwner}.cd_mppng cd on mod.src_sys_cd_sk = cd.cd_mppng_sk), cte_ref as (select cd_mppng_sk, coalesce(trgt_cd,'UNK') as trgt_cd, coalesce(trgt_cd_nm,'UNK') as trgt_cd_nm from @{pipeline().globalParameters.gbl_param_IDSOwner}.cd_mppng), cte_lkp as (select s.clm_id, s.clm_ln_seq_no, s.src_sys_cd, s.clm_ln_proc_cd_mod_ordnl_cd_sk, s.proc_cd_mod_tx, r.trgt_cd as clm_ln_proc_cd_mod_ordnl_cd from cte_src s left join cte_ref r on s.clm_ln_proc_cd_mod_ordnl_cd_sk = r.cd_mppng_sk), final as (select lkp.src_sys_cd, lkp.clm_id, lkp.clm_ln_seq_no, lkp.clm_ln_proc_cd_mod_ordnl_cd, lkp.proc_cd_mod_tx, @{pipeline().parameters.CurrRunCycle} as last_updt_run_cyc_no from cte_lkp lkp) select * into @{pipeline().globalParameters.gbl_param_ids_staging}.ABC_TMP_IdsDmClmDmClmLnProcCdModExtr from final",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyToFile_IdsDmClmDmClmLnProcCdModExtr",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsDmClmDmClmLnProcCdModExtr",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ABC_TMP_IdsDmClmDmClmLnProcCdModExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "CLM_DM_CLM_LN_PROC_CD_MOD.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Claim/ClaimLine/ProcCdMod"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2005 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:     IdsCLmMartClmLnProcCdModExtr\n\nDESCRIPTION:  \n  Pulls data from IDS to create claim data mart\n      \n\nINPUTS:\n\tIDS - CLM_LN_PROC_CD_MOD\n                IDS - P_CLM_DM_EXTR\n                IDS - CD_MPPNG\n               \n\n  \nHASH FILES:\n                hf_clmlnproc_mppng - hash file for sk lookup\n               \n\nTRANSFORMS:  \n                  \n                           \nPROCESSING:\n                  IDS - read from source, lookup all code SK values and get the natural codes\n                 \n\nOUTPUTS: \n                    updates CLM_DM_CLM_LN_PROC_CD_MOD\n\nDeveloper                               Date                    Project/Altiris #       Change Description                                                       Development Project               Code Reviewer                      Date Reviewed\n---------------------------------         ----------------                 -------------------      ---------------------------------------------------------                                       ----------------------------      ---------------------------------               -------------------------\n\nSteph Goddard                 03/22/2005 -                                     Originally Programmed\nBJ Luce                            08/29/2005                                       change SQL parameters to ClmMart for job sequencer\nBrent Leland                     04/03/2006                                       Changed parameter for new sequencer\n                                                                                                   Changed name of driver table.\nBrent Leland                    04/06/2006                                        Added run cycle parameter for new table field\n                                                                                                   LAST_UPDT_RUN_CYC_NO\nNagesh Bandi                  09/13/2013              5114                     Original Programming(Server to Parallel)                                 IntegrateWrhsDevl\n\nAnnotations:\nWrite CLM_DM_CLM_LN_PROC_CD_MOD Data into a Sequential file for Load Job IdsDmClmDmClmLnProcCdModLoad.\nAdd Defaults and Null Handling.\nJob Name: \n\nIdsDmClmDmClmLnProcCdModExtr\nRead all the Data from IDS CLM_LN_PROC_CD_MOD Table;\nCode SK lookups for Denormalization\n\nLookup Keys:\n\nCLM_LN_PROC_CD_MOD_ORDNL_CD_SK"
+}

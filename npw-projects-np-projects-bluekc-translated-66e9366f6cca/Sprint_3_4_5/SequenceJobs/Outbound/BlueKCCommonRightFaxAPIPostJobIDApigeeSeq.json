@@ -1,0 +1,350 @@
+{
+  "name": "BlueKCCommonRightFaxAPIPostJobIDApigeeSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Outbound/Fullfilment"
+    },
+    "parameters": {
+      "JobId": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DynamicAccessToken": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RightFaxAPIURL": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "COMM_SK": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "Status": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "StatusText": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Exec_cmd_Get_JobID_Response",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/curl_command')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "authorizationBearer": {
+              "value": "@pipeline().parameters.DynamicAccessToken",
+              "type": "Expression"
+            },
+            "apiUrl": {
+              "value": "@pipeline().parameters.RightFaxAPIURL",
+              "type": "Expression"
+            },
+            "jobId": {
+              "value": "@pipeline().parameters.JobId",
+              "type": "Expression"
+            },
+            "outputFilePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_container_published,'/',pipeline().globalParameters.gbl_param_environment,'/external/GetFaxJobIDResponse.json')",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Exec_cmd_parse_response",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Exec_cmd_Get_JobID_Response",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/parse_status')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "inputFilePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_container_published,'/',pipeline().globalParameters.gbl_param_environment,'/external/GetFaxJobIDResponse.json')",
+              "type": "Expression"
+            },
+            "fieldPosition": "2",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Exec_cmd_StatusText",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Exec_cmd_parse_response",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/parse_statustext')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "inputFilePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_container_published,'/',pipeline().globalParameters.gbl_param_environment,'/external/GetFaxJobIDResponse.json')",
+              "type": "Expression"
+            },
+            "fieldPosition": "3",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Ereplace_Status",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Exec_cmd_parse_response",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Ereplace')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "Ereplace_a1": {
+              "value": "@string(activity('Exec_cmd_parse_response').output.runOutput)",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Set_Status",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Ereplace_Status",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "Status",
+          "value": {
+            "value": "@string(activity('Ereplace_Status').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Ereplace_StatusText",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Exec_cmd_StatusText",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Ereplace')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "Ereplace_a1": {
+              "value": "@string(activity('Exec_cmd_StatusText').output.runOutput)",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Set_StatusText",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Ereplace_StatusText",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "StatusText",
+          "value": {
+            "value": "@string(activity('Ereplace_StatusText').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "BlueKCCommonRightFaxAPIJobIDStsUpdate",
+        "type": "ExecutePipeline",
+        "dependsOn": [
+          {
+            "activity": "Set_Status",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Set_StatusText",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "BlueKCCommonRightFaxAPIJobIDStsUpdate",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "DynamicAccessToken": "DynamicAccessToken.txt",
+            "JobIDStatus": {
+              "value": "@variables('Status')",
+              "type": "Expression"
+            },
+            "CommTrnsmsnOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_CommTrnsmsnOwner",
+              "type": "Expression"
+            },
+            "commtrnsmsn_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_CommTrnsmsnSecret",
+              "type": "Expression"
+            },
+            "COMM_SK": {
+              "value": "@pipeline().parameters.COMM_SK",
+              "type": "Expression"
+            },
+            "StatusText": {
+              "value": "@variables('StatusText')",
+              "type": "Expression"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "name": "IdsEdwBnfVndrDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "int"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyIdsEdwBnfVndrDToFile",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_in AS ( SELECT BNF_VNDR.BNF_VNDR_SK, COALESCE(CD_SRC.TRGT_CD, 'UNK') AS SRC_SYS_CD, BNF_VNDR.SRC_SYS_CD_SK, BNF_VNDR.BNF_VNDR_ID, BNF_VNDR.BNF_VNDR_NM, BNF_VNDR.BNF_VNDR_PHN_NO, BNF_VNDR.USER_ID, BNF_VNDR.LAST_UPDT_DT_SK, BNF_VNDR.BNF_VNDR_PHN_NO_EXT, BNF_VNDR.BNF_VNDR_TYP_CD_SK, COALESCE(CD_TYP.TRGT_CD, 'UNK') AS BNF_VNDR_TYP_CD, COALESCE(CD_TYP.TRGT_CD_NM, 'UNK') AS BNF_VNDR_TYP_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.BNF_VNDR AS BNF_VNDR LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG AS CD_SRC ON BNF_VNDR.SRC_SYS_CD_SK = CD_SRC.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG AS CD_TYP ON BNF_VNDR.BNF_VNDR_TYP_CD_SK = CD_TYP.CD_MPPNG_SK ), cte_out AS ( SELECT cte_in.BNF_VNDR_SK AS BNF_VNDR_SK, CASE WHEN dbo.trim_default(cte_in.SRC_SYS_CD) = '' THEN 'UNK' ELSE cte_in.SRC_SYS_CD END AS SRC_SYS_CD, cte_in.BNF_VNDR_ID AS BNF_VNDR_ID, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, cte_in.BNF_VNDR_NM, cte_in.BNF_VNDR_PHN_NO, CASE WHEN dbo.trim_default(cte_in.BNF_VNDR_TYP_CD) = '' THEN 'UNK' ELSE cte_in.BNF_VNDR_TYP_CD END AS BNF_VNDR_TYP_CD, CASE WHEN dbo.trim_default(cte_in.BNF_VNDR_TYP_CD) = '' THEN 'UNK' ELSE cte_in.BNF_VNDR_TYP_NM END AS BNF_VNDR_TYP_NM, cte_in.USER_ID, cte_in.LAST_UPDT_DT_SK, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, cte_in.BNF_VNDR_TYP_CD_SK, cte_in.BNF_VNDR_PHN_NO_EXT FROM cte_in ) SELECT * FROM cte_out",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "BNF_VNDR_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/BnfVndrD"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY: EdwProductExtrSeq\n\nPROCESSING: Extracts all IDS records and loads in to EDW BNF_VNDR_D table\n\n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #               Change Description                                    Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------    ---------------------------------------------------------              ----------------------------------   ---------------------------------    -------------------------   \nBhoomi Dasari                 08/14/2009         4113                          Originally Programmed                                    devlEDWnew                Steph Goddard             08/19/2009\n\nArchana Palivela             06/04/2013        5114                           Originally Programmed (In Parallel)                  EnterpriseWhseDevl   Bhoomi Dasari                 8/11/2013\n\nAnnotations:\nJob name: IdsEdwBnfVndrDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file.\nRead data from source table BNF_VNDR_D\nCode SK lookups for Denormalization\n\nLookup Keys:\nBNF_VNDR_TYP_CD_SK\nWrite BNF_VNDR_D Data into a Sequential file for Load Ready Job."
+}

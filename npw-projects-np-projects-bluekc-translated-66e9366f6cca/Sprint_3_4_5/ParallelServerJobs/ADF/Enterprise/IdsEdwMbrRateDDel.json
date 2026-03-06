@@ -1,0 +1,197 @@
+{
+  "name": "IdsEdwMbrRateDDel",
+  "properties": {
+    "parameters": {},
+    "activities": [
+      {
+        "name": "CopyFileToTemp_IdsEdwMbrRateDDel",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.[MBRRATEDEL_TMP_IdsEdwMbrRateDDel]",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "MBR_UNIQ_KEY",
+                  "type": "Int64",
+                  "physicalType": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "MBR_RATE_EFF_DT_SK",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "EdwMbrRateDel.uniq",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "MBRRATEDEL_TMP_IdsEdwMbrRateDDel"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptDelete_IdsEdwMbrRateDDel",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTemp_IdsEdwMbrRateDDel",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte1 AS (SELECT SRC_SYS_CD, MBR_UNIQ_KEY, MBR_RATE_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_edw_staging}.[MBRRATEDEL_TMP_IdsEdwMbrRateDDel]) DELETE T FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_RATE_D AS T JOIN cte1 ON T.SRC_SYS_CD = cte1.SRC_SYS_CD AND T.MBR_UNIQ_KEY = cte1.MBR_UNIQ_KEY AND T.MBR_RATE_EFF_DT_SK = cte1.MBR_RATE_EFF_DT_SK; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.[MBRRATEDEL_TMP_IdsEdwMbrRateDDel]",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "DB2StatsSubroutine_IdsEdwMbrRateDDel",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "ScriptDelete_IdsEdwMbrRateDDel",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "String"
+            },
+            "filename": {
+              "value": "EdwMbrRateDel.uniq",
+              "type": "String"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/MbrRateD"
+    }
+  },
+  "Description": "COPYRIGHT 2014 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:  EdwMbrNoDriverSeq\n            \n\nPROCESSING:   Delete IDS Mbr Rate Change Data Capture rows.   \n\n\nMODIFICATIONS:\nDeveloper                Date                 \tProject/Altiris #\t                 Change Description\t         Development Project\tCode Reviewer\tDate Reviewed       \n------------------              --------------------     \t------------------------\t                 ---------------------------------------------------     --------------------------------\t-------------------------------\t----------------------------       \nKalyan Neelam          2014-03-25            5235 ACA                                  Initial Programming                           EnterpriseNewDevl         Bhoomi Dasari         03/28/2014\n\nAnnotations:\nRead Delete File created in the IDS Job IdsMbrRateDel\nCopy Stage for buffer and column rename\nApply deletes to the EDW MBR_RATE_D Table."
+}

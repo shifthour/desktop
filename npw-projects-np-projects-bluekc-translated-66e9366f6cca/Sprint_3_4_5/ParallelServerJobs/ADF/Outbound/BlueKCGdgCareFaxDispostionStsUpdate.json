@@ -1,0 +1,216 @@
+{
+  "name": "BlueKCGdgCareFaxDispostionStsUpdate",
+  "properties": {
+    "parameters": {
+      "CommTrnsmsnOwner": {
+        "type": "String",
+        "defaultValue": "PROJDEF"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_File_To_Temp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_BlueKCGdgCareFaxDispostionStsUpdate",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "COMM_SK",
+                  "type": "Int64",
+                  "physicalType": "Int64"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "COMM_ID",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "COMM_SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "COMM_TRGT_SYS_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "COMM_STTUS_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "COMM_TYP_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "COMM_STTUS_CMNT_TX",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "LAST_UPDT_DTM",
+                  "type": "DateTime",
+                  "physicalType": "DateTime"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/external')",
+              "param_filename": "GuidingCare_FaxDispstion_Update.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "A1_TMP_BlueKCGdgCareFaxDispostionStsUpdate"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Pushdown_Transformation",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_File_To_Temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte AS (SELECT COMM_SK, COMM_SRC_SYS_CD, COMM_TRGT_SYS_CD, COMM_STTUS_CD, COMM_TYP_CD, COMM_STTUS_CMNT_TX, LAST_UPDT_DTM, LAST_UPDT_DTM AS COMM_SENT_DTM FROM @{pipeline().globalParameters.gbl_param_ids_staging}.A1_TMP_BlueKCGdgCareFaxDispostionStsUpdate) INSERT INTO @{pipeline().parameters.CommTrnsmsnOwner}.comm (COMM_SK, COMM_SRC_SYS_CD, COMM_TRGT_SYS_CD, COMM_STTUS_CD, COMM_TYP_CD, COMM_STTUS_CMNT_TX, LAST_UPDT_DTM, COMM_SENT_DTM) SELECT COMM_SK, COMM_SRC_SYS_CD, COMM_TRGT_SYS_CD, COMM_STTUS_CD, COMM_TYP_CD, COMM_STTUS_CMNT_TX, LAST_UPDT_DTM, COMM_SENT_DTM FROM cte",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2017 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY : BlueKCGdgCareFaxDispostionSeq\n\n\nPROCESSING : Job updates Disposition Status in COMM table\n\nMODIFICATIONS :\n\nDeveloper                               Date                         Project                                   Change Description            Development Project          Code Reviewer                   Date Reviewed       \n------------------------------              ------------------        ----------------------             ---------------------------------------       ------------------------------\\(9)----------------------------------         -------------------------------        \nBharani Chalamalasetty      04/01/2020             Fullfillment                       Original Programming               OutboundDev3                    Jaideep Mankala              04/20/2020\n\nSaranya A                                2021-06-29            US370660         Modified Job to process NextPage and RightFax    OutboundDev3          Jaideep Mankala                 06/30/2021\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)jobs in Parallel\nSaranya A                          2022-03-15               US502007            Replace DataSets with Sequential file                    OutboundDev3                    Jaideep Mankala                03/16/2022"
+}

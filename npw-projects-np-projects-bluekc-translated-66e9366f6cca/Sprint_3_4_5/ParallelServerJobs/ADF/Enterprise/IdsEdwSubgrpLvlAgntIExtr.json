@@ -1,0 +1,95 @@
+{
+  "name": "IdsEdwSubgrpLvlAgntIExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "cp_IdsEdwSubgrpLvlAgntIExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_main AS (SELECT A.SUBGRP_LVL_AGNT_SK, A.AGNT_ID, A.CLS_PLN_ID, A.GRP_ID, A.SUBGRP_ID, A.SUBGRP_LVL_AGNT_ROLE_TYP_CD_SK, A.EFF_DT_SK, A.TERM_DT_SK, A.AGNT_SK, A.CLS_PLN_SK, A.GRP_SK, A.SUBGRP_SK, COALESCE(cm.TRGT_CD, 'UNK') AS SRC_SYS_CD, lkp2.TRGT_CD AS SUBGRP_LVL_AGNT_ROLE_TYP_CD, lkp2.TRGT_CD_NM AS SUBGRP_LVL_AGNT_ROLE_TYP_NM, lkp2.CD_MPPNG_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.SUBGRP_LVL_AGNT A LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cm ON A.SRC_SYS_CD_SK = cm.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG lkp2 ON A.SUBGRP_LVL_AGNT_ROLE_TYP_CD_SK = lkp2.CD_MPPNG_SK) SELECT SUBGRP_LVL_AGNT_SK, CASE WHEN SRC_SYS_CD IS NULL OR SRC_SYS_CD = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, AGNT_ID, CLS_PLN_ID, GRP_ID, SUBGRP_ID, CASE WHEN CD_MPPNG_SK IS NULL THEN 'UNK' ELSE dbo.trim_default(SUBGRP_LVL_AGNT_ROLE_TYP_CD) END AS SUBGRP_LVL_AGNT_ROLE_TYP_CD, EFF_DT_SK AS SUBGRP_LVL_AGNT_EFF_DT_SK, TERM_DT_SK AS SUBGRP_LVL_AGNT_TERM_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, AGNT_SK, CLS_PLN_SK, GRP_SK, SUBGRP_SK, CASE WHEN CD_MPPNG_SK IS NULL THEN 'UNK' ELSE dbo.trim_default(SUBGRP_LVL_AGNT_ROLE_TYP_NM) END AS SUBGRP_LVL_AGNT_ROLE_TYP_NM, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, SUBGRP_LVL_AGNT_ROLE_TYP_CD_SK FROM cte_main",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "SUBGRP_LVL_AGNT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'load')",
+              "param_filename": "SUBGRP_LVL_AGNT_I.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "runtimeConfiguration": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/SubgrpLvlAgntI"
+    }
+  },
+  "Description": "MODIFICATIONS:\n            Sharon Andrew  08/10/2005-   Originally Programmed\n            Sharon Anderw    12/12/2005   Changed output file name from SUBGRP_LVL_AGNT_I.dat   to  SUBGRP_LVL_AGNT_HIST_I.dat\n            Sharon Anderw    07/20/2007   Per BlueJira 134 - Added GroupSK to the table - also table EDW SUB_LVL_AGNT_I    \n                                                               Took out EDW Parameters.   This implies sequencer change.\n\n\n                                                                                                                                                                                                                                           DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                                                ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------                          -------------------------------    ------------------------------    \nBhupinder Kaur            07/02/2013      5114                               Create Load File for EDW Table SUBGRP_LVL_AGNT_I                                                   EnterpriseWhseDevl\n\nAnnotations:\nWrite SUBGRP_LVL_AGNT Data into a Sequential file for Load Job IdsEdwSubgrpLvlAgntILoad.\nRead from IDS source table:\nSUBGRP_LVL_AGNT \n\nRun Cycle filters is applied to get just the needed rows forward\nJob: IdsEdwSubgrpLvlAgntIExtr\nAdd Defaults and Null Handling.\nReference Code Mapping Data for Code SK lookups\nCode SK lookups for Denormalization\nLookup Key:\nSUBGRP_LVL_AGNT_ROLE_TYP_CD_SK"
+}

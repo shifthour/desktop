@@ -1,0 +1,199 @@
+{
+  "name": "IdsEdwClmSrcDtlFLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsEdwClmSrcDtlFLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "CLM_SK"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "CLM_SK",
+                  "type": "Int64",
+                  "physicalType": "int"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "CLM_ID",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_DT_SK",
+                  "type": "String",
+                  "physicalType": "char"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_DT_SK",
+                  "type": "String",
+                  "physicalType": "char"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "SRC_FILE_ID",
+                  "type": "String",
+                  "physicalType": "varchar"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "CLM_SRC_DTL_F.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "CLM_SRC_DTL_F"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DatabricksNotebook_DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Copy_IdsEdwClmSrcDtlFLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "CLM_SRC_DTL_F.dat",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Claims/EdwLoads/ClmSrcDtlF"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                                            \nDEVELOPER                             DATE                PROJECT                      DATASTAGE ENVIRONMENT     DESCRIPTION                                             CODE REVIEWER           DATE REVIEW                                            \n                                                                    \n-----------------------------------------         --------------------     ----------------------------------     -----------------------------------------------         ----------------------------------------------------                  --------------------------------        --------------------\nHariKrishnaRao Yadav            2022-11-08           US 559701                                EnterpriseDevB                     Original Programming                                  Jeyaprasanna                   2023-01-14\n\nAnnotations:\nCopy For Buffer\nRead the Load ready file created in IdsEdwBnfSumDExtr Job\nLoad rejects are redirected into a Reject file\n\nThis file is an append\nLoad file created in the previous job will be loaded into the target DB2 table here. \n\nLoad Type; \"Update then Insert\" .\nJob Name: \nIdsEdwClmSrcDtlFLoad"
+}

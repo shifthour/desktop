@@ -1,0 +1,288 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CHANNEL_PARTNER
+  SALES_MANAGER
+  AGENT
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  NEGOTIATION
+  CONVERTED
+  LOST
+}
+
+enum PropertyType {
+  APARTMENT
+  VILLA
+  PLOT
+  COMMERCIAL
+  OFFICE_SPACE
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  BOOKED
+  SOLD
+  HOLD
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String
+  phone           String?
+  role            UserRole  @default(AGENT)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  channelPartnerId String?
+  channelPartner   ChannelPartner? @relation("ChannelPartnerUser", fields: [channelPartnerId], references: [id])
+  
+  managedPartners  ChannelPartner[] @relation("ManagedPartners")
+  assignedLeads    Lead[]          @relation("AssignedAgent")
+  createdLeads     Lead[]          @relation("LeadCreator")
+  activities       Activity[]
+  deals            Deal[]
+  tasks            Task[]
+}
+
+model ChannelPartner {
+  id              String    @id @default(cuid())
+  companyName     String
+  registrationNo  String?   @unique
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  website         String?
+  gstNumber       String?
+  panNumber       String?
+  
+  commissionRate  Float     @default(2.5)
+  totalEarnings   Float     @default(0)
+  pendingPayments Float     @default(0)
+  
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  managerId       String?
+  manager         User?     @relation("ManagedPartners", fields: [managerId], references: [id])
+  
+  users           User[]    @relation("ChannelPartnerUser")
+  leads           Lead[]
+  deals           Deal[]
+  commissions     Commission[]
+  projects        ProjectPartner[]
+}
+
+model Lead {
+  id              String      @id @default(cuid())
+  firstName       String
+  lastName        String?
+  email           String?
+  phone           String
+  alternatePhone  String?
+  
+  source          String?
+  status          LeadStatus  @default(NEW)
+  budget          Float?
+  notes           String?
+  
+  interestedIn    PropertyType[]
+  preferredLocation String?
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  lastContactedAt DateTime?
+  
+  assignedToId    String?
+  assignedTo      User?       @relation("AssignedAgent", fields: [assignedToId], references: [id])
+  
+  createdById     String
+  createdBy       User        @relation("LeadCreator", fields: [createdById], references: [id])
+  
+  channelPartnerId String?
+  channelPartner   ChannelPartner? @relation(fields: [channelPartnerId], references: [id])
+  
+  activities      Activity[]
+  deals           Deal[]
+  tasks           Task[]
+}
+
+model Project {
+  id              String    @id @default(cuid())
+  name            String
+  developerName   String
+  location        String
+  city            String
+  totalUnits      Int
+  availableUnits  Int
+  priceRange      String?
+  description     String?
+  amenities       String[]
+  brochureUrl     String?
+  
+  launchDate      DateTime?
+  completionDate  DateTime?
+  reraNumber      String?
+  
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  properties      Property[]
+  partners        ProjectPartner[]
+}
+
+model ProjectPartner {
+  id              String    @id @default(cuid())
+  
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  
+  partnerId       String
+  partner         ChannelPartner @relation(fields: [partnerId], references: [id])
+  
+  commissionRate  Float?
+  createdAt       DateTime  @default(now())
+  
+  @@unique([projectId, partnerId])
+}
+
+model Property {
+  id              String    @id @default(cuid())
+  unitNumber      String
+  type            PropertyType
+  status          PropertyStatus @default(AVAILABLE)
+  
+  floor           Int?
+  area            Float
+  price           Float
+  facing          String?
+  bedrooms        Int?
+  bathrooms       Int?
+  parking         Boolean   @default(false)
+  furnishing      String?
+  
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id])
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  deals           Deal[]
+  
+  @@unique([projectId, unitNumber])
+}
+
+model Deal {
+  id              String    @id @default(cuid())
+  dealNumber      String    @unique @default(cuid())
+  
+  leadId          String
+  lead            Lead      @relation(fields: [leadId], references: [id])
+  
+  propertyId      String
+  property        Property  @relation(fields: [propertyId], references: [id])
+  
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  
+  channelPartnerId String?
+  channelPartner   ChannelPartner? @relation(fields: [channelPartnerId], references: [id])
+  
+  dealValue       Float
+  status          String    @default("ACTIVE")
+  
+  bookingDate     DateTime  @default(now())
+  closingDate     DateTime?
+  
+  notes           String?
+  documents       String[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  commission      Commission?
+}
+
+model Commission {
+  id              String    @id @default(cuid())
+  
+  dealId          String    @unique
+  deal            Deal      @relation(fields: [dealId], references: [id])
+  
+  channelPartnerId String
+  channelPartner   ChannelPartner @relation(fields: [channelPartnerId], references: [id])
+  
+  amount          Float
+  percentage      Float
+  status          CommissionStatus @default(PENDING)
+  
+  approvedDate    DateTime?
+  paidDate        DateTime?
+  paymentMethod   String?
+  transactionRef  String?
+  
+  notes           String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Activity {
+  id              String    @id @default(cuid())
+  type            String
+  description     String
+  
+  leadId          String?
+  lead            Lead?     @relation(fields: [leadId], references: [id])
+  
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  
+  metadata        Json?
+  
+  createdAt       DateTime  @default(now())
+}
+
+model Task {
+  id              String    @id @default(cuid())
+  title           String
+  description     String?
+  dueDate         DateTime?
+  priority        String    @default("MEDIUM")
+  status          String    @default("PENDING")
+  
+  leadId          String?
+  lead            Lead?     @relation(fields: [leadId], references: [id])
+  
+  assignedToId    String
+  assignedTo      User      @relation(fields: [assignedToId], references: [id])
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?
+}

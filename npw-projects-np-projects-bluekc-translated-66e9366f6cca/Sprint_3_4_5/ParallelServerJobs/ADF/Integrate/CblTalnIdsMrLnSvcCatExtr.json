@@ -1,0 +1,360 @@
+{
+  "name": "CblTalnIdsMrLnSvcCatExtr",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "FileName": {
+        "type": "String"
+      },
+      "Vendor": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyLandingToTmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.49384_TMP_CblTalnIdsMrLnSvcCatExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'landing')",
+              "param_filename": "@{pipeline().parameters.FileName}",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "49384_TMP_CblTalnIdsMrLnSvcCatExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptFilter",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyLandingToTmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.49384_TMPVAL_CblTalnIdsMrLnSvcCatExtr; SELECT RTRIM(LTRIM(MR_LN_ID)) AS MR_LN_ID, RTRIM(LTRIM(ACTURL_HLTH_CST_GRP_SUM_ID)) AS ACTURL_HLTH_CST_GRP_SUM_ID, RTRIM(LTRIM(CST_MDL_UTILITY_ID)) AS CST_MDL_UTILITY_ID, RTRIM(LTRIM(MR_LN_DESC)) AS MR_LN_DESC, RTRIM(LTRIM(MR_LN_PFX_DESC)) AS MR_LN_PFX_DESC, RTRIM(LTRIM(MR_LN_BODY_DESC)) AS MR_LN_BODY_DESC, RTRIM(LTRIM(MR_LN_SFX_DESC)) AS MR_LN_SFX_DESC INTO @{pipeline().globalParameters.gbl_param_ids_staging}.49384_TMPVAL_CblTalnIdsMrLnSvcCatExtr FROM @{pipeline().globalParameters.gbl_param_ids_staging}.49384_TMP_CblTalnIdsMrLnSvcCatExtr WHERE MR_LN_ID IS NOT NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.49384_TMPERR_CblTalnIdsMrLnSvcCatExtr; SELECT MR_LN_ID, ACTURL_HLTH_CST_GRP_SUM_ID, CST_MDL_UTILITY_ID, MR_LN_DESC, MR_LN_PFX_DESC, MR_LN_BODY_DESC, MR_LN_SFX_DESC INTO @{pipeline().globalParameters.gbl_param_ids_staging}.49384_TMPERR_CblTalnIdsMrLnSvcCatExtr FROM @{pipeline().globalParameters.gbl_param_ids_staging}.49384_TMP_CblTalnIdsMrLnSvcCatExtr WHERE MR_LN_ID IS NULL",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyValidToDsFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptFilter",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "MR_LN_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "ACTURL_HLTH_CST_GRP_SUM_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "CST_MDL_UTILITY_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "MR_LN_DESC",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "MR_LN_PFX_DESC",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "MR_LN_BODY_DESC",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "MR_LN_SFX_DESC",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "49384_TMPVAL_CblTalnIdsMrLnSvcCatExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'ds')",
+              "param_filename": "@concat('MR_LN_SVC_CAT.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyErrorToExtFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptFilter",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "49384_TMPERR_CblTalnIdsMrLnSvcCatExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'external')",
+              "param_filename": "@concat(pipeline().parameters.Vendor, '_MRLINESVC_ERRORS.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/HCG/MrLnSvcCat"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #               Change Description                             Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRaja Gummadi                  2015-04-22      5460                                Originally Programmed                            IntegrateNewDevl         Kalyan Neelam             2015-04-24\n\nManasa Andru                  2016-06-29      TFS - 12571                    Corrected the fields order in the              IntegrateDev2               Jag Yelavarthi              2016-07-11\n                                                                                                       InputFile stage to match with the source file\n\nKrishnakanth                    2017-12-12      30001                            Parameterized the variable Vendor           IntegrateDev2               Kalyan Neelam             2017-12-12\n  Manivannan\n\nAnnotations:\nJob name: CblTalnIdsMrLnSvcCatExtr\nINPUT : P1.IDS.COBALTTALON.MRLINE.*.CSV\nOUTPUT: MR_LN_SVC_CAT.#SrcSysCd#.extr.#RunID#.ds"
+}

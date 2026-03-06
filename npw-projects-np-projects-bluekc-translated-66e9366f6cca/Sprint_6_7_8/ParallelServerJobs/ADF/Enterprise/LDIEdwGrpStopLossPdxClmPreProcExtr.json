@@ -1,0 +1,206 @@
+{
+  "name": "LDIEdwGrpStopLossPdxClmPreProcExtr",
+  "properties": {
+    "parameters": {
+      "InFileName": {
+        "type": "String"
+      },
+      "RunId": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.W0_TMP_LDIEdwGrpStopLossPdxClmPreProcExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/StopLoss/Pdx/LDI')",
+              "param_filename": "@{pipeline().parameters.InFileName}",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "W0_TMP_LDIEdwGrpStopLossPdxClmPreProcExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.W1_TMP_LDIEdwGrpStopLossPdxClmPreProcExtr;WITH cte AS (SELECT 'LDI' AS SRC_SYS_CD, dbo.trim_default(GRP_NO) AS GRP_BASE, LEFT(CONVERT(VARCHAR(10), TRY_CONVERT(date, PD_DT, 112), 23),7) AS PRCS_DT FROM @{pipeline().globalParameters.gbl_param_edw_staging}.W0_TMP_LDIEdwGrpStopLossPdxClmPreProcExtr) SELECT SRC_SYS_CD,GRP_BASE,PRCS_DT INTO @{pipeline().globalParameters.gbl_param_edw_staging}.W1_TMP_LDIEdwGrpStopLossPdxClmPreProcExtr FROM cte",
+                "type": "Expression"
+              }
+            }
+          ],
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        }
+      },
+      {
+        "name": "CopyToFinalFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "W1_TMP_LDIEdwGrpStopLossPdxClmPreProcExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/verified')",
+              "param_filename": "@concat('PDX_EDW_CLM_STD_INPT_LDI.dat.', pipeline().parameters.RunId)",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/StopLoss/Pdx/LDI"
+    }
+  },
+  "description": "\u00c2\u00a9 Copyright 2018 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    \n\nPROCESSING : Reads data from the SavRx Claim file and creats a common output\n\nModifications:                        \n Developer                           Date              Project/Altiris #    Change Description                                       Development Project    Code Reviewer         Date Reviewed\n---------------------------------------     -------------------   ------------------------    -------------------------------------------------------------------   ----------------------------------   -----------------------------    -------------------------   \nKaushik Kapoor                   2018-03-30    5828                    Initial Programming                                         EnterpriseDev2            Kalyan Neelam          2018-04-20\nKaushik Kapoor                   2018-09-10    5828                    Changed the calculation column to PD_DT   EnterpriseDev2            Hugh Sisson             2018-09-19\n\nAnnotations:\nThis job extracts data from LDI claims file and load file date and other required details in to a common layout for further use."
+}

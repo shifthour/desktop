@@ -1,0 +1,360 @@
+{
+  "name": "IdsFepProvAddrRowCntBal",
+  "properties": {
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_SrcTrgtCompTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT PROV_ADDR.SRC_SYS_CD_SK as TRGT_SRC_SYS_CD_SK, PROV_ADDR.PROV_ADDR_ID as TRGT_PROV_ADDR_ID, PROV_ADDR.PROV_ADDR_TYP_CD_SK as TRGT_PROV_ADDR_TYP_CD_SK, PROV_ADDR.PROV_ADDR_EFF_DT_SK as TRGT_PROV_ADDR_EFF_DT_SK, B_PROV_ADDR.SRC_SYS_CD_SK as SRC_SYS_CD_SK, B_PROV_ADDR.PROV_ADDR_ID, B_PROV_ADDR.PROV_ADDR_TYP_CD_SK, B_PROV_ADDR.PROV_ADDR_EFF_DT_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG MPPNG, @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV_ADDR PROV_ADDR FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.B_PROV_ADDR B_PROV_ADDR ON PROV_ADDR.PROV_ADDR_ID = B_PROV_ADDR.PROV_ADDR_ID AND PROV_ADDR.PROV_ADDR_TYP_CD_SK = B_PROV_ADDR.PROV_ADDR_TYP_CD_SK AND PROV_ADDR.PROV_ADDR_EFF_DT_SK = B_PROV_ADDR.PROV_ADDR_EFF_DT_SK AND PROV_ADDR.SRC_SYS_CD_SK = B_PROV_ADDR.SRC_SYS_CD_SK WHERE PROV_ADDR.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND PROV_ADDR.SRC_SYS_CD_SK = MPPNG.CD_MPPNG_SK AND MPPNG.TRGT_CD = 'BCA'",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.SRC_TMP_IdsFepProvAddrRowCntBal",
+              "type": "Expression"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "DUMMYTABLE"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "SRC_TMP_IdsFepProvAddrRowCntBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_SrcTrgtCompTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RES_TMP_IdsFepProvAddrRowCntBal; SELECT TRGT_SRC_SYS_CD_SK, TRGT_PROV_ADDR_ID, TRGT_PROV_ADDR_TYP_CD_SK, TRGT_PROV_ADDR_EFF_DT_SK, SRC_SYS_CD_SK, PROV_ADDR_ID, PROV_ADDR_TYP_CD_SK, PROV_ADDR_EFF_DT_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RES_TMP_IdsFepProvAddrRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.SRC_TMP_IdsFepProvAddrRowCntBal WHERE PROV_ADDR_ID IS NULL OR TRGT_PROV_ADDR_ID IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.ERR_TMP_IdsFepProvAddrRowCntBal; SELECT TOP 1 'ROW COUNT BALANCING BCA FEP - IDS PROV ADDR OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.ERR_TMP_IdsFepProvAddrRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.SRC_TMP_IdsFepProvAddrRowCntBal WHERE @{pipeline().parameters.ToleranceCd} = 'OUT'",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_Research",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "TRGT_SRC_SYS_CD_SK",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "TRGT_PROV_ADDR_ID",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "TRGT_PROV_ADDR_TYP_CD_SK",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "TRGT_PROV_ADDR_EFF_DT_SK",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD_SK",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "PROV_ADDR_ID",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "PROV_ADDR_TYP_CD_SK",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "PROV_ADDR_EFF_DT_SK",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "RES_TMP_IdsFepProvAddrRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/research')",
+              "param_filename": "@concat('FepIdsProvAddrResearch.dat.',pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_Notify",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "NOTIFICATION",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "ERR_TMP_IdsFepProvAddrRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/notify')",
+              "param_filename": "FepProvidersBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/ProvAddr/Balancing"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                        DATASTAGE               CODE                           DATE\nDEVELOPER                     DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------          ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nSudhir Bomshetty              2017-09-11           5781                           Initial Programming                                                                               IntegrateDev2               Hugh Sisson               2017-09-26\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - PROV_ADDR    Job Name: IdsFepProvAddrCdRowCntBal\nJob Name: IdsIdsWCdmEtlDrvrLoad"
+}

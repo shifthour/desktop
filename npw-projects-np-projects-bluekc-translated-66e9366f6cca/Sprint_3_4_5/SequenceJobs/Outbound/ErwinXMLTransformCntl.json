@@ -1,0 +1,1211 @@
+{
+  "name": "ErwinXMLTransformCntl",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Outbound/Jobs/Erwin"
+    },
+    "parameters": {
+      "APT_AUTO_TRANSPORT_BLOCK_SIZE": {
+        "type": "String",
+        "defaultValue": "true"
+      },
+      "ModelName": {
+        "type": "String",
+        "defaultValue": "Unknown"
+      },
+      "SourceDB": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FtpRemotePathGet": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FtpRemotePathPut": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "FileList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ModelNameVar": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TempFile": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FileName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Source": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Database": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "OutfileCDMA": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "OutfileDS": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FilePathFull": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FtpLanPath": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "OutfileCdmaFinal": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "LIST_FILES",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/LIST.FILES')",
+          "baseParameters": {
+            "file_path": {
+              "value": "@pipeline().parameters.FtpRemotePathPut",
+              "type": "Expression"
+            },
+            "file_pattern": {
+              "value": "'*std.xml'",
+              "type": "Expression"
+            },
+            "gbl_param_environment": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Set_FileList",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "LIST_FILES",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "FileList",
+          "value": {
+            "value": "@string(activity('LIST_FILES').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Set_JobName",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Set_FileList",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "JobName",
+          "value": {
+            "value": "@pipeline().Pipeline",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "CheckList",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Set_JobName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(length(trim(variables('FileList'))), 0)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "StartLoop_Foreach",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "CheckList",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "items": {
+            "value": "@split(variables('FileList'), ',')",
+            "type": "Expression"
+          },
+          "activities": [
+            {
+              "name": "Set_ModelNameVar",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat('EReplace(', item(), ', \"_std.xml\", \"\")')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_ModelName",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_ModelNameVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "ModelNameVar",
+                "value": {
+                  "value": "@string(activity('Set_ModelNameVar').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_TempFileVar",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_ModelName",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat('EReplace(', item(), ', \"_std.xml\", \"_std_LE1.xml\")')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_TempFile",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_TempFileVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "TempFile",
+                "value": {
+                  "value": "@string(activity('Set_TempFileVar').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_FileNameVar",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_TempFile",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat('', item(), '')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_FileName",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_FileNameVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "FileName",
+                "value": {
+                  "value": "@string(activity('Set_FileNameVar').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_Source",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_FileName",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat('EReplace(', variables('ModelNameVar'), ', \"_\", \" \")')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_SourceVar",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_Source",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "Source",
+                "value": {
+                  "value": "@string(activity('Set_Source').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_Database",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_SourceVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat('If(UpCase(trim(pipeline().parameters.SourceDB))=\"DB2\", \"DB2/UDB\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"SQL\", \"MICROSOFT SQL SERVER\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"SYBASE\", \"SYBASE AS ENTERPRISE\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"FILE\", \"MICROSOFT SQL SERVER\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"AZURE\", \"MICROSOFT SQL SERVER\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"SNOWFLAKE\", \"MICROSOFT SQL SERVER\", \"Unknown\"))))))')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_DatabaseVar",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_Database",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "Database",
+                "value": {
+                  "value": "@string(activity('Set_Database').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_OutfileCDMA",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_DatabaseVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat(variables('ModelNameVar'), '_cdma.xml')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_OutfileCDMAVar",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_OutfileCDMA",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "OutfileCDMA",
+                "value": {
+                  "value": "@string(activity('Set_OutfileCDMA').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_OutfileDS",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_OutfileCDMAVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat(variables('ModelNameVar'), '_ds.xml')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_OutfileDSVar",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_OutfileDS",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "OutfileDS",
+                "value": {
+                  "value": "@string(activity('Set_OutfileDS').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_FilePathFull",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_OutfileDSVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat(pipeline().parameters.FtpRemotePathPut, '')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_FilePathFullVar",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_FilePathFull",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "FilePathFull",
+                "value": {
+                  "value": "@string(activity('Set_FilePathFull').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_FtpLanPath",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_FilePathFullVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat('If(UpCase(trim(pipeline().parameters.SourceDB))=\"DB2\", \"/Library/library/IAD/PHI11/Dedicated/Applications/MetaStage/ERwin_xmls/IAD_EDW_Models\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"SQL\", \"/Library/library/IAD/PHI11/Dedicated/Applications/MetaStage/ERwin_xmls/Sql_Server_Models\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"SYBASE\", \"/Library/library/IAD/PHI11/Dedicated/Applications/MetaStage/ERwin_xmls/Sybase_Models\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"FILE\", \"/Library/library/IAD/PHI11/Dedicated/Applications/MetaStage/ERwin_xmls/IAD_File_Layouts\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"AZURE\", \"/Library/library/IAD/PHI11/Dedicated/Applications/MetaStage/ERwin_xmls/Azure_Models\", If(UpCase(trim(pipeline().parameters.SourceDB))=\"SNOWFLAKE\", \"/Library/library/IAD/PHI11/Dedicated/Applications/MetaStage/ERwin_xmls/Snowflake_Models\", \"Unknown\"))))))')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_FtpLanPathVar",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_FtpLanPath",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "FtpLanPath",
+                "value": {
+                  "value": "@string(activity('Set_FtpLanPath').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "Set_OutfileCdmaFinal",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_FtpLanPathVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/ExpressionEval')",
+                "baseParameters": {
+                  "expression": {
+                    "value": "@concat('EReplace(', variables('ModelNameVar'), ', \"_\", \" \") : \".xml\"')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Set_OutfileCdmaFinalVar",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Set_OutfileCdmaFinal",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "OutfileCdmaFinal",
+                "value": {
+                  "value": "@string(activity('Set_OutfileCdmaFinal').output.runOutput)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "PreProcess1",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Set_OutfileCdmaFinalVar",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/FileName",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/ -f1`_Cleanup.xml",
+                    "type": "Expression"
+                  },
+                  "command": "copy",
+                  "project": "outbound"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Input_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "PreProcess1",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/le1.xml",
+                    "type": "Expression"
+                  },
+                  "command": "touch",
+                  "project": "outbound"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "CDMA_XML",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Input_File",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Erwin/ErwinCdmaXMLTrans')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "APT_LUTCREATE_FIXEDBLOCK": "3",
+                  "APT_TSORT_STRESS_BLOCKSIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_TSORT_STRESS_BLOCKSIZE",
+                    "type": "Expression"
+                  },
+                  "APT_LATENCY_COEFFICIENT": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_LATENCY_COEFFICIENT",
+                    "type": "Expression"
+                  },
+                  "APT_DISABLE_COMBINATION": "\"True\"",
+                  "APT_DEFAULT_TRANSPORT_BLOCK_SIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_DEFAULT_TRANSPORT_BLOCK_SIZE",
+                    "type": "Expression"
+                  },
+                  "APT_MAX_TRANSPORT_BLOCK_SIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_MAX_TRANSPORT_BLOCK_SIZE",
+                    "type": "Expression"
+                  },
+                  "APT_MAX_DELIMITED_READ_SIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_MAX_DELIMITED_READ_SIZE",
+                    "type": "Expression"
+                  },
+                  "InputFilePath": {
+                    "value": "@variables('FilePathFull')",
+                    "type": "Expression"
+                  },
+                  "OutPutFilePath": {
+                    "value": "@variables('FilePathFull')",
+                    "type": "Expression"
+                  },
+                  "InputFileName": {
+                    "value": "@variables('TempFile')",
+                    "type": "Expression"
+                  },
+                  "OutFileName": {
+                    "value": "@variables('OutfileCDMA')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "FTP_Put_CDMA_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "CDMA_XML",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                "baseParameters": {
+                  "MACHINE": "\"o_lib\"",
+                  "FTPCMD": "\"put\"",
+                  "LOCALPATH": {
+                    "value": "@variables('FilePathFull')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": {
+                    "value": "@variables('OutfileCDMA')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": {
+                    "value": "@variables('FtpLanPath')",
+                    "type": "Expression"
+                  },
+                  "REMOTEFILENAME": {
+                    "value": "@variables('OutfileCDMA')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "DataStage_XML",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Input_File",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/Erwin/ErwinDataStageXMLTrans')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "APT_LUTCREATE_FIXEDBLOCK": "3",
+                  "APT_DEFAULT_TRANSPORT_BLOCK_SIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_DEFAULT_TRANSPORT_BLOCK_SIZE",
+                    "type": "Expression"
+                  },
+                  "APT_MAX_TRANSPORT_BLOCK_SIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_MAX_TRANSPORT_BLOCK_SIZE",
+                    "type": "Expression"
+                  },
+                  "APT_MAX_DELIMITED_READ_SIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_MAX_DELIMITED_READ_SIZE",
+                    "type": "Expression"
+                  },
+                  "APT_LATENCY_COEFFICIENT": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_LATENCY_COEFFICIENT",
+                    "type": "Expression"
+                  },
+                  "APT_AUTO_TRANSPORT_BLOCK_SIZE": {
+                    "value": "@pipeline().parameters.APT_AUTO_TRANSPORT_BLOCK_SIZE",
+                    "type": "Expression"
+                  },
+                  "APT_TSORT_STRESS_BLOCKSIZE": {
+                    "value": "@pipeline().globalParameters.gbl_param_APT_TSORT_STRESS_BLOCKSIZE",
+                    "type": "Expression"
+                  },
+                  "InputFilePath": {
+                    "value": "@variables('FilePathFull')",
+                    "type": "Expression"
+                  },
+                  "OutPutFilePath": {
+                    "value": "@variables('FilePathFull')",
+                    "type": "Expression"
+                  },
+                  "InputFileName": {
+                    "value": "@variables('TempFile')",
+                    "type": "Expression"
+                  },
+                  "SourceDB": {
+                    "value": "@variables('Database')",
+                    "type": "Expression"
+                  },
+                  "Source": {
+                    "value": "@variables('Source')",
+                    "type": "Expression"
+                  },
+                  "OutFileName": {
+                    "value": "@variables('OutfileDS')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "PostProcess1",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "DataStage_XML",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/Composed_DSFormat.xml",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/Composed_DSFormat_Final.xml",
+                    "type": "Expression"
+                  },
+                  "command": "copy",
+                  "project": "outbound"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "FTP_Put_DS_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "PostProcess1",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+                "baseParameters": {
+                  "MACHINE": "\"o_lib\"",
+                  "FTPCMD": "\"put\"",
+                  "LOCALPATH": {
+                    "value": "@variables('FilePathFull')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": {
+                    "value": "@variables('OutfileDS')",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": {
+                    "value": "@variables('FtpLanPath')",
+                    "type": "Expression"
+                  },
+                  "REMOTEFILENAME": {
+                    "value": "@variables('OutfileDS')",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "MoveInput",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "FTP_Put_CDMA_File",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                },
+                {
+                  "activity": "FTP_Put_DS_File",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/FileName",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/processed",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "outbound"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            },
+            {
+              "name": "Cleanup1",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "MoveInput",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "notebookPath": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/*.xml",
+                    "type": "Expression"
+                  },
+                  "command": "delete",
+                  "project": "outbound"
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "name": "EdwBhiMbrCobItemSplitXcomLoad",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_EdwBhiMbrCobItemSplitXcomLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH source_data AS (SELECT A.MBR_UNIQ_KEY, A.MBR_EFF_DT_SK, A.MBR_TERM_DT_SK, B.MBR_COB_TYP_CD, B.MBR_COB_EFF_DT_SK, B.MBR_COB_TERM_DT_SK FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.W_BHI_MBR_ENR_SPLT A JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.W_BHI_MBR_COB B ON A.MBR_UNIQ_KEY = B.MBR_UNIQ_KEY WHERE B.MBR_COB_TYP_CD = 'XCOM' AND A.MBR_EFF_DT_SK <= B.MBR_COB_TERM_DT_SK AND A.MBR_TERM_DT_SK >= B.MBR_COB_EFF_DT_SK AND A.MBR_MED_COB_CD = 'P'), transform_data AS (SELECT source_data.MBR_UNIQ_KEY AS MBR_UNIQ_KEY, source_data.MBR_EFF_DT_SK AS MBR_EFF_DT_SK, source_data.MBR_TERM_DT_SK AS MBR_TERM_DT_SK, source_data.MBR_COB_TYP_CD AS MBR_COB_TYP_CD, source_data.MBR_COB_EFF_DT_SK AS MBR_COB_EFF_DT_SK, source_data.MBR_COB_TERM_DT_SK AS MBR_COB_TERM_DT_SK, CASE WHEN source_data.MBR_EFF_DT_SK < source_data.MBR_COB_EFF_DT_SK THEN source_data.MBR_EFF_DT_SK ELSE 'NULL' END AS BEG_EFF_DT_SK, CASE WHEN source_data.MBR_EFF_DT_SK < source_data.MBR_COB_EFF_DT_SK THEN CONVERT(VARCHAR(8), DATEADD(DAY, -1, CONVERT(DATE, source_data.MBR_COB_EFF_DT_SK, 112)), 112) ELSE 'NULL' END AS BEG_TERM_DT_SK, CASE WHEN source_data.MBR_COB_EFF_DT_SK < source_data.MBR_EFF_DT_SK THEN source_data.MBR_EFF_DT_SK ELSE source_data.MBR_COB_EFF_DT_SK END AS MID_EFF_DT_SK, CASE WHEN source_data.MBR_TERM_DT_SK < source_data.MBR_COB_TERM_DT_SK THEN source_data.MBR_TERM_DT_SK ELSE source_data.MBR_COB_TERM_DT_SK END AS MID_TERM_DT_SK, CASE WHEN source_data.MBR_TERM_DT_SK > source_data.MBR_COB_TERM_DT_SK THEN CONVERT(VARCHAR(8), DATEADD(DAY, 1, CONVERT(DATE, source_data.MBR_COB_TERM_DT_SK, 112)), 112) ELSE 'NULL' END AS END_EFF_DT_SK, CASE WHEN source_data.MBR_TERM_DT_SK > source_data.MBR_COB_TERM_DT_SK THEN source_data.MBR_TERM_DT_SK ELSE 'NULL' END AS END_TERM_DT_SK FROM source_data) SELECT MBR_UNIQ_KEY, MBR_EFF_DT_SK, MBR_TERM_DT_SK, MBR_COB_TYP_CD, MBR_COB_EFF_DT_SK, MBR_COB_TERM_DT_SK, BEG_EFF_DT_SK, BEG_TERM_DT_SK, MID_EFF_DT_SK, MID_TERM_DT_SK, END_EFF_DT_SK, END_TERM_DT_SK FROM transform_data",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_EDWOwner}.W_BHI_MBR_COB",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "W_BHI_MBR_ENR_SPLT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "W_BHI_MBR_COB"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {},
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/BHI/Member/Member_XCOM"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2013 Blue Cross/Blue Shield of Kansas City\n\nJOB NAME:  EdwBhiMbrCobItemSplitXcomLoad\n\n\nDESCRIPTION:  Loads Item Split table for cob type code = XCOM\n\n\nCALLED BY:  \n\nHASH FILES:  \n\n\nRERUN INFORMATION: \n\n             PREVIOUS RUN SUCCESSFUL:   Nothing to reset. \n             PREVIOUS RUN ABORTED:         Nothing to reset, just restart.\n\n\nMODIFICATIONS:\n\nDeveloper                 Date                    Project/Ticket #\\(9)           Change Description\\(9)\\(9)\\(9)              Development Project\\(9)      Code Reviewer\\(9)        Date Reviewed       \n------------------               -------------------         ---------------------------\\(9)           -----------------------------------------------------------------------            --------------------------------\\(9)      -------------------------         -------------------------    \nPraveen Annam            2013-08-28          5115 BHI                               Original programming                                                  EnterpriseNewDevl        Kalyan Neelam          2013-11-13                               \n\nKrishnakanth M         2018-04-04              TFS19405                         Changed the auto commit mode to \"ON\"                   EnterpriseDev2                 Jaideep Mankala        04/05/2018\n\nAnnotations:\nLoad ItemSplit table for Cob_Type Xcom"
+}

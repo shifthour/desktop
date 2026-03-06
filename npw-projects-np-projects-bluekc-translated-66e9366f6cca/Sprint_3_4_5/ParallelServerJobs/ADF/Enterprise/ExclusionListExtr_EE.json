@@ -1,0 +1,90 @@
+{
+  "name": "ExclusionListExtr_EE",
+  "properties": {
+    "description": "",
+    "parameters": {
+      "Subject": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_ExclusionListExtr_EE",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte AS (SELECT LTRIM(RTRIM(TASK_NM)) AS TASK_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.W_TASK_EXCL WHERE TASK_SUBJ_NM = '@{pipeline().parameters.Subject}') SELECT '@{pipeline().parameters.Subject}' AS SUBJECT, STUFF((SELECT ';' + c2.TASK_NM FROM cte c2 FOR XML PATH('')),1,1,'') AS TASKLIST",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "W_TASK_EXCL"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/JobSequencer/CommonComponents/load')",
+              "param_filename": "@concat(pipeline().parameters.Subject, '_TASK_EXCL.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/JobSequencer/CommonComponents"
+    }
+  },
+  "Description": "COPYRIGHT 2005 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:    ExclusionListExtr\n\n\nDESCRIPTION:   Extract the records for a subject from the DB2 - W_TASK_EXCL table.\n      \n\nINPUTS:\t Subject name\n\n  \nHASH FILES:  TASK_EXCL\n\n\nTRANSFORMS:  None\n                        \n   \nPROCESSING:   Task rows from DB2 table are concatenated together with a semi-colon delimiter.  Each row overwrites the previous row in the TASK_EXCL UV table.  The last entry is the combination of all DB2 entries.\n \n\nOUTPUTS:  A semi-colon delimited string of tasks to exclude for a subject.\n                    \n\n\nMODIFICATIONS:\n              B Leland           05/25/2005  -  Initial programming\n\n\n===============================================\n\n\nMODIFICATIONS:\n                                                                                                                                                                                                                      \nDEVELOPER                         DATE                 PROJECT                                                  DESCRIPTION                                                          DATASTAGE   ENVIRONMENT                     CODE  REVIEW            REVIEW DATE                    \n-----------------------------                 ----------------------      ------------------------------                                  -----------------------------------                                                ------------------------------                                          ------------------------------      --------------------\nNagesh Bandi                         07/01/2013        5114-Enterprise Efficiencies                 Extract subject records from W_TASK_EXCL                EnterpriseWrhseDevl\n\nAnnotations:\nExtract subject records from W_TASK_EXCL and Loads into TASK_EXCL file\n\nJob Name:\nIdsEdwExclusionListExtr\nRead TASK_SUBJ_NM,TASK_NM fields from W_TASK_EXCL table  from IDS.\nThis file has Job names which are supposed to skip from run cycle.\n\nJob names from file TASK_EXCL are pulled in sequencer going further.\nConcat TASKLIST"
+}

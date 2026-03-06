@@ -1,0 +1,91 @@
+{
+  "name": "IdsEdwClmOvrdDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "Int"
+      },
+      "EDWRunCycleDate": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "cp_IdsEdwClmOvrdDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH cte_main AS (SELECT CLM_OVRD.CLM_OVRD_SK, CASE WHEN CD.TRGT_CD IS NOT NULL AND LEN(dbo.trim_default(CD.TRGT_CD))>0 THEN CD.TRGT_CD ELSE 'UNK' END AS SRC_SYS_CD, CLM_OVRD.CLM_ID, CLM_OVRD.CLM_OVRD_ID, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CLM_OVRD.CLM_OVRD_EXCD_SK AS EXCD_SK, CLM_OVRD.CLM_SK, CLM_OVRD.USER_ID_SK, CLM_OVRD.OVRD_DT_SK AS CLM_OVRD_DT_SK, CLM_OVRD.OVRD_AMT, CLM_OVRD.OVRD_VAL_DESC, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CLM_OVRD CLM_OVRD INNER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.W_EDW_ETL_DRVR DT ON CLM_OVRD.CLM_ID=DT.CLM_ID AND CLM_OVRD.SRC_SYS_CD_SK=DT.SRC_SYS_CD_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON CLM_OVRD.SRC_SYS_CD_SK=CD.CD_MPPNG_SK WHERE CLM_OVRD.CLM_OVRD_SK NOT IN (0,1)), cte_na AS (SELECT 1 AS CLM_OVRD_SK, 'NA' AS SRC_SYS_CD, 'NA' AS CLM_ID, 'NA' AS CLM_OVRD_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 1 AS EXCD_SK, 1 AS CLM_SK, 1 AS USER_ID_SK, '1753-01-01' AS CLM_OVRD_DT_SK, 0 AS CLM_OVRD_AMT, NULL AS CLM_OVRD_VAL_DESC, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK), cte_unk AS (SELECT 0 AS CLM_OVRD_SK, 'UNK' AS SRC_SYS_CD, 'UNK' AS CLM_ID, 'UNK' AS CLM_OVRD_ID, '1753-01-01' AS CRT_RUN_CYC_EXCTN_DT_SK, '1753-01-01' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, 0 AS EXCD_SK, 0 AS CLM_SK, 0 AS USER_ID_SK, '1753-01-01' AS CLM_OVRD_DT_SK, 0 AS CLM_OVRD_AMT, NULL AS CLM_OVRD_VAL_DESC, 100 AS CRT_RUN_CYC_EXCTN_SK, 100 AS LAST_UPDT_RUN_CYC_EXCTN_SK) SELECT * FROM cte_main UNION ALL SELECT * FROM cte_na UNION ALL SELECT * FROM cte_unk",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "CLM_OVRD"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "CLM_OVRD_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Claims/EdwLoads/ClmOvrdD"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2007 Blue Cross and Blue Shield of Kansas City\n\nCalled by:\n                    IdsClaimExtrSeq\n\nProcessing:\n                    IDS - read from source, lookup all source system code SK value to get the natural code\n\nControl Job Rerun Information: \n             Previous Run Successful:    Restart\n             Previous Run Aborted:         Restart\n\nModifications:                        \n                                              Project/                                                                                                 Code                  Date\nDeveloper        Date              Altiris #           Change Description                                                        Reviewer            Reviewed\n----------------------  -------------------   -------------------   ------------------------------------------------------------------------------------   ----------------------     -------------------   \nHugh Sisson    6/26/2007                           Original program                                                              Steph Goddard   08/30/07\n\nSiva Devagiri   09-18-2013    5114               Rewrite in Parallel                                                          Peter Marshall     12/20/2013\n\nAnnotations:\nJob Name:   IdsEdwClmOvrdDimExtr\nAdd Defaults and Null Handling\nThis is a load ready file conforms to the target table structure.\n\nWrite CLM_OVRD_D Data into a Sequential file for Load Job.\nRead from source table \nCLM_OVRD"
+}

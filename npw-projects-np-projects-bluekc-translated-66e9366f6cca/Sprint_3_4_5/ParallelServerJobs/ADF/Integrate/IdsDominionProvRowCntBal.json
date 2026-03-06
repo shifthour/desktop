@@ -1,0 +1,246 @@
+{
+  "name": "IdsDominionProvRowCntBal",
+  "properties": {
+    "description": "FolderPath: Jobs/provider/Provider/Balancing",
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "SrcSysCd": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyToTmp_IdsDominionProvRowCntBal",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH CTE AS ( SELECT PROV.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK, PROV.PROV_ID AS TRGT_PROV_ID, B_PROV.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK, B_PROV.PROV_ID AS SRC_PROV_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG MPPNG, @{pipeline().globalParameters.gbl_param_IDSOwner}.PROV PROV FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.B_PROV B_PROV ON PROV.SRC_SYS_CD_SK = B_PROV.SRC_SYS_CD_SK AND PROV.PROV_ID = B_PROV.PROV_ID WHERE PROV.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND PROV.SRC_SYS_CD_SK = MPPNG.CD_MPPNG_SK AND MPPNG.TRGT_CD = '@{pipeline().parameters.SrcSysCd}' ) SELECT * FROM CTE",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.DemJT_TMP_IdsDominionProvRowCntBal",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": ""
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "DemJT_TMP_IdsDominionProvRowCntBal"
+            }
+          }
+        ]
+      },
+      {
+        "name": "TransformLogic",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyToTmp_IdsDominionProvRowCntBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.DemJT_Research_TMP_IdsDominionProvRowCntBal; SELECT TRGT_SRC_SYS_CD_SK,TRGT_PROV_ID,SRC_SRC_SYS_CD_SK,SRC_PROV_ID INTO @{pipeline().globalParameters.gbl_param_ids_staging}.DemJT_Research_TMP_IdsDominionProvRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.DemJT_TMP_IdsDominionProvRowCntBal WHERE SRC_PROV_ID IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_PROV_ID IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.DemJT_Notify_TMP_IdsDominionProvRowCntBal; SELECT TOP 1 'ROW COUNT BALANCING ' + @{pipeline().parameters.SrcSysCd} + ' - IDS PROV OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.DemJT_Notify_TMP_IdsDominionProvRowCntBal FROM @{pipeline().globalParameters.gbl_param_ids_staging}.DemJT_TMP_IdsDominionProvRowCntBal WHERE '@{pipeline().parameters.ToleranceCd}' = 'OUT';",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "WriteResearchFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "TransformLogic",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "DemJT_Research_TMP_IdsDominionProvRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/research')",
+              "param_filename": "@concat(pipeline().parameters.SrcSysCd,'IdsProvResearch.dat.',pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "WriteNotifyFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "TransformLogic",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "DemJT_Notify_TMP_IdsDominionProvRowCntBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'balancing/notify')",
+              "param_filename": "@concat(pipeline().parameters.SrcSysCd,'ProvidersBalancingNotification.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/provider/Provider/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:       DominionIdsProvBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target files are compared to see if there are any discrepancies \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                          Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                    ----------------------------------   ---------------------------------    -------------------------   \nDeepika C                   2023-11-24          US 600544                         Initial Programming                                             IntegrateSITF               Jeyaprasanna             2024-01-18\n\nAnnotations:\nDominion- IDS Provider Row Count Errors\nFile checked later for rows and email to on-call\nDetail file for on-call to research errors\nRows with Failed Comparison on Specified columns"
+}

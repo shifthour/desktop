@@ -1,0 +1,201 @@
+{
+  "name": "UwsMbrSubjAreaBalSumLoad",
+  "properties": {
+    "parameters": {
+      "Target": {
+        "type": "String"
+      },
+      "Subject": {
+        "type": "String"
+      },
+      "CurrDate": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "Int32"
+      },
+      "UWSAcct": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_UwsMbrSubjAreaBalSum",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_source AS (SELECT s.TRGT_SYS_CD, s.SUBJ_AREA_NM, s.BAL_DT, s.CLMN_SUM_TLRNC_CD, s.ROW_TO_ROW_TLRNC_CD, s.RI_TLRNC_CD, ROW_NUMBER() OVER(ORDER BY s.BAL_DT ASC) AS rn, COUNT(*) OVER() AS total_rows FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM s WHERE s.TRGT_SYS_CD='@{pipeline().parameters.Target}' AND s.SUBJ_AREA_NM='@{pipeline().parameters.Subject}'), cte_recursive AS (SELECT rn, TRGT_SYS_CD, SUBJ_AREA_NM, BAL_DT, CLMN_SUM_TLRNC_CD, ROW_TO_ROW_TLRNC_CD, RI_TLRNC_CD, total_rows, CLMN_SUM_TLRNC_CD AS svCSCurrTlrncCd, ROW_TO_ROW_TLRNC_CD AS svRRCurrTlrncCd, RI_TLRNC_CD AS svRICurrTlrncCd, CASE WHEN CONVERT(VARCHAR(10), BAL_DT, 120) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN (CLMN_SUM_TLRNC_CD IN ('BAL','NA') AND ROW_TO_ROW_TLRNC_CD IN ('BAL','NA') AND RI_TLRNC_CD IN ('BAL','NA')) THEN 'BAL' WHEN (CLMN_SUM_TLRNC_CD IN ('BAL','IN') OR ROW_TO_ROW_TLRNC_CD IN ('BAL','IN') OR RI_TLRNC_CD IN ('BAL','IN')) THEN 'IN' ELSE 'OUT' END END AS svTempTlrncCd, CASE WHEN CONVERT(VARCHAR(10), BAL_DT, 120) = '@{pipeline().parameters.CurrDate}' THEN 'Y' ELSE CASE WHEN (CLMN_SUM_TLRNC_CD IN ('BAL','IN') OR ROW_TO_ROW_TLRNC_CD IN ('BAL','IN') OR RI_TLRNC_CD IN ('BAL','IN')) THEN 'Y' ELSE 'N' END END AS svTempRslvIn, CASE WHEN CONVERT(VARCHAR(10), BAL_DT, 120) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN (CLMN_SUM_TLRNC_CD IN ('BAL','NA') AND ROW_TO_ROW_TLRNC_CD IN ('BAL','NA') AND RI_TLRNC_CD IN ('BAL','NA')) THEN 'BAL' WHEN (CLMN_SUM_TLRNC_CD IN ('BAL','IN') OR ROW_TO_ROW_TLRNC_CD IN ('BAL','IN') OR RI_TLRNC_CD IN ('BAL','IN')) THEN 'IN' ELSE 'OUT' END END AS svTempRslvIncd, 0 AS svPrevCount, 1 AS svCurrCount FROM cte_source WHERE rn=1 UNION ALL SELECT s.rn, s.TRGT_SYS_CD, s.SUBJ_AREA_NM, s.BAL_DT, s.CLMN_SUM_TLRNC_CD, s.ROW_TO_ROW_TLRNC_CD, s.RI_TLRNC_CD, s.total_rows, s.CLMN_SUM_TLRNC_CD, s.ROW_TO_ROW_TLRNC_CD, s.RI_TLRNC_CD, CASE WHEN CONVERT(VARCHAR(10), s.BAL_DT, 120) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN (s.CLMN_SUM_TLRNC_CD IN ('BAL','NA') AND s.ROW_TO_ROW_TLRNC_CD IN ('BAL','NA') AND s.RI_TLRNC_CD IN ('BAL','NA')) AND c.svTempTlrncCd NOT IN ('OUT','IN') THEN 'BAL' WHEN (s.CLMN_SUM_TLRNC_CD IN ('BAL','IN') OR s.ROW_TO_ROW_TLRNC_CD IN ('BAL','IN') OR s.RI_TLRNC_CD IN ('BAL','IN')) AND c.svTempTlrncCd <> 'OUT' THEN 'IN' ELSE 'OUT' END END, CASE WHEN CONVERT(VARCHAR(10), s.BAL_DT, 120) = '@{pipeline().parameters.CurrDate}' THEN c.svTempRslvIn ELSE CASE WHEN (s.CLMN_SUM_TLRNC_CD IN ('BAL','IN') OR s.ROW_TO_ROW_TLRNC_CD IN ('BAL','IN') OR s.RI_TLRNC_CD IN ('BAL','IN')) AND c.svTempRslvIncd <> 'OUT' THEN 'Y' ELSE 'N' END END, CASE WHEN CONVERT(VARCHAR(10), s.BAL_DT, 120) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN (s.CLMN_SUM_TLRNC_CD IN ('BAL','NA') AND s.ROW_TO_ROW_TLRNC_CD IN ('BAL','NA') AND s.RI_TLRNC_CD IN ('BAL','NA')) AND c.svTempRslvIncd NOT IN ('OUT','IN') THEN 'BAL' WHEN (s.CLMN_SUM_TLRNC_CD IN ('BAL','IN') OR s.ROW_TO_ROW_TLRNC_CD IN ('BAL','IN') OR s.RI_TLRNC_CD IN ('BAL','IN')) AND c.svTempRslvIncd <> 'OUT' THEN 'IN' ELSE 'OUT' END END, c.svCurrCount, c.svCurrCount+1 FROM cte_source s JOIN cte_recursive c ON s.rn=c.rn+1 ), final AS (SELECT TOP 1 '@{pipeline().parameters.Target}' AS TRGT_SYS_CD, '@{pipeline().parameters.Subject}' AS SUBJ_AREA_NM, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS LAST_BAL_DT, c.svTempTlrncCd AS TLRNC_CD, c.svTempRslvIn AS PREV_ISSUE_CRCTD_IN, @{pipeline().parameters.ExtrRunCycle} AS TRGT_RUN_CYC_NO, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS CRT_DTM, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS LAST_UPDT_DTM, '@{pipeline().parameters.UWSAcct}' AS USER_ID FROM cte_recursive c WHERE rn=total_rows ORDER BY rn DESC) SELECT * FROM final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "TRGT_SYS_CD",
+                "SUBJ_AREA_NM"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "ordinal": 1,
+                  "physicalType": "String"
+                },
+                "sink": {
+                  "name": "TRGT_SYS_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 2,
+                  "physicalType": "String"
+                },
+                "sink": {
+                  "name": "SUBJ_AREA_NM",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 3,
+                  "physicalType": "DateTime"
+                },
+                "sink": {
+                  "name": "LAST_BAL_DT",
+                  "type": "DateTime",
+                  "physicalType": "DateTime"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 4,
+                  "physicalType": "String"
+                },
+                "sink": {
+                  "name": "TLRNC_CD",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 5,
+                  "physicalType": "String"
+                },
+                "sink": {
+                  "name": "PREV_ISSUE_CRCTD_IN",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 6,
+                  "physicalType": "Int32"
+                },
+                "sink": {
+                  "name": "TRGT_RUN_CYC_NO",
+                  "type": "Int32",
+                  "physicalType": "Int32"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 7,
+                  "physicalType": "DateTime"
+                },
+                "sink": {
+                  "name": "CRT_DTM",
+                  "type": "DateTime",
+                  "physicalType": "DateTime"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 8,
+                  "physicalType": "DateTime"
+                },
+                "sink": {
+                  "name": "LAST_UPDT_DTM",
+                  "type": "DateTime",
+                  "physicalType": "DateTime"
+                }
+              },
+              {
+                "source": {
+                  "ordinal": 9,
+                  "physicalType": "String"
+                },
+                "sink": {
+                  "name": "USER_ID",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "uws",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "TBL_BAL_SUM"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "SUBJ_AREA_BAL_SUM"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "variables": {},
+    "runtimeConfiguration": {},
+    "globalParameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:   IdsMbrshpBalCntl\n\nPROCESSING:\n                  \n                The Job loads the SUBJECT_AREA_BAL_SUM table after the balancing control job is done for a given Subject Area              \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/18/2007          3264                              Originally Programmed                          devlEDW10      \n\n\nSrikanth Mettpalli             08/05/2013          5114                            Updated  Sequencer                             EnterpriseWrhsDevl \n                                                                                                       (Server to Parallel Conversion)\n\nAnnotations:\nJob Name: UwsMbrSubjAreaBalSumLoad\nExtraction From Table Balance Summary table for a given subject area and target system and loading into the Subject Area Balance Summary table\nRead all the Data from UWS TBL_BAL_SUM TBL_BAL_SUM Table; Pull records based on SOURCE AND  SUBJECT\nReference Code Mapping Data for Code SK lookups\nLeft Join to pull the MemberCounts \nJoin Keys:\nSOURCE AND SUBJECT\nDefaults and Null Handling\nUpdate then Insert the SUBJ_AREA_BAL_SUM Data."
+}

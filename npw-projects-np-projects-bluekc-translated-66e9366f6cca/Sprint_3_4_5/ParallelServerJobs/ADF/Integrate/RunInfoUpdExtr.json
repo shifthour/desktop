@@ -1,0 +1,144 @@
+{
+  "name": "RunInfoUpdExtr",
+  "properties": {
+    "parameters": {
+      "ProcessFunction": {
+        "type": "string",
+        "defaultValue": "READ"
+      },
+      "JobName": {
+        "type": "string",
+        "defaultValue": "CopyOfFctsMbrCntl_RUNINFOUPDT"
+      },
+      "Label1": {
+        "type": "string",
+        "defaultValue": "BeginDate"
+      },
+      "Value1": {
+        "type": "string",
+        "defaultValue": "2021-01-02"
+      },
+      "FilePath": {
+        "type": "string",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyDBToFile",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT concat(concat(USER_DEFN_LABEL_TX,'='),USER_DEFN_VAL_TX) AS PARLIST FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.P_JOB_PARM_SET WHERE FILE_PATH_ID = '@{pipeline().parameters.FilePath}' AND JOB_NM = '@{pipeline().parameters.JobName}'",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".info"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "PARLIST",
+                  "type": "String",
+                  "physicalType": "String"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "P_JOB_PARM_SET"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/external')",
+              "param_filename": "@concat(pipeline().parameters.JobName, '_RUNINFOUPDT.info')",
+              "param_col_delimiter": ";",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptUpdateDB",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "MERGE @{pipeline().globalParameters.gbl_param_IDSOwner}.P_JOB_PARM_SET AS T USING (SELECT '@{pipeline().parameters.FilePath}' AS FILE_PATH_ID, '@{pipeline().parameters.JobName}' AS JOB_NM, CASE WHEN LEN(LTRIM(RTRIM(@{pipeline().parameters.Label1}))) = 0 THEN '' ELSE @{pipeline().parameters.Label1} END AS USER_DEFN_LABEL_TX, CASE WHEN LEN(LTRIM(RTRIM(@{pipeline().parameters.Value1}))) = 0 THEN NULL ELSE @{pipeline().parameters.Value1} END AS USER_DEFN_VAL_TX) AS S ON T.FILE_PATH_ID = S.FILE_PATH_ID AND T.JOB_NM = S.JOB_NM AND T.USER_DEFN_LABEL_TX = S.USER_DEFN_LABEL_TX WHEN MATCHED THEN UPDATE SET USER_DEFN_VAL_TX = S.USER_DEFN_VAL_TX WHEN NOT MATCHED THEN INSERT (FILE_PATH_ID, JOB_NM, USER_DEFN_LABEL_TX, USER_DEFN_VAL_TX) VALUES (S.FILE_PATH_ID, S.JOB_NM, S.USER_DEFN_LABEL_TX, S.USER_DEFN_VAL_TX);",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/1RunInfoUpdt/main"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2021 Blue Cross/Blue Shield of Kansas City\n\nJOB NAME: RunInfoExtr\n\n\nDESCRIPTION:   Maintain DataStage run time information in a IDS table.  Based on PROCESSFUNCTION job will update one row in P_JOB_PARM_SET\n                            or create output file with all parameters.\n\nCALLED BY:  \n\n\nINPUTS: \n        \nProcessFunction:\n       START - Output DB2 table and input parameters to AIX file for DataStage consumption of run time information.  File will exist for job restarts.\n       UPDATE - Update DB2 table for for one parameter row.\n               \n\nEMAIL FILES:  None\n\n\nUNIX SCRIPTS USED:  None\n\n\nDATABASE TABLES USED:\n                 Database                    Table Name\n                 ----------------------------       ---------------------------------------------------------------------\n                 IDS_PROD                 P_JOB_PARM_SET\n\nBCBSKC TRANSFORMS/ROUTINES USED: None\n\n\nOUPUT:     Run information file #$FilePath#/runinfo/<JobName>.info\n\n\nRERUN INFORMATION: \n             PREVIOUS RUN SUCCESSFUL:   Nothing to reset, just restart. \n             PREVIOUS RUN ABORTED:         Nothing to reset, just restart.\n\nMODIFICATIONS:\nDeveloper                          Date                Store #                         Change Description                                                       Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                              ----------------------------------   ---------------------------------    -------------------------   \nBrent Leland                    09-23-2021     431876                           Initial creation                                                                  IntegrateDev1\n\nAnnotations:\nRead / Update DataStage Run Information\n#$FilePath#/runinfo/#JobName#.info\nUpdate one label/value row\nFile used to set Control job run time parameters"
+}

@@ -1,0 +1,343 @@
+{
+  "name": "IdsEdwSubPrmIncmFBal",
+  "properties": {
+    "parameters": {
+      "ExtrRunCycle": {
+        "type": "string",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "string",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_IdsEdwSubPrmIncmFBal",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.DSubPrmIncmFBal_TMP_IdsEdwSubPrmIncmFBal; SELECT SUB_PRM_INCM_F.SRC_SYS_CD, SUB_PRM_INCM_F.BILL_INVC_ID, SUB_PRM_INCM_F.SUB_UNIQ_KEY, SUB_PRM_INCM_F.CLS_PLN_ID, SUB_PRM_INCM_F.PROD_ID, SUB_PRM_INCM_F.PROD_BILL_CMPNT_ID, SUB_PRM_INCM_F.INVC_SUB_COV_DUE_DT_SK, SUB_PRM_INCM_F.INVC_SUB_COV_STRT_DT_SK, SUB_PRM_INCM_F.INVC_SUB_PRM_TYP_CD, SUB_PRM_INCM_F.INVC_SUB_CRT_DTM, SUB_PRM_INCM_F.INVC_SUB_BILL_DISP_CD, SUB_PRM_INCM_F.INVC_SUB_SUB_PRM_AMT INTO @{pipeline().globalParameters.gbl_param_edw_staging}.DSubPrmIncmFBal_TMP_IdsEdwSubPrmIncmFBal FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.SUB_PRM_INCM_F SUB_PRM_INCM_F FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.B_SUB_PRM_INCM_F B_SUB_PRM_INCM_F ON SUB_PRM_INCM_F.SRC_SYS_CD = B_SUB_PRM_INCM_F.SRC_SYS_CD AND SUB_PRM_INCM_F.BILL_INVC_ID = B_SUB_PRM_INCM_F.BILL_INVC_ID AND SUB_PRM_INCM_F.SUB_UNIQ_KEY = B_SUB_PRM_INCM_F.SUB_UNIQ_KEY AND SUB_PRM_INCM_F.CLS_PLN_ID = B_SUB_PRM_INCM_F.CLS_PLN_ID AND SUB_PRM_INCM_F.PROD_ID = B_SUB_PRM_INCM_F.PROD_ID AND SUB_PRM_INCM_F.PROD_BILL_CMPNT_ID = B_SUB_PRM_INCM_F.PROD_BILL_CMPNT_ID AND SUB_PRM_INCM_F.INVC_SUB_COV_DUE_DT_SK = B_SUB_PRM_INCM_F.INVC_SUB_COV_DUE_DT_SK AND SUB_PRM_INCM_F.INVC_SUB_COV_STRT_DT_SK = B_SUB_PRM_INCM_F.INVC_SUB_COV_STRT_DT_SK AND SUB_PRM_INCM_F.INVC_SUB_PRM_TYP_CD = B_SUB_PRM_INCM_F.INVC_SUB_PRM_TYP_CD AND SUB_PRM_INCM_F.INVC_SUB_CRT_DTM = B_SUB_PRM_INCM_F.INVC_SUB_CRTTM AND SUB_PRM_INCM_F.INVC_SUB_BILL_DISP_CD = B_SUB_PRM_INCM_F.INVC_SUB_BILL_DISP_CD WHERE SUB_PRM_INCM_F.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.ExtrRunCycle} AND SUB_PRM_INCM_F.INVC_SUB_SUB_PRM_AMT <> B_SUB_PRM_INCM_F.INVC_SUB_SUB_PRM_AMT; DECLARE @rc INT=(SELECT COUNT(*) FROM @{pipeline().globalParameters.gbl_param_edw_staging}.DSubPrmIncmFBal_TMP_IdsEdwSubPrmIncmFBal); DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.Notify_TMP_IdsEdwSubPrmIncmFBal; CREATE TABLE @{pipeline().globalParameters.gbl_param_edw_staging}.Notify_TMP_IdsEdwSubPrmIncmFBal (NOTIFICATION CHAR(100)); IF @rc>0 BEGIN INSERT INTO @{pipeline().globalParameters.gbl_param_edw_staging}.Notify_TMP_IdsEdwSubPrmIncmFBal VALUES('COLUMN SUM BALANCING IDS - EDW SUB PRM INCM F OUT OF TOLERANCE'); END",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_SUB_PRM_INCM_F_Error_csv_out",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsEdwSubPrmIncmFBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "BILL_INVC_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "SUB_UNIQ_KEY",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "CLS_PLN_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "PROD_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "PROD_BILL_CMPNT_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "INVC_SUB_COV_DUE_DT_SK",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 8
+                  },
+                  "sink": {
+                    "name": "INVC_SUB_COV_STRT_DT_SK",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 9
+                  },
+                  "sink": {
+                    "name": "INVC_SUB_PRM_TYP_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 10
+                  },
+                  "sink": {
+                    "name": "INVC_SUB_CRT_DTM",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 11
+                  },
+                  "sink": {
+                    "name": "INVC_SUB_BILL_DISP_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 12
+                  },
+                  "sink": {
+                    "name": "INVC_SUB_SUB_PRM_AMT",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "DSubPrmIncmFBal_TMP_IdsEdwSubPrmIncmFBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/research')",
+              "param_filename": "@concat('IdsEdwSubPrmIncmFColumnSumResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Copy_SUB_PRM_INCM_F_Notify_csv_out",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsEdwSubPrmIncmFBal",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "NOTIFICATION",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "Notify_TMP_IdsEdwSubPrmIncmFBal"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','balancing/notify')",
+              "param_filename": "IncomeBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Income/EdwLoads/SubPrmIncmF/Balancing"
+    }
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "Description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:          IdsEdwSubPrmIncmFBalSeq\n\nPROCESSING:\n                  This is where the actual balancing takes place and the Source and Target tables are compared on the specified column to see if there are any discrepancies\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               07/26/2007          3264                              Originally Programmed                           devlEDW10              Steph Goddard             10/26/2007              \n\n\nSrikanth Mettpalli               12/18/2013         5114                              Originally Programmed                         EnterpriseWrhsDevl     Jag Yelavarthi               2013-12-26\n                                                                                                            (Server to Parallel Conversion)\n\nAnnotations:\nJob Name: IdsEdwSubPrmIncmFBal\nCopy stage used to remove duplicates and create one record for the Notification file.\nFile checked later for rows and email to on-call\nDetail file for on-call to research errors\nRows with Failed Comparison on Specified columns\nIDS - EDW Subscriber Premium Income Facts Column Sum Comparisons"
+}

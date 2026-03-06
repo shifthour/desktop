@@ -1,0 +1,118 @@
+{
+  "name": "IdsDmMbrshDmSubGrpLvlAgtExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Script_IdsDmMbrshDmSubGrpLvlAgtExtr_1",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "@concat(\n'DROP TABLE IF EXISTS ',pipeline().globalParameters.gbl_param_ids_staging,'.IdsDmMbrshDmSubGrpLvlAgtExtr_TMP; ',\n'WITH CTE AS ( SELECT s.GRP_ID, s.SUBGRP_ID, s.CLS_PLN_ID, s.AGNT_ID, COALESCE(role_cd.TRGT_CD,'''') AS SUBGRP_LVL_AGNT_ROLE_TYP_CD, CASE WHEN s.EFF_DT_SK IS NULL OR s.EFF_DT_SK = '''' THEN NULL ELSE CONVERT(DATETIME, s.EFF_DT_SK, 120) END AS EFF_DT, CASE WHEN s.TERM_DT_SK IS NULL OR s.TERM_DT_SK = '''' THEN NULL ELSE CONVERT(DATETIME, s.TERM_DT_SK, 120) END AS TERM_DT, COALESCE(src_cd.TRGT_CD,''UNK'') AS SRC_SYS_CD, ',string(pipeline().parameters.CurrRunCycle),' AS LAST_UPDT_RUN_CYC_NO, s.LAST_UPDT_RUN_CYC_EXCTN_SK AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK FROM ',pipeline().globalParameters.gbl_param_IDSOwner,\n'.SUBGRP_LVL_AGNT s LEFT JOIN ',pipeline().globalParameters.gbl_param_IDSOwner,\n'.CD_MPPNG src_cd ON s.SRC_SYS_CD_SK = src_cd.CD_MPPNG_SK LEFT JOIN ',pipeline().globalParameters.gbl_param_IDSOwner,\n'.CD_MPPNG role_cd ON s.SUBGRP_LVL_AGNT_ROLE_TYP_CD_SK = role_cd.CD_MPPNG_SK WHERE s.SUBGRP_LVL_AGNT_SK NOT IN (0,1) ) SELECT * INTO ',pipeline().globalParameters.gbl_param_ids_staging,\n'.IdsDmMbrshDmSubGrpLvlAgtExtr_TMP FROM CTE;' )",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_IdsDmMbrshDmSubGrpLvlAgtExtr_2",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_IdsDmMbrshDmSubGrpLvlAgtExtr_1",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "IdsDmMbrshDmSubGrpLvlAgtExtr_TMP"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'load')",
+              "param_filename": "MBRSH_DM_SUBGRP_LVL_AGNT.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "int"
+      }
+    },
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Member/MbrshDmSubGrpLvlAgnt"
+    }
+  },
+  "Description": "COPYRIGHT 2010 BLUE CROSS/BLUE SHIELD OF KANSAS CITY        \n                           \nPROCESSING:\n                    Extracts from IDS SUBGRP_LVL_AGNT and loads the DataMart table MBRSH_DM_SUBGRP_LVL_AGNT\n\nMODIFICATIONS:\nDeveloper                Date                 Project/Altiris #       Change Description                                                                                Development Project                                            Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------                                         --------------------------------                                             -------------------------------   ----------------------------       \nKalyan Neelam        2010-10-28         3346                      Original Programming                                                                              IntegrateNewDevl                                                Steph Goddard          11/04/2010\nShiva Devagiri         07/25/2013       5114                     Create Load File for EDW Table MBRSHP_DM_SUB_GRP_LVL_AGT  IntegrateWrhseDevl                                            Peter Marshall            10/22/2013\n\nPooja Sunkara         08/28/2014       TFS#9538            Changed Load file name as per naming standards to\n                                                                                       MBRSH_DM_SUBGRP_LVL_AGNT.dat                                                      IntegrateNewDevl                                          Jag Yelavarthi             2014-09-03\n\nAnnotations:\nRead from source table SUBGRP_LVL_AGNT from IDS.\nJob Name: IdsDmMbrshDmSubGrpLvlAgtExtr\nReference Code Mapping Data for Code SK lookups\nCode SK lookups for Denormalization\n\nLookup Keys:\nSUBGRP_LVL_AGNT_ROLE_TYP_CD_SK\nAdd Defaults and Null Handling.\nWrite MBRSH_DM_SUBGRP_LVL_AGNT Data into a Sequential file for Load Job IdsDmMbrshpDmIndBeLtrLoad."
+}

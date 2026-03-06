@@ -1,0 +1,95 @@
+{
+  "name": "IdsEdwBnfSumDtlDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "string"
+      },
+      "EDWRunCycle": {
+        "type": "int"
+      }
+    },
+    "activities": [
+      {
+        "name": "copy_IdsEdwBnfSumDtlDExtr_1",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_lkp AS (SELECT B.BNF_SUM_DTL_SK, COALESCE(CD.TRGT_CD,'UNK') AS SRC_SYS_CD, B.PROD_CMPNT_PFX_ID, B.BNF_SUM_DTL_TYP_CD_SK, B.COINS_PCT_AMT AS BNF_SUM_DTL_COINS_PCT_AMT, B.COPAY_AMT AS BNF_SUM_DTL_COPAY_AMT, B.DEDCT_AMT AS BNF_SUM_DTL_DEDCT_AMT, B.LMT_AMT AS BNF_SUM_DTL_LMT_AMT, B.STOPLOSS_AMT AS BNF_SUM_DTL_STOPLOSS_AMT, CD2.TRGT_CD AS BNF_SUM_DTL_TYP_CD, CD2.TRGT_CD_NM AS BNF_SUM_DTL_TYP_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.BNF_SUM_DTL B LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON B.SRC_SYS_CD_SK = CD.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD2 ON B.BNF_SUM_DTL_TYP_CD_SK = CD2.CD_MPPNG_SK), cte_xfm AS (SELECT BNF_SUM_DTL_SK, CASE WHEN dbo.trim_default(SRC_SYS_CD) = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, PROD_CMPNT_PFX_ID, CASE WHEN dbo.trim_default(BNF_SUM_DTL_TYP_CD) = '' THEN 'UNK' ELSE BNF_SUM_DTL_TYP_CD END AS BNF_SUM_DTL_TYP_CD, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, BNF_SUM_DTL_COINS_PCT_AMT, BNF_SUM_DTL_COPAY_AMT, BNF_SUM_DTL_DEDCT_AMT, BNF_SUM_DTL_LMT_AMT, CASE WHEN dbo.trim_default(BNF_SUM_DTL_TYP_NM) = '' THEN 'UNK' ELSE BNF_SUM_DTL_TYP_NM END AS BNF_SUM_DTL_TYP_NM, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, BNF_SUM_DTL_TYP_CD_SK, BNF_SUM_DTL_STOPLOSS_AMT FROM cte_lkp) SELECT BNF_SUM_DTL_SK, SRC_SYS_CD, PROD_CMPNT_PFX_ID, BNF_SUM_DTL_TYP_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, BNF_SUM_DTL_COINS_PCT_AMT, BNF_SUM_DTL_COPAY_AMT, BNF_SUM_DTL_DEDCT_AMT, BNF_SUM_DTL_LMT_AMT, BNF_SUM_DTL_TYP_NM, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, BNF_SUM_DTL_TYP_CD_SK, BNF_SUM_DTL_STOPLOSS_AMT FROM cte_xfm",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "BNF_SUM_DTL"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "BNF_SUM_DTL_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "runtimeSettings": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/BnfSumDtlD"
+    }
+  },
+  "Description": "COPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:\n\nPROCESSING:\n\n\nMODIFICATIONS:\nDeveloper                               Date               Project/Altiris #               Change Description                                                                               Development Project    Code Reviewer            Date Reviewed\n----------------------------------          -------------------     -------------------------------    ---------------------------------------------------------                                                           ----------------------------------   ---------------------------------    -------------------------   \nNaren Garapaty                   3/16/2007              3078                     Originally Programmed                                                                               devlEDW10                  Steph Goddard             \n\nBhoomi Dasari                      08/17/2009            4113                     Added EDWRunCycle                                                                              devlEDWnew                Steph Goddard             08/19/2009\n                  \nRaja Gummadi                      09/10/2012           4814                     Added new column(BNF_SUM_DTL_STOPLOSS_AMT) to Target.         EnterpriseNewDevl        Bhoomi Dasari             09/10/2012\n                                                                                                        Removed Dataelements.\n\nRajasekhar Mangalampally  05/23/2013            5114                     Original Programming                                                                                 EnterpriseWrhsDevl      Pete Marshall               8/8/2013                                                   \n                                                                                                         (Server to Parallel Conversion)\n\nAnnotations:\nThis is Source extract data from an IDS table and apply Code denormalization, create a load ready file.\n\nJob Name:\nIdsEdwBnfSumDtlDExtr\n\nTable:\nBNF_SUM_DTL_D\nRead from source table BNF_SUM_DTL from IDS ;\nPull records based on LAST_UPDT_RUN_CYC_EXCTN_SK\nThis is a load ready file conforms to the target table structure.\n\nWrite BNF_SUM_DTL_D Data into a Sequential file for Load Job.\nAdd Defaults and Null Handling\nCode SK lookups for Denormalization\n\nLookup Keys:\n\nBNF_SUM_DTL_TYP_CD_SK\nReference Code Mapping Data for Code SK lookups"
+}

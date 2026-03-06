@@ -1,0 +1,159 @@
+{
+  "name": "CotivitiIdsStndExtrPMbrHedisMesrtYrMoLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyFileToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_CotivitiIdsStndExtrPMbrHedisMesrtYrMoLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "P_MBR_HEDIS_MESR_YR_MO.txt",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "\"\""
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP_CotivitiIdsStndExtrPMbrHedisMesrtYrMoLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyTempToFinal",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte AS (SELECT MBR_HEDIS_MESR_YR_MO_SK, RVW_SET_NM AS HEDIS_RVW_SET_NM, POP_NM AS HEDIS_POP_NM, MESR_NM AS HEDIS_MESR_NM, SUB_MESR_NM AS HEDIS_SUB_MESR_NM, MBR_ID, MBR_BUCKET_ID AS HEDIS_MBR_BUCKET_ID, BASE_EVT_EPSD_DT_SK, ACTVTY_YR_NO, ACTVTY_MO_NO, SRC_SYS_CD, MBR_UNIQ_KEY, MBR_SK FROM @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_CotivitiIdsStndExtrPMbrHedisMesrtYrMoLoad) SELECT MBR_HEDIS_MESR_YR_MO_SK, HEDIS_RVW_SET_NM, HEDIS_POP_NM, HEDIS_MESR_NM, HEDIS_SUB_MESR_NM, MBR_ID, HEDIS_MBR_BUCKET_ID, BASE_EVT_EPSD_DT_SK, ACTVTY_YR_NO, ACTVTY_MO_NO, SRC_SYS_CD FROM cte WHERE (MBR_UNIQ_KEY IS NULL OR MBR_UNIQ_KEY=0 OR MBR_SK IS NULL OR MBR_SK=0)",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "MBR_HEDIS_MESR_YR_MO_SK"
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP_CotivitiIdsStndExtrPMbrHedisMesrtYrMoLoad"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "P_MBR_HEDIS_MESR_YR_MO"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "IDSRunCycle": {
+        "type": "string"
+      },
+      "RunID": {
+        "type": "string"
+      },
+      "RunDate": {
+        "type": "string"
+      },
+      "SrcSysCd": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Membership/StandardExtract"
+    }
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "Description": "Process Description: This Job Loads Data into IDS P_MBR_HEDIS_MESR_YR_MO table                  \n\n           \nPROCESSING:\nBuild primary key for  PROD_QHP table load data \n\nCalled By: CotivitiIdsStndExtrMbrHedisMesrYrMoSeq\n\nApplies Transformation rules for P_MBR_HEDIS_MESR_YR_MO\n\n\n\nModifications:                        \n                                                                                                 Project/                                                                                                                                       \t\tCode                  Date\nDeveloper                               Date                                   Altiris #                Change Description                                   Environment                                   Reviewer                    Reviewed\n-----------------------              ------------------                             -------------         ------------------------------------------------\t            -------------------------\t -------------------------         -------------------\n\nKarthik Chintalapani          2021-02- 10                         US#341503                Original Program                                    IntegrateDev1                           Jaideep Mankala         02/12/2021\nReddy Sanam                   2022-01-20                           us441657                 Added reject link to the load                   IntegrateDev2                           Goutham Kalidindi        01/24/2022\n                                                                                                                      Mapped array and transaction \n                                                                                                                      size \n                                                                                                                      Removed MultiInstance\n\nAnnotations:\nThis query the mbr match lookup failure records into  P_MBR_HEDIS_MESR_YR_MO table.\nThis xfm  filter condition sends  mbr match lookup failure records and drop mbr match lookup success records."
+}

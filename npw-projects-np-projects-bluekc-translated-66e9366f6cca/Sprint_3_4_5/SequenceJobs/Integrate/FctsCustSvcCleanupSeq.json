@@ -1,0 +1,243 @@
+{
+  "name": "FctsCustSvcCleanupSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/CustServ/Seq"
+    },
+    "parameters": {
+      "BeginDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CntlJobName": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'FctsCustSvcRecycleSeq'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FctsCustSvcRecycleSeq",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": "FctsCustSvcRecycleSeq",
+                "waitOnCompletion": true,
+                "parameters": {
+                  "ExclusionList": {
+                    "value": "@pipeline().parameters.ExclusionList",
+                    "type": "Expression"
+                  },
+                  "EmailSupport": {
+                    "value": "@pipeline().globalParameters.gbl_param_EmailSupport",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'FctsCustSvcDateUpdt'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FctsCustSvcDateUpdt",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/CustServ/Driver/FctsCustSvcDateUpdt')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "CntlJobName": {
+                    "value": "@pipeline().parameters.CntlJobName",
+                    "type": "Expression"
+                  },
+                  "BeginDate": {
+                    "value": "@pipeline().parameters.BeginDate",
+                    "type": "Expression"
+                  },
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_2A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(contains(split(pipeline().parameters.ExclusionList, ';'), 'tmp_cust_svc_drvr_bld'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "tmp_cust_svc_drvr_bld",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": "SQLQueryCmd",
+                "waitOnCompletion": true,
+                "parameters": {
+                  "FacetsOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsOwner",
+                    "type": "Expression"
+                  },
+                  "facets_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_FacetsSecret",
+                    "type": "Expression"
+                  },
+                  "Command1": "DROP TABLE IF EXISTS tempdb..TMP_IDS_CUST_SVC_DRVR",
+                  "Command2": "DROP TABLE IF EXISTS tempdb..TMP_CUST_SVC_TASK_NOTE_LN"
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "StartLoop",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "If_2A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "items": [
+            "K_CUST_SVC_TASK_CSTM_DTL_TEMP",
+            "K_CUST_SVC_TASK_LINK_TEMP",
+            "K_CUST_SVC_TASK_LTR_TEMP",
+            "K_CUST_SVC_TASK_NOTE_LN_TEMP",
+            "K_CUST_SVC_TASK_NOTE_TEMP",
+            "K_CUST_SVC_TASK_STTUS_TEMP",
+            "K_CUST_SVC_TASK_TEMP",
+            "K_CUST_SVC_TEMP"
+          ],
+          "activities": [
+            {
+              "name": "Truncate_Table",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/DB.TRUNCATE')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "owner_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "DBTable": {
+                    "value": "@item()",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

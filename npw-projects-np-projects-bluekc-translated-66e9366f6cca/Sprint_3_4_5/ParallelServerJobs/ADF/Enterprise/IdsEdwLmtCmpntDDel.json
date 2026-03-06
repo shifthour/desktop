@@ -1,0 +1,197 @@
+{
+  "name": "IdsEdwLmtCmpntDDel",
+  "properties": {
+    "activities": [
+      {
+        "name": "cpyFileToTmp_IdsEdwLmtCmpntDDel",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.DBG7_TMP_IdsEdwLmtCmpntDDel",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "STRING",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "LTLT_PFX",
+                  "type": "STRING",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "ACAC_ACC_NO",
+                  "type": "INT",
+                  "physicalType": "Integer"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "EdwProdLmtCmpntDel.uniq",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "DBG7_TMP_IdsEdwLmtCmpntDDel"
+            }
+          }
+        ]
+      },
+      {
+        "name": "script_IdsEdwLmtCmpntDDel",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "cpyFileToTmp_IdsEdwLmtCmpntDDel",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH CTE AS (SELECT SRC_SYS_CD, LTLT_PFX, ACAC_ACC_NO FROM @{pipeline().globalParameters.gbl_param_edw_staging}.DBG7_TMP_IdsEdwLmtCmpntDDel) DELETE T FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.LMT_CMPNT_D AS T JOIN CTE ON T.SRC_SYS_CD = CTE.SRC_SYS_CD AND T.LMT_CMPNT_ID = CTE.LTLT_PFX AND T.LMT_CMPNT_ACCUM_NO = CTE.ACAC_ACC_NO",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "nb_MoveFile_IdsEdwLmtCmpntDDel",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "script_IdsEdwLmtCmpntDDel",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "load",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "EdwProdLmtCmpntDel.uniq",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/LmtCmpntD"
+    }
+  },
+  "Description": "MODIFICATIONS:\n\nDeveloper                Date                 \tProject/Altiris #\t                 Change Description\t         Development Project\tCode Reviewer\tDate Reviewed       \n------------------              --------------------     \t------------------------\t                 ---------------------------------------------------     --------------------------------\t-------------------------------\t----------------------------       \nPete Cundy              2009-09-18\t3556 Change Data Capture \t Original Programming                       devlIDSnew                     Steph Goddard       10/07/2009\n\n \n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nBalkarn Singh         06/03/2013        5114                             Delete from EDW Table LMT_CMPNT_D                                               EnterpriseWrhsDevl      Pete Marshall               8/8/2013\n\nAnnotations:\nJob Name: IdsEdwLmtCmpntDDel\nRead Delete File created in the IDS Job IdsLmtCmpntDel\nCopy Stage for buffer and column rename\nApply deletes to the EDW \nLMT_CMPNT_D Table."
+}

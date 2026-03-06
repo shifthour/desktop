@@ -1,0 +1,92 @@
+{
+  "name": "IdsDmClmDmAgntMbrExtr",
+  "properties": {
+    "parameters": {
+      "DataMartRunCycle": {
+        "type": "String"
+      },
+      "DatamartDate": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsDmClmDmAgntMbrExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH main AS (SELECT DISTINCT a.SRC_SYS_CD_SK,a.AGNT_ID,a.AGNT_NM,m.MBR_UNIQ_KEY FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.Agnt a JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.SubGrp_Lvl_Agnt sa ON a.AGNT_SK=sa.AGNT_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cm ON sa.SUBGRP_LVL_AGNT_ROLE_TYP_CD_SK=cm.CD_MPPNG_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR m ON m.SUBGRP_SK=sa.SUBGRP_SK WHERE cm.TRGT_CD='AGENTRCRD' AND '@{pipeline().parameters.DatamartDate}'>=sa.EFF_DT_SK AND '@{pipeline().parameters.DatamartDate}'<=sa.TERM_DT_SK AND m.MBR_UNIQ_KEY<>0 UNION SELECT DISTINCT a.SRC_SYS_CD_SK,a.AGNT_ID,a.AGNT_NM,m.MBR_UNIQ_KEY FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.Agnt a JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.Sub_Lvl_Agnt sa ON a.AGNT_SK=sa.AGNT_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cm ON sa.SUB_LVL_AGNT_ROLE_TYP_CD_SK=cm.CD_MPPNG_SK JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.MBR m ON m.SUB_SK=sa.SUB_SK WHERE cm.TRGT_CD='AGENTRCRD' AND '@{pipeline().parameters.DatamartDate}'>=sa.EFF_DT_SK AND '@{pipeline().parameters.DatamartDate}'<=sa.TERM_DT_SK AND m.MBR_UNIQ_KEY<>0), cd AS (SELECT CD_MPPNG_SK,TRGT_CD FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG), lkp AS (SELECT main.*,cd.TRGT_CD AS temp_SRC_SYS_CD FROM main LEFT JOIN cd ON main.SRC_SYS_CD_SK=cd.CD_MPPNG_SK), xfrm AS (SELECT CASE WHEN LTRIM(RTRIM(temp_SRC_SYS_CD))='' THEN 'UNK' ELSE temp_SRC_SYS_CD END AS SRC_SYS_CD,AGNT_ID,MBR_UNIQ_KEY,AGNT_NM,@{pipeline().parameters.DataMartRunCycle} AS LAST_UPDT_RUN_CYC_NO FROM lkp) SELECT SRC_SYS_CD,AGNT_ID,MBR_UNIQ_KEY,AGNT_NM,LAST_UPDT_RUN_CYC_NO FROM xfrm",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@null",
+              "param_table": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "'@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/WebDataMart/Claim/Agent/load')'",
+              "param_filename": "CLM_DM_AGNT_MBR.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "translator": {
+          "type": "TabularTranslator",
+          "typeConversion": true,
+          "typeConversionSettings": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Claim/Agent"
+    }
+  },
+  "Description": "COPYRIGHT 2008 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                                       Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------                  ----------------------------------   ---------------------------------    -------------------------   \nRalph Tucker                  2008-12-16     3648(Labor Accts)           Added fields (Carovr_amt, Cob_oop_amt)          devlIDSnew         \n\nArchana Palivela              09/14/13     5114                            Original Programming(Server to Parallel)                    IntegrateWrhsDevl       Jag Yelavarthi                 2013-11-28\n\nAnnotations:\nWrite CLM_DM_AGNT_MBR Data into a Sequential file for Load Job IdsDmProdDmDedctCmpntLoad.\nRead all the Data from IDS AGNT, MBR Tables;\nJob Name: IdsDmClmDmAgntMbrExtr"
+}

@@ -1,0 +1,1206 @@
+{
+  "name": "IdsBEKeyCntl",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership"
+    },
+    "parameters": {
+      "EmailNotify": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "GroupName": {
+        "type": "String",
+        "defaultValue": "EDW_BEKEY"
+      },
+      "Source": {
+        "type": "String",
+        "defaultValue": "IDS"
+      },
+      "Target": {
+        "type": "String",
+        "defaultValue": "EDW"
+      },
+      "Subject": {
+        "type": "String",
+        "defaultValue": "BEKEY"
+      },
+      "Frequency": {
+        "type": "String",
+        "defaultValue": "DAILY"
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_CountChk_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FctsRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CommandOutput_ReadExclusionListFile": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "EdwRunCycleDt": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExtactRunCycle": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_If_1A_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_If_1B_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_If_2A_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_If_2B_branch": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "var_If_3A_branch": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "SetVar_JobName",
+        "type": "SetVariable",
+        "dependsOn": [],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "JobName",
+          "value": {
+            "type": "Expression",
+            "value": "@pipeline().Pipeline"
+          }
+        }
+      },
+      {
+        "name": "ProcessCheckExtr_EE",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "SetVar_JobName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH db2_data AS (\n    select SUBJ_CD, TRGT_SYS_CD, SRC_SYS_CD\n    from @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC\n    where CYC_STTUS_CD = 'RUNNING'\n       and SUBJ_CD = '@{variables('Subject')}'\n       and TRGT_SYS_CD = '@{variables('Target')}'\n    UNION\n    select SUBJ_CD, TRGT_SYS_CD, SRC_SYS_CD\n    from @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC\n    where CYC_STTUS_CD = 'RUNNING'\n       and SUBJ_CD = '@{variables('Subject')}'\n       and SRC_SYS_CD <> '@{variables('Source')}'\n       and TRGT_SYS_CD = '@{variables('Target')}'\n    UNION\n    select SUBJ_CD, TRGT_SYS_CD, SRC_SYS_CD\n    from @{pipeline().globalParameters.gbl_param_IDSOwner}.P_RUN_CYC\n    where CYC_STTUS_CD = 'RUNNING'\n       and SUBJ_CD = '@{variables('Subject')}'\n       and SRC_SYS_CD = '@{variables('Source')}'\n),\ntransformed_data AS (\n    SELECT SUBJ_CD, SRC_SYS_CD, TRGT_SYS_CD\n    FROM db2_data\n)\nSELECT COUNT(*) as link_count FROM transformed_data",
+              "type": "Expression"
+            },
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "dataset": {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@pipeline().globalParameters.gbl_param_IDSOwner",
+              "param_table": "P_RUN_CYC"
+            }
+          }
+        }
+      },
+      {
+        "name": "LinkCount_SetVar",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "ProcessCheckExtr_EE",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "LinkCount",
+          "value": {
+            "value": "@string(activity('ProcessCheckExtr_EE').output.firstRow.link_count)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Switch_CountChk",
+        "type": "Switch",
+        "dependsOn": [
+          {
+            "activity": "LinkCount_SetVar",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "on": {
+            "type": "Expression",
+            "value": "@if(not(equals(string(variables('LinkCount')), '0')),'1','0')"
+          },
+          "cases": [
+            {
+              "value": "1",
+              "activities": [
+                {
+                  "name": "SetVar_CountChk_branch_True",
+                  "type": "SetVariable",
+                  "dependsOn": [],
+                  "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "variableName": "var_CountChk_branch",
+                    "value": {
+                      "type": "Expression",
+                      "value": "@string(1)"
+                    }
+                  }
+                },
+                {
+                  "name": "Email_DAT",
+                  "type": "ExecutePipeline",
+                  "dependsOn": [
+                    {
+                      "activity": "SetVar_CountChk_branch_True",
+                      "dependencyConditions": [
+                        "Succeeded"
+                      ]
+                    }
+                  ],
+                  "policy": {
+                    "secureInput": false
+                  },
+                  "userProperties": [],
+                  "typeProperties": {
+                    "pipeline": {
+                      "referenceName": "Email_Notification",
+                      "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                      "recipients": {
+                        "type": "Expression",
+                        "value": "@pipeline().globalParameters.gbl_param_EmailSupport"
+                      },
+                      "subject": "EDW BEKey Abort",
+                      "body": "The EDW BEKey processing can not run while IDS BEKey is being updated or extracted from.",
+                      "blobFilenames": "",
+                      "fromemail": {
+                        "type": "Expression",
+                        "value": "@pipeline().globalParameters.gbl_param_fromemail"
+                      },
+                      "containerName": ""
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "SetVar_CountChk_branch_False",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "var_CountChk_branch",
+                "value": {
+                  "type": "Expression",
+                  "value": "@string(0)"
+                }
+              }
+            },
+            {
+              "name": "Notebook_OpenRunCycle",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_CountChk_branch_False",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "type": "Expression",
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/OpenRunCycle')"
+                },
+                "baseParameters": {
+                  "DBOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "Source": {
+                    "type": "Expression",
+                    "value": "@variables('Source')"
+                  },
+                  "Target": {
+                    "type": "Expression",
+                    "value": "@variables('Target')"
+                  },
+                  "Subject": {
+                    "type": "Expression",
+                    "value": "@variables('Subject')"
+                  },
+                  "Frequency": {
+                    "type": "Expression",
+                    "value": "@variables('Frequency')"
+                  },
+                  "secret_name": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret"
+                  },
+                  "GlobalEnvironment": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_environment"
+                  }
+                }
+              }
+            },
+            {
+              "name": "SetVar_RunCycle",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Notebook_OpenRunCycle",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "RunCycle",
+                "value": {
+                  "type": "Expression",
+                  "value": "@string(activity('Notebook_OpenRunCycle').output.runOutput)"
+                }
+              }
+            },
+            {
+              "name": "Notebook_GetExtractRunCycle",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_RunCycle",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "type": "Expression",
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetExtractRunCycle')"
+                },
+                "baseParameters": {
+                  "GetExtractRunCycle_a1": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "GetExtractRunCycle_a2": {
+                    "type": "Expression",
+                    "value": "@variables('Subject')"
+                  },
+                  "GetExtractRunCycle_a3": "MPI_BCBS",
+                  "load": {
+                    "type": "Expression",
+                    "value": "@variables('Target')"
+                  },
+                  "owner_schema": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "secret_name": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret"
+                  },
+                  "GlobalEnvironment": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_environment"
+                  },
+                  "subject": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "source": {
+                    "value": "",
+                    "type": "Expression"
+                  },
+                  "target": {
+                    "value": "",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "SetVar_FctsRunCycle",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Notebook_GetExtractRunCycle",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "FctsRunCycle",
+                "value": {
+                  "type": "Expression",
+                  "value": "@string(activity('Notebook_GetExtractRunCycle').output.runOutput)"
+                }
+              }
+            },
+            {
+              "name": "ExclusionListExtr",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_FctsRunCycle",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "ExclusionListExtr_EE",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "IDSOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "ids_secret_name": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret"
+                  },
+                  "Subject": {
+                    "type": "Expression",
+                    "value": "@variables('JobName')"
+                  },
+                  "SourceSys": "",
+                  "TargetSys": ""
+                }
+              }
+            },
+            {
+              "name": "Notebook_ReadExclusionListFile",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "ExclusionListExtr",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "type": "Expression",
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/_TASK_EXCL.dat",
+                    "type": "Expression"
+                  },
+                  "command": "cat",
+                  "cut_column_index": "2",
+                  "project": "enterprise"
+                }
+              }
+            },
+            {
+              "name": "SetVar_CommandOutput_ReadExclusionListFile",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Notebook_ReadExclusionListFile",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "CommandOutput_ReadExclusionListFile",
+                "value": {
+                  "type": "Expression",
+                  "value": "@string(activity('Notebook_ReadExclusionListFile').output.runOutput)"
+                }
+              }
+            },
+            {
+              "name": "Notebook_WriteRunID",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_CommandOutput_ReadExclusionListFile",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/WriteRunID')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "entry_name": {
+                    "value": "@concat(variables('JobName'),'RunID')",
+                    "type": "Expression"
+                  },
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              }
+            },
+            {
+              "name": "Notebook_GetRunInfo",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "Notebook_WriteRunID",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "type": "Expression",
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetRunInfo')"
+                },
+                "baseParameters": {
+                  "job_name": {
+                    "type": "Expression",
+                    "value": "@concat(variables('JobName'),'RunID')"
+                  },
+                  "IDSOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "secret_name": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret"
+                  },
+                  "GlobalEnvironment": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_environment"
+                  }
+                }
+              }
+            },
+            {
+              "name": "SetVar_RunID",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Notebook_GetRunInfo",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "RunID",
+                "value": {
+                  "type": "Expression",
+                  "value": "@string(activity('Notebook_GetRunInfo').output.runOutput)"
+                }
+              }
+            },
+            {
+              "name": "SetVar_ExclusionList",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_RunID",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "ExclusionList",
+                "value": {
+                  "type": "Expression",
+                  "value": "@variables('CommandOutput_ReadExclusionListFile')"
+                }
+              }
+            },
+            {
+              "name": "Notebook_GetRunCycleDate",
+              "type": "DatabricksNotebook",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_ExclusionList",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "type": "Expression",
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/GetRunCycleDate')"
+                },
+                "baseParameters": {
+                  "DBOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "Subject": {
+                    "type": "Expression",
+                    "value": "@variables('Subject')"
+                  },
+                  "SourceSystem": {
+                    "type": "Expression",
+                    "value": "@variables('Source')"
+                  },
+                  "TargetSystem": {
+                    "type": "Expression",
+                    "value": "@variables('Target')"
+                  },
+                  "RunCycle": {
+                    "type": "Expression",
+                    "value": "@variables('RunCycle')"
+                  },
+                  "secret_name": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret"
+                  },
+                  "GlobalEnvironment": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_environment"
+                  }
+                }
+              }
+            },
+            {
+              "name": "SetVar_EdwRunCycleDt",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "Notebook_GetRunCycleDate",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "EdwRunCycleDt",
+                "value": {
+                  "type": "Expression",
+                  "value": "@string(activity('Notebook_GetRunCycleDate').output.runOutput)"
+                }
+              }
+            },
+            {
+              "name": "SetVar_ExtactRunCycle",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_EdwRunCycleDt",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "ExtactRunCycle",
+                "value": {
+                  "type": "Expression",
+                  "value": "@variables('FctsRunCycle')"
+                }
+              }
+            },
+            {
+              "name": "ExclusionListDelete",
+              "type": "ExecutePipeline",
+              "dependsOn": [
+                {
+                  "activity": "SetVar_ExtactRunCycle",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "ExclusionListDelete_EE",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "IDSOwner": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner",
+                    "type": "Expression"
+                  },
+                  "ids_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_IDSSecret",
+                    "type": "Expression"
+                  },
+                  "Subject": {
+                    "value": "@variables('JobName')",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Switch_CountChk",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "type": "Expression",
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'EdwBEkeyDel'), 0)"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBEkeyDel",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwIndvBeDDel",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "EDWOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner"
+                  },
+                  "IDSFilePath": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSFilePath"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_1B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "type": "Expression",
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'Mv_Del_File'), 0)"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Mv_Del_File",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "type": "Expression",
+                  "value": "@concat(pipeline().globalParameters.gbl_param_scripts,'/Generic_ADLS_File_Operations')"
+                },
+                "baseParameters": {
+                  "src_file_with_path": {
+                    "value": "/external/processed/edw_bekey_delete.dat",
+                    "type": "Expression"
+                  },
+                  "trgt_file_with_path": {
+                    "value": "/RunID",
+                    "type": "Expression"
+                  },
+                  "command": "move",
+                  "project": "enterprise"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_2A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_1B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "IdsClmHitList",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "type": "Expression",
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'IdsEdwIndvBeDExtr'), 0)"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwIndvBeDExtr",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "type": "Expression",
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path,'/DataWarehouse/Membership/EdwLoads/IndvBeD/IdsEdwIndvBeDExtr')"
+                },
+                "baseParameters": {
+                  "IDSOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "EDWRunCycle": {
+                    "type": "Expression",
+                    "value": "@variables('RunCycle')"
+                  },
+                  "EDWRunCycleDate": {
+                    "type": "Expression",
+                    "value": "@variables('EdwRunCycleDt')"
+                  },
+                  "PrevEdwRunCycleDt": {
+                    "type": "Expression",
+                    "value": "@concat('FIND.DATE:',variables('EdwRunCycleDt'))"
+                  },
+                  "IDSRunCycle": {
+                    "type": "Expression",
+                    "value": "@variables('ExtactRunCycle')"
+                  },
+                  "EDWOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_3A",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_2A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "type": "Expression",
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'IdsEdwIndvBeDLoad'), 0)"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "IdsEdwIndvBeDLoad",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "IdsEdwIndvBeDLoad",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "EDWOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_EDWOwner"
+                  },
+                  "edw_secret_name": {
+                    "value": "@pipeline().globalParameters.gbl_param_EDWSecret",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "If_2B",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "If_3A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "type": "Expression",
+            "value": "@equals(count(split(variables('ExclusionList'), ';'), 'EdwBEKeyRunCycUpd'), 0)"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBEKeyRunCycUpd",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "policy": {
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "EdwBEKeyRunCycUpd_EE",
+                  "type": "PipelineReference"
+                },
+                "waitOnCompletion": true,
+                "parameters": {
+                  "IDSOwner": {
+                    "type": "Expression",
+                    "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+                  },
+                  "IDSRunCycle": {
+                    "type": "Expression",
+                    "value": "@variables('ExtactRunCycle')"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CloseRunCycle",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_2B",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "type": "Expression",
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/CloseRunCycle')"
+          },
+          "baseParameters": {
+            "CloseRunCycle_a1": {
+              "type": "Expression",
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+            },
+            "CloseRunCycle_a2": {
+              "type": "Expression",
+              "value": "@variables('Source')"
+            },
+            "CloseRunCycle_a3": {
+              "type": "Expression",
+              "value": "@variables('Target')"
+            },
+            "CloseRunCycle_a4": {
+              "type": "Expression",
+              "value": "@variables('Subject')"
+            },
+            "CloseRunCycle_a5": {
+              "type": "Expression",
+              "value": "@variables('Frequency')"
+            },
+            "CloseRunCycle_a6": {
+              "type": "Expression",
+              "value": "@variables('RunCycle')"
+            },
+            "DBOwner": {
+              "type": "Expression",
+              "value": "@pipeline().globalParameters.gbl_param_IDSOwner"
+            },
+            "secret_name": {
+              "type": "Expression",
+              "value": "@pipeline().globalParameters.gbl_param_IDSSecret"
+            },
+            "GlobalEnvironment": {
+              "type": "Expression",
+              "value": "@pipeline().globalParameters.gbl_param_environment"
+            },
+            "SrcSystem": {
+              "value": "",
+              "type": "Expression"
+            },
+            "TrgtSystem": {
+              "value": "",
+              "type": "Expression"
+            },
+            "SubjCode": {
+              "value": "",
+              "type": "Expression"
+            },
+            "FreqCode": {
+              "value": "",
+              "type": "Expression"
+            },
+            "RunCycle": {
+              "value": "",
+              "type": "Expression"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

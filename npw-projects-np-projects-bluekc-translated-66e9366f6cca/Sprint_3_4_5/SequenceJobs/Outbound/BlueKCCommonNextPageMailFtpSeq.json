@@ -1,0 +1,252 @@
+{
+  "name": "BlueKCCommonNextPageMailFtpSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    },
+    "parameters": {
+      "DynamicAccessToken": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "PerceptiveAPIURL": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Environment": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FTPFiles": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "MailFileInd": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "NXTPGOutboundFile": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "Vendor": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "COMM_SK": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FIRSTNAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LASTNAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "MIDDLENAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "DESTINATION": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ATTACHMENTS": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LETTERQUEUEID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "TEMPLATENAME": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "SUBSCRIBERID": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "FileCount": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "Cmd_ChkPDFFile",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/landing",
+              "type": "Expression"
+            },
+            "command": "wc",
+            "project": "outbound"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Set_FileCount",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Cmd_ChkPDFFile",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "FileCount",
+          "value": {
+            "value": "@string(activity('Cmd_ChkPDFFile').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "FTP_Files",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Set_FileCount",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(and(equals(toUpper(trim(string(pipeline().parameters.FTPFiles))), 'Y'), equals(toUpper(trim(string(pipeline().parameters.MailFileInd))), 'Y')), equals(string(variables('FileCount')), '1'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "FTP_PDF_Files",
+              "type": "DatabricksNotebook",
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTPBINARY')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "FTPCMD": "put",
+                  "LOCALPATH": {
+                    "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/landing')",
+                    "type": "Expression"
+                  },
+                  "LOCALFILENAME": {
+                    "value": "@pipeline().parameters.ATTACHMENTS",
+                    "type": "Expression"
+                  },
+                  "REMOTEPATH": "/",
+                  "REMOTEFILENAME": {
+                    "value": "@concat(pipeline().parameters.Environment, '1.MAILPRINT.GC.', pipeline().parameters.ATTACHMENTS)",
+                    "type": "Expression"
+                  },
+                  "GlobalEnvironment": {
+                    "value": "@pipeline().globalParameters.gbl_param_environment",
+                    "type": "Expression"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Echo",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "FTP_Files",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/MailStatusData.txt",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/MailStatusData_New.txt",
+              "type": "Expression"
+            },
+            "command": "cat",
+            "project": "outbound"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ]
+  }
+}

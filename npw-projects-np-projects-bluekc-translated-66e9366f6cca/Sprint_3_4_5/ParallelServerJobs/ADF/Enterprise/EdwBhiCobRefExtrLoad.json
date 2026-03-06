@@ -1,0 +1,77 @@
+{
+  "name": "EdwBhiCobRefExtrLoad",
+  "properties": {
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/BHI/Member/Member_COM"
+    },
+    "parameters": {},
+    "activities": [
+      {
+        "name": "ACT_Copy_EdwBhiCobRefExtrLoad",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_1 AS (\n    SELECT cob.MBR_UNIQ_KEY,\n           CASE WHEN cob.MBR_COB_TYP_CD = 'COM' THEN 'COM' ELSE 'XCOM' END AS MBR_COB_TYP_CD,\n           cob.MBR_COB_EFF_DT_SK AS MBR_COB_EFF_Date,\n           cob.MBR_COB_TERM_DT_SK AS MBR_COB_TERM_Date,\n           cob.MBR_COB_SK\n      FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.MBR_COB_D cob\n     WHERE cob.MBR_COB_TYP_CD IN ('COM','MCARE','MCARED','SUPLMTMCARE')\n       AND cob.MBR_COB_TERM_DT_SK >= '2010-10-01'\n       AND cob.MBR_COB_PAYMT_PRTY_CD = 'PRI'\n),\ncte_2 AS (\n    SELECT MBR_UNIQ_KEY,\n           MBR_COB_TYP_CD,\n           MBR_COB_EFF_Date,\n           MBR_COB_TERM_Date,\n           MBR_COB_SK\n      FROM cte_1\n     WHERE MBR_COB_TERM_Date <> DATEADD(day, 1, MBR_COB_EFF_Date)\n),\ncte_3 AS (\n    SELECT MBR_UNIQ_KEY,\n           MBR_COB_TYP_CD,\n           MBR_COB_EFF_Date,\n           MBR_COB_TERM_Date,\n           MBR_COB_SK,\n           ROW_NUMBER() OVER (PARTITION BY MBR_UNIQ_KEY, MBR_COB_TYP_CD, MBR_COB_EFF_Date, MBR_COB_TERM_Date ORDER BY (SELECT NULL)) AS rn\n      FROM cte_2\n)\nSELECT MBR_UNIQ_KEY,\n       MBR_COB_TYP_CD,\n       MBR_COB_EFF_Date AS MBR_COB_EFF_DT_SK,\n       MBR_COB_TERM_Date AS MBR_COB_TERM_DT_SK,\n       MBR_COB_SK\n  FROM cte_3\n WHERE rn = 1",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_EDWOwner}.W_BHI_MBR_COB",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "MBR_COB_D"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "W_BHI_MBR_COB"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "Description": "\u00c2\u00a9 Copyright 2013 Blue Cross/Blue Shield of Kansas City\n\nJOB NAME:  EdwBhiCobRefExtrLoad\n\n\nDESCRIPTION:  Extract member data to for COB process\n\n\nCALLED BY:  \n\nHASH FILES:  \n\n\nRERUN INFORMATION: \n\n             PREVIOUS RUN SUCCESSFUL:   Nothing to reset. \n             PREVIOUS RUN ABORTED:         Nothing to reset, just restart.\n\n\nMODIFICATIONS:\n\nDeveloper                 Date                    Project/Ticket #\\(9)           Change Description\\(9)\\(9)\\(9)              Development Project\\(9)      Code Reviewer\\(9)        Date Reviewed       \n------------------               -------------------         ---------------------------\\(9)           -----------------------------------------------------------------------            --------------------------------\\(9)      -------------------------         -------------------------    \nPraveen Annam            2013-08-28          5115 BHI                               Original programming                                                  EnterpriseNewDevl       Kalyan Neelam          2013-11-13                                    \n\nKrishnakanth M         2018-04-04              TFS19405                         Changed the auto commit mode to \"ON\"                   EnterpriseDev2                 Jaideep Mankala      04/05/2018\n\nAnnotations:\nLoads COB table from MBR_COB_D"
+}

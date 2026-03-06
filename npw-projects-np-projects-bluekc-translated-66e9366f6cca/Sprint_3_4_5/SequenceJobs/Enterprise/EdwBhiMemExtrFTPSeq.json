@@ -1,0 +1,284 @@
+{
+  "name": "EdwBhiMemExtrFTPSeq",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Enterprise/Jobs/BHI/Member"
+    },
+    "parameters": {
+      "ProdIn": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FTPFiles": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ExclusionList": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "FTP_NDW25IND": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "If_FTP_NonNDW",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(@and(equals(pipeline().parameters.FTPFiles,'Y'),not(contains(concat(';',pipeline().parameters.ExclusionList,';'),';EdwBhiMbrFinalExtrFTP;'))),equals(pipeline().parameters.FTP_NDW25IND,'N'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiMbrFinalExtrFTP_Notebook",
+              "type": "DatabricksNotebook",
+              "dependsOn": [],
+              "linkedServiceName": {
+                "referenceName": "shareddatabricks",
+                "type": "LinkedServiceReference"
+              },
+              "userProperties": [],
+              "policy": {
+                "timeout": "12:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "typeProperties": {
+                "notebookPath": {
+                  "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/BHI/Member/Member_COM/EdwBhiMbrFinalExtrFTP')",
+                  "type": "Expression"
+                },
+                "baseParameters": {
+                  "ProdIn": {
+                    "value": "@pipeline().parameters.ProdIn",
+                    "type": "Expression"
+                  }
+                }
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "If_FTP_NDW",
+        "type": "IfCondition",
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@and(@and(equals(pipeline().parameters.FTPFiles,'Y'),not(contains(concat(';',pipeline().parameters.ExclusionList,';'),';EdwBhiMbrFinalExtrFTP_NDW;'))),equals(pipeline().parameters.FTP_NDW25IND,'Y'))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "EdwBhiMbrFinalExtrFTP_NDW_Pipeline",
+              "type": "ExecutePipeline",
+              "dependsOn": [],
+              "userProperties": [],
+              "policy": {
+                "secureInput": false
+              },
+              "typeProperties": {
+                "pipeline": {
+                  "referenceName": "EdwBhiMbrFinalExtrFTP_NDW",
+                  "type": "PipelineReference"
+                },
+                "parameters": {
+                  "ProdIn": {
+                    "value": "@pipeline().parameters.ProdIn",
+                    "type": "Expression"
+                  }
+                },
+                "waitOnCompletion": true
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Move_Compress_Load_File_1",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "If_FTP_NonNDW",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "If_FTP_NDW",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/std_member",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/external/processed/std_member.",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "enterprise"
+          }
+        }
+      },
+      {
+        "name": "Move_Compress_Load_File_2",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Move_Compress_Load_File_1",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/processed/std_member.",
+              "type": "Expression"
+            },
+            "command": "compress",
+            "project": "enterprise"
+          }
+        }
+      },
+      {
+        "name": "Move_Compress_Load_File_3",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Move_Compress_Load_File_2",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/std_member_ndw_25.5",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/external/processed/std_member_ndw_25.5.",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "enterprise"
+          }
+        }
+      },
+      {
+        "name": "Move_Compress_Load_File_4",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Move_Compress_Load_File_3",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        },
+        "userProperties": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/external/processed/std_member_ndw_25.5.",
+              "type": "Expression"
+            },
+            "command": "compress",
+            "project": "enterprise"
+          }
+        }
+      }
+    ]
+  }
+}

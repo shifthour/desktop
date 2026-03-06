@@ -1,0 +1,221 @@
+{
+  "name": "IdsCchgSnglCatGrpRplcLoad",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "CurrRunCycle": {
+        "type": "String"
+      },
+      "VersionId": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyFileToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.X1_TMP_IdsCchgSnglCatGrpRplcLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "CCHG_SNGL_CAT_GRP_SK",
+                  "type": "int",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "CCHG_SNGL_CAT_GRP_CD",
+                  "type": "varchar",
+                  "physicalType": "STRING"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD_SK",
+                  "type": "int",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "CRT_RUN_CYC_EXCTN_SK",
+                  "type": "int",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                  "type": "int",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "ICD_VRSN_CD_SK",
+                  "type": "int",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "CCHG_SNGL_CAT_GRP_DESC",
+                  "type": "varchar",
+                  "physicalType": "STRING"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "ICD_DIAG_CLM_MPPNG_DESC",
+                  "type": "varchar",
+                  "physicalType": "STRING"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "@concat('CCHG_SNGL_CAT_GRP.',pipeline().parameters.SrcSysCd,'.',pipeline().parameters.RunID,'.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "X1_TMP_IdsCchgSnglCatGrpRplcLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "UpsertToFinal",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH SourceData AS ( SELECT st.CCHG_SNGL_CAT_GRP_SK AS CCHG_SNGL_CAT_GRP_RPLC_SK, st.CCHG_SNGL_CAT_GRP_CD, st.SRC_SYS_CD_SK, st.CRT_RUN_CYC_EXCTN_SK, st.LAST_UPDT_RUN_CYC_EXCTN_SK, st.ICD_VRSN_CD_SK, st.CCHG_SNGL_CAT_GRP_DESC, st.ICD_DIAG_CLM_MPPNG_DESC, '@{pipeline().parameters.VersionId}' AS VRSN_ID FROM @{pipeline().globalParameters.gbl_param_ids_staging}.X1_TMP_IdsCchgSnglCatGrpRplcLoad st ) MERGE @{pipeline().globalParameters.gbl_param_IDSOwner}.CCHG_SNGL_CAT_GRP_RPLC T USING SourceData S ON (T.CCHG_SNGL_CAT_GRP_RPLC_SK = S.CCHG_SNGL_CAT_GRP_RPLC_SK) WHEN MATCHED THEN UPDATE SET T.CCHG_SNGL_CAT_GRP_CD = S.CCHG_SNGL_CAT_GRP_CD, T.SRC_SYS_CD_SK = S.SRC_SYS_CD_SK, T.CRT_RUN_CYC_EXCTN_SK = S.CRT_RUN_CYC_EXCTN_SK, T.LAST_UPDT_RUN_CYC_EXCTN_SK = S.LAST_UPDT_RUN_CYC_EXCTN_SK, T.ICD_VRSN_CD_SK = S.ICD_VRSN_CD_SK, T.CCHG_SNGL_CAT_GRP_DESC = S.CCHG_SNGL_CAT_GRP_DESC, T.ICD_DIAG_CLM_MPPNG_DESC = S.ICD_DIAG_CLM_MPPNG_DESC, T.VRSN_ID = S.VRSN_ID WHEN NOT MATCHED THEN INSERT (CCHG_SNGL_CAT_GRP_RPLC_SK, CCHG_SNGL_CAT_GRP_CD, SRC_SYS_CD_SK, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, ICD_VRSN_CD_SK, CCHG_SNGL_CAT_GRP_DESC, ICD_DIAG_CLM_MPPNG_DESC, VRSN_ID) VALUES (S.CCHG_SNGL_CAT_GRP_RPLC_SK, S.CCHG_SNGL_CAT_GRP_CD, S.SRC_SYS_CD_SK, S.CRT_RUN_CYC_EXCTN_SK, S.LAST_UPDT_RUN_CYC_EXCTN_SK, S.ICD_VRSN_CD_SK, S.CCHG_SNGL_CAT_GRP_DESC, S.ICD_DIAG_CLM_MPPNG_DESC, S.VRSN_ID);",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/CCHG/CchgSnglCatGrp"
+    }
+  },
+  "Description": "CALLED BY: CblTalnCchgLoadSeq\n\nPROCESSING:  Loads data into CCHG_SNGL_CAT_GRP table and rejected records into a Rej file. \n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                   DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                        DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nGoutham K                11/13/2021         US-500022                    New Job to Load RPLC Table                                                                IntegrateDev2       Reddy Sanam               04/13/2022\n\nAnnotations:\nUpdate Term date for old records in After load SQL\nRead Load File created in the FKEY job\nTfrm VersionId\nLoad CCHG_SNGL_CAT_GRP_RPLC table\nLoad rejects are redirected into a Reject file"
+}

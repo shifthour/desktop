@@ -1,0 +1,256 @@
+{
+  "name": "I820CMSPaymtFlExtr",
+  "properties": {
+    "parameters": {
+      "RunID": {
+        "type": "String"
+      },
+      "GormPolicyFile": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_Valencia820FfmPolicy_to_Tmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Val820_TMP_I820CMSPaymtFlExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/landing')",
+              "param_filename": "@{pipeline().parameters.GormPolicyFile}",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Val820_TMP_I820CMSPaymtFlExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform_Dedup",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_Valencia820FfmPolicy_to_Tmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Val820Dedup_TMP_I820CMSPaymtFlExtr; WITH Xfm AS (SELECT CASE WHEN T.EFT_TRACE_NUMBER IS NULL THEN '' ELSE T.EFT_TRACE_NUMBER END AS EFT_TRACE_ID, CASE WHEN T.EFT_EFFECTIVE_DATE IS NULL THEN '1753-01-01 00:00:00' ELSE SUBSTRING(T.EFT_EFFECTIVE_DATE,7,4) + '-' + SUBSTRING(T.EFT_EFFECTIVE_DATE,1,2) + '-' + SUBSTRING(T.EFT_EFFECTIVE_DATE,4,2) + ' 00:00:00' END AS EFT_EFF_DT, CASE WHEN T.EXCHANGE_TOTAL_EFT_PAYMENT_AMOUNT IS NULL THEN 0 ELSE T.EXCHANGE_TOTAL_EFT_PAYMENT_AMOUNT END AS EFT_TOT_PAYMT_AMT, CASE WHEN T.TRADING_PARTNER_ID IS NULL THEN '' ELSE dbo.trim_default(T.TRADING_PARTNER_ID) END AS TRDNG_PRTNR_ID, CASE WHEN T.CREATED_ON IS NULL THEN '1753-01-01 00:00:00' ELSE SUBSTRING(T.CREATED_ON,7,4) + '-' + SUBSTRING(T.CREATED_ON,1,2) + '-' + SUBSTRING(T.CREATED_ON,4,2) + ' 00:00:00' END AS SRC_SYS_CRT_DT, '820' AS LOAD_FILE_NM FROM @{pipeline().globalParameters.gbl_param_ids_staging}.Val820_TMP_I820CMSPaymtFlExtr T WHERE dbo.trim_default(T.EXCHANGE_ASSIGNED_SUBSCRIBER_ID) <> ''), Dedup AS (SELECT EFT_TRACE_ID, EFT_EFF_DT, EFT_TOT_PAYMT_AMT, TRDNG_PRTNR_ID, SRC_SYS_CRT_DT, LOAD_FILE_NM, ROW_NUMBER() OVER (PARTITION BY EFT_TRACE_ID ORDER BY (SELECT NULL)) AS rn FROM Xfm) SELECT EFT_TRACE_ID, EFT_EFF_DT, EFT_TOT_PAYMT_AMT, TRDNG_PRTNR_ID, SRC_SYS_CRT_DT, LOAD_FILE_NM INTO @{pipeline().globalParameters.gbl_param_ids_staging}.Val820Dedup_TMP_I820CMSPaymtFlExtr FROM Dedup WHERE rn = 1",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_CmsPaymtFlExtr",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_Dedup",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "name": "EFT_TRACE_ID",
+                    "type": "String"
+                  },
+                  "sink": {
+                    "name": "EFT_TRACE_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "name": "EFT_EFF_DT",
+                    "type": "String"
+                  },
+                  "sink": {
+                    "name": "EFT_EFF_DT",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "name": "EFT_TOT_PAYMT_AMT",
+                    "type": "Decimal"
+                  },
+                  "sink": {
+                    "name": "EFT_TOT_PAYMT_AMT",
+                    "type": "Decimal",
+                    "physicalType": "Decimal"
+                  }
+                },
+                {
+                  "source": {
+                    "name": "TRDNG_PRTNR_ID",
+                    "type": "String"
+                  },
+                  "sink": {
+                    "name": "TRDNG_PRTNR_ID",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "name": "SRC_SYS_CRT_DT",
+                    "type": "String"
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CRT_DT",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "name": "LOAD_FILE_NM",
+                    "type": "String"
+                  },
+                  "sink": {
+                    "name": "LOAD_FILE_NM",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Val820Dedup_TMP_I820CMSPaymtFlExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "I820_CMS_PAYMT_FILE_VALENCIA.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/PYMT Load/I820/I820CmsPaymtFileLoad"
+    }
+  },
+  "Description": "Job: I820CMSPaymtFlExtr\n\nThis job Extracts data from Gorman Policy  file\n\nCALLED BY: GORMANI820BCBSFinanceTablesLoadSeq\n\nDeveloper                                            Date                          Project or Ticket                         Description                                    Environment                   Code Reviewer               Review Date\n------------------------                           -----------------------          ---------------------------------------            ---------------------------------------------------    -----------------------------          -----------------------------          ------------------------------\nRaj Kommineni                               2021-12-15              US390105                                        Original programming                     IntegrateDev2           Jeyaprasanna                   2021-12-18\n\nAnnotations:\nThis job generates intermediate file for CMS PAYMT FILE  from GORMAN.FFM.820.POLICY file\nRemove duplicate on EFT_TRACE_ID"
+}

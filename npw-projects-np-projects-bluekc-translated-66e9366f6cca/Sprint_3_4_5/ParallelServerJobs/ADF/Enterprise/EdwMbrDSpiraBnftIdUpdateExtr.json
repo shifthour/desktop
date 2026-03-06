@@ -1,0 +1,53 @@
+{
+  "name": "EdwMbrDSpiraBnftIdUpdateExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Script_edwMbrDSpiraBnft",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.TMP_EdwMbrDSpiraBnftIdUpdateExtr;WITH cte_in AS (SELECT m.MBR_SK, CASE WHEN s.SPIRA_BNF_ID = 'CLNC' THEN 'CLNC' ELSE 'NA' END AS spira_stage1 FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.mbr_d m LEFT JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.mbr_enr_d e ON m.mbr_sk = e.mbr_sk AND e.mbr_enr_elig_in = 'Y' AND e.mbr_enr_term_dt_sk >= '@{pipeline().parameters.CurrentDate}' AND e.mbr_enr_eff_dt_sk <= '@{pipeline().parameters.CurrentDate}' AND e.mbr_enr_cls_pln_prod_cat_cd = 'MED' LEFT JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.PROD_DSGN_SUM_F s ON s.PROD_SK = e.PROD_SK AND s.PROD_CMPNT_EFF_DT_SK <= '@{pipeline().parameters.CurrentDate}' AND s.PROD_CMPNT_TERM_DT_SK >= '@{pipeline().parameters.CurrentDate}' WHERE m.SPIRA_BNF_ID <> COALESCE(s.SPIRA_BNF_ID,'NA')), cte_transform AS (SELECT MBR_SK, CASE WHEN dbo.trim_default(CASE WHEN spira_stage1 IS NOT NULL THEN spira_stage1 ELSE '' END) = '' THEN 'NA' ELSE spira_stage1 END AS SPIRA_BNF_ID FROM cte_in) SELECT MBR_SK, SPIRA_BNF_ID INTO @{pipeline().globalParameters.gbl_param_edw_staging}.TMP_EdwMbrDSpiraBnftIdUpdateExtr FROM cte_transform",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "UPDATE M SET M.SPIRA_BNF_ID = T.SPIRA_BNF_ID FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.mbr_d M INNER JOIN @{pipeline().globalParameters.gbl_param_edw_staging}.TMP_EdwMbrDSpiraBnftIdUpdateExtr T ON M.MBR_SK = T.MBR_SK",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "CurrentDate": {
+        "type": "string",
+        "defaultValue": ""
+      }
+    },
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/MbrD"
+    }
+  },
+  "Description": "COPYRIGHT 2005 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nJOB NAME:   EdwMbrDSpiraBnftIdUpdateExtr\nCalled By:  EdwMbrExtrLoadDriverSeq\n\nDESCRIPTION:  \n  Pull SPIRA_BNF_ID column from from edw tables and update the field.  \n\n \nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #                                        Change Description                                                                     Development Project    Code Reviewer            Date Reviewed\n---------------------------      -------------------    -----------------------------------         -------------------------------------------------------------------------------------------                                     ----------------------------------   ---------------------------------    -------------------------   \n\nKarthik Chintalapani  2019-02-25              INC0489698                    New job to update the SPIRA_BNF_ID column in the enterprise MBR_D table    EnterpriseDev2           Kalyan Neelam             2019-02-27\n\nReddy Sanam          2021-06-25              US388520                      Updated the source sql to pull only members where the SPIRA_BNF_IND             EnterpriseDev2           Jeyaprasanna               2021-07-06\n                                                                                                       is out of sync with eligibility table\n\nAnnotations:\nJob Name: EdwMbrDSpiraBnftIdUpdateExtr\nThis Job updates the SPIRA_BNF_ID column in the EDW Table MBR_D after the table is populated."
+}

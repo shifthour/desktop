@@ -1,0 +1,320 @@
+{
+  "name": "BBBRnwlPredMdlCntl",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "folder": {
+      "name": "Integrate/Jobs/BBB"
+    },
+    "parameters": {},
+    "variables": {
+      "JobName": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "GroupName": {
+        "type": "String",
+        "defaultValue": "BBB_RNWL_PRED_MDL_LOAD"
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "LinkCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "activities": [
+      {
+        "name": "SetJobName",
+        "type": "SetVariable",
+        "dependsOn": [],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "JobName",
+          "value": {
+            "value": "@pipeline().Pipeline",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "FORMAT_DATE_NB",
+        "type": "DatabricksNotebook",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FORMAT.DATE')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "pInDate": "string('@DATE')",
+            "pSource": "DATE",
+            "pSourceFormat": "CURRENT",
+            "pOutFormat": "CCYY-MM-DD"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "SetRunID",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "FORMAT_DATE_NB",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "variableName": "RunID",
+          "value": {
+            "value": "@string(activity('FORMAT_DATE_NB').output.runOutput)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "FTP_get",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "SetJobName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "SetRunID",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "MACHINE": "o_lib",
+            "FTPCMD": "get",
+            "LOCALPATH": "/library/library/IS/PHI11/Shared/BBB_Imports/to_prod",
+            "LOCALFILENAME": "BCBSKC_PredictiveModel.csv",
+            "REMOTEPATH": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/landing')",
+              "type": "Expression"
+            },
+            "REMOTEFILENAME": "BCBSKC_PredictiveModel.txt",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "BBBRnwlPredMdlUpdt",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "FTP_get",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_notebook_path, '/BBB/BBBRnwlPredMdlUpdt')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "BlueBusOwner": {
+              "value": "@pipeline().globalParameters.gbl_param_BlueBusOwner",
+              "type": "Expression"
+            },
+            "bluebus_secret_name": {
+              "value": "@pipeline().globalParameters.gbl_param_BlueBusSecret",
+              "type": "Expression"
+            },
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "mv_to_processed",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "BBBRnwlPredMdlUpdt",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/landing/BCBSKC_PredictiveModel.txt",
+              "type": "Expression"
+            },
+            "trgt_file_with_path": {
+              "value": "/RunID",
+              "type": "Expression"
+            },
+            "command": "move",
+            "project": "integrate"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "compress_file",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "mv_to_processed",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_scripts, '/Generic_ADLS_File_Operations')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "src_file_with_path": {
+              "value": "/RunID",
+              "type": "Expression"
+            },
+            "command": "compress",
+            "project": "integrate"
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "FTP_delete",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "compress_file",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path, '/sequencer_routines/FTP')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "MACHINE": "o_lib",
+            "FTPCMD": "delete",
+            "LOCALPATH": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_FilePath, '/landing')",
+              "type": "Expression"
+            },
+            "LOCALFILENAME": "BCBSKC_PredictiveModel.csv",
+            "REMOTEPATH": "/library/library/IS/PHI11/Shared/BBB_Imports/to_prod",
+            "REMOTEFILENAME": "BCBSKC_PredictiveModel.csv",
+            "GlobalEnvironment": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,315 @@
+You are a senior full‑stack engineer inside Cursor. Build a production‑minded, zero‑cost real‑estate CRM for a Bengaluru channel partner (lead → site visit → booking). Use Option A: **Next.js 14 (App Router) + Prisma + Neon Postgres (Free)**, deploy on **Vercel Hobby (Free)**, schedule automations via **Cloudflare Workers Cron** calling Next.js API routes, and send emails via **Resend Free**. Brand color = **Indigo**.
+
+Do not ask for step-by-step confirmations. Plan → scaffold → implement → deliver a runnable app with seed data, scripts, README, and basic tests.
+
+──────────────────────────────────────────────────────────────────────────────
+# 0) Non‑negotiables (Zero‑cost, UX, and quality bars)
+- Start and run on free tiers: Vercel Hobby, Neon Free, Cloudflare Workers (Cron), Resend Free.
+- All code must be runnable locally with `pnpm dev`, and deployable to Vercel as-is.
+- Clean, accessible UI (shadcn/ui + Tailwind), **Indigo** as primary color, dark mode via system preference.
+- Telecaller workflow is the priority: fast list, keyboard shortcuts, minimal clicks.
+- PII hygiene: mask phone/email in lists/logs; unmask only on demand or detail page.
+- Include concise tests for scoring, dedupe, and one API route validation.
+
+──────────────────────────────────────────────────────────────────────────────
+# 1) Tech Stack & Project Layout
+- Single Next.js 14 (App Router) app in repo root: `crm/` structure is fine.
+- TypeScript, ESLint, Prettier, Tailwind, **shadcn/ui**.
+- **Prisma** ORM with Neon Postgres (Free) as DB.
+- **Resend** for transactional emails (assignment, reminders, digest).
+- Charts: **Chart.js** (or Recharts, pick one and keep it light).
+- Testing: **Vitest** for unit tests.
+
+Root tree (guidance):
+- `app/`                 // routes and layouts
+- `app/api/...`          // API routes
+- `components/`          // shared UI
+- `lib/`                 // db, auth, scoring, dedupe, email, util
+- `prisma/`              // schema.prisma + seed.ts
+- `styles/`              // globals.css, theme
+- `tests/`               // unit tests
+- `README.md`, `.env.example`, tool configs
+
+Scripts: `dev`, `build`, `start`, `lint`, `format`, `typecheck`, `prisma:generate`, `prisma:migrate`, `prisma:seed`.
+
+──────────────────────────────────────────────────────────────────────────────
+# 2) Environment, Auth, and Config
+Create `.env.example` with:
+- DATABASE_URL="postgresql://..."
+- RESEND_API_KEY="resend_..."
+- AUTH_PASSWORD_SALT="random-32b"   // for hashing
+- NEXTAUTH_SECRET or APP_SECRET="random-32b" // if needed by your session impl
+
+Auth: implement a simple **credentials** auth (email/password) stored in Users table with **argon2/bcrypt**. No paid providers. Create login page and server session helpers.
+
+──────────────────────────────────────────────────────────────────────────────
+# 3) Tailwind + shadcn/ui + Indigo theme
+- Install Tailwind + shadcn/ui.
+- Primary color = **Indigo** (e.g., indigo-600/700 variants). Buttons, badges, focus outlines, and links should use Indigo.
+- Add `ThemeProvider` with system dark mode.
+- Keep components accessible (labels, aria, proper focus management).
+
+──────────────────────────────────────────────────────────────────────────────
+# 4) Data Model (Prisma)
+Create `prisma/schema.prisma` with:
+
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+generator client { provider = "prisma-client-js" }
+
+model Org { id String @id @default(cuid()); name String; users User[]; projects Project[]; leads Lead[]; createdAt DateTime @default(now()) }
+
+enum UserRole { ADMIN MANAGER AGENT }
+
+model User {
+  id String @id @default(cuid())
+  orgId String
+  email String @unique
+  name String
+  role UserRole @default(AGENT)
+  passwordHash String
+  createdAt DateTime @default(now())
+  org Org @relation(fields:[orgId], references:[id])
+  activities Activity[]
+}
+
+model Project {
+  id String @id @default(cuid())
+  orgId String
+  name String
+  location String?
+  builder String?
+  createdAt DateTime @default(now())
+  org Org @relation(fields:[orgId], references:[id])
+  leads Lead[]
+}
+
+enum Stage { NEW CONTACTED SCHEDULED VISITED NEGOTIATION BOOKED DROPPED }
+
+model Lead {
+  id String @id @default(cuid())
+  orgId String
+  projectId String?
+  name String?
+  phone String
+  email String?
+  source String      // google_ads | meta | website | csv
+  campaign String?
+  adset String?
+  ad String?
+  gclid String?
+  fbclid String?
+  utmSource String?
+  utmMedium String?
+  utmCampaign String?
+  bedroomsPref Int?
+  budgetMin Int?
+  budgetMax Int?
+  locationPref String?
+  stage Stage @default(NEW)
+  score Int @default(0)
+  assignedToId String?
+  duplicateOf String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org Org @relation(fields:[orgId], references:[id])
+  project Project? @relation(fields:[projectId], references:[id])
+  assignedTo User? @relation(fields:[assignedToId], references:[id])
+  activities Activity[]
+  siteVisits SiteVisit[]
+}
+
+enum ActivityType { CALL WHATSAPP EMAIL NOTE STATUS_CHANGE ASSIGNMENT }
+
+model Activity {
+  id String @id @default(cuid())
+  leadId String
+  userId String?
+  type ActivityType
+  note String?
+  payload Json?
+  at DateTime @default(now())
+  lead Lead @relation(fields:[leadId], references:[id])
+  user User? @relation(fields:[userId], references:[id])
+}
+
+enum VisitStatus { SCHEDULED DONE NO_SHOW RESCHEDULED }
+
+model SiteVisit {
+  id String @id @default(cuid())
+  leadId String
+  projectId String?
+  scheduledAt DateTime
+  status VisitStatus @default(SCHEDULED)
+  outcomeNote String?
+  createdAt DateTime @default(now())
+  lead Lead @relation(fields:[leadId], references:[id])
+  project Project? @relation(fields:[projectId], references:[id])
+}
+
+Seed script:
+- 1 Org, Users: ADMIN, MANAGER, AGENT (test logins with Argon2/bcrypt).
+- 2 Projects in/near Whitefield.
+- 80 Leads across sources (google_ads/meta/website/csv) with realistic UTMs; include duplicates.
+- Reasonable stage distribution.
+
+──────────────────────────────────────────────────────────────────────────────
+# 5) Core domain logic (lib/)
+Create:
+- `lib/db.ts`      → Prisma client singleton.
+- `lib/auth.ts`    → credentials login, session helpers, route guards.
+- `lib/mask.ts`    → maskPhone("+91 98765 43210") => "+91 ••••• 3210"; maskEmail("a@b.com") => "a••@b.com".
+- `lib/whatsapp.ts`→ `waLink(phone, text)` → "https://wa.me/<digits>?text=<encoded>".
+- `lib/scoring.ts` → rule-based scoring:
+
+export function scoreLead(l: Partial<Lead>): number {
+  let s = 0;
+  if ([2,3].includes(l.bedroomsPref ?? 0)) s += 20;
+  if ((l.budgetMax ?? 0) >= 8000000) s += 15;           // ≥ ₹80L
+  if ((l.locationPref ?? "").toLowerCase().includes("whitefield")) s += 10;
+  if ((l.source ?? "") === "google_ads") s += 15;
+  if (l.duplicateOf) s -= 10;
+  return s;
+}
+
+- `lib/dedupe.ts`  → On create, check existing by phone/email; set `duplicateOf` if matched.
+- `lib/email.ts`   → Resend client + helper send functions (assignment, reminders, digest).
+
+──────────────────────────────────────────────────────────────────────────────
+# 6) API Routes (Next.js App Router)
+Implement with Zod validation and proper error handling:
+- POST `/api/leads`                         → create: normalize, dedupe, score, assign (round-robin among AGENTs), record Activity
+- GET  `/api/leads`                         → list with filters: `stage`, `assignedTo`, `source`, `q` (name/phone/email/campaign), `from/to`; server pagination; mask PII in list
+- PATCH `/api/leads/[id]`                   → update fields, stage, assignment; record Activity (STATUS_CHANGE/ASSIGNMENT)
+- POST `/api/leads/[id]/activities`         → add NOTE/CALL/WHATSAPP/EMAIL
+- POST `/api/leads/[id]/schedule-visit`     → create SiteVisit + Activity; set stage SCHEDULED
+- POST `/api/hooks/meta`                    → normalize Meta payload; ingest + Activity
+- POST `/api/hooks/google-ads`              → normalize Google Ads Lead Form payload; ingest + Activity
+- GET  `/api/reports/source-metrics`        → totals + **CPL, CPSV, CPB** grouped by `source/campaign` within date range
+- GET  `/api/reports/funnel`                → counts per stage in date range
+- GET  `/api/admin/offline-conversions`     → list JSON payloads prepared on stage=BOOKED when `gclid` exists (preview only)
+- GET  `/api/cron/sla`                      → mark NEW leads older than 15 min as overdue; send assignment nudges
+- GET  `/api/cron/reminders`                → send T‑24h and T‑2h site‑visit reminders to agent (and optional lead)
+
+Notes:
+- All writes create an `Activity` row.
+- For `/api/leads` search, use Postgres text search across name/phone/email/campaign; keep it efficient with indexes.
+
+──────────────────────────────────────────────────────────────────────────────
+# 7) UI Pages (Indigo theme)
+Scaffold these pages with shadcn/ui, Tailwind, accessible components:
+
+- `/leads` (default) — **Telecaller Queue**
+  - Filters: AssignedTo=Me, Stage=[NEW, CONTACTED], Source, Date range.
+  - SLA view (show overdue), Export CSV.
+  - Virtualized rows (fast): columns → Score, Lead & masked Contact, Source/Campaign badges, Stage, SLA tag, Row actions.
+  - Row Actions: Call (`tel:`), WhatsApp (`wa.me` prefilled), Add Note, Change Stage.
+  - Keyboard shortcuts: **C** (mark CONTACTED), **N** (Add Note), **S** (Stage menu), **W** (WhatsApp), **T** (Call).
+
+- `/leads/[id]` — **Lead Detail**
+  - Sticky action bar: Call, WhatsApp, Add Note, Schedule Visit, Change Stage.
+  - Left: Profile (PII with copy), Preferences (BHK/Budget/Location), Attribution badges (utmSource/Medium/Campaign; gclid/fbclid), Project.
+  - Right: quick stage, reminder set, agent assignment.
+  - Timeline: Activities with icons and timestamps.
+
+- `/dashboard`
+  - KPI cards: Leads Today, Site Visits Today, Bookings MTD, **CPL/CPSV/CPB**.
+  - Source/Campaign chart.
+
+- `/reports/source-metrics`
+  - Table + chart for Leads/Site Visits/Bookings and CPL/CPSV/CPB by source/campaign; date range filters; CSV export.
+
+- `/reports/funnel`
+  - Funnel visualization + conversion percentages.
+
+- `/visits`
+  - Upcoming visits list, quick reschedule/mark done.
+
+- `/admin/users` (simple)
+  - List users, create user, set role (ADMIN/MANAGER/AGENT).
+
+- `/admin/webhooks` (simple)
+  - Show last webhook deliveries (basic metadata), last error if any.
+
+- `/admin/scoring` (optional enhancement)
+  - UI to tweak scoring weights; persist and apply (if implemented now, keep it minimal).
+
+Design:
+- Indigo primary styles for buttons/badges/focus.
+- Mask PII in lists; unmask on hover or in details.
+- Support dark mode automatically.
+
+──────────────────────────────────────────────────────────────────────────────
+# 8) Emails via Resend
+Implement `lib/email.ts` with Resend client:
+- **Assignment** email to agent (lead summary + deep links).
+- **Visit reminders** to agent at T‑24h and T‑2h (optional to lead).
+- **Daily digest** to agents: overdue + pending leads.
+
+Fail gracefully (log warning) if no RESEND_API_KEY set in dev.
+
+──────────────────────────────────────────────────────────────────────────────
+# 9) Cron Automation with Cloudflare Workers
+- Expose GET endpoints `/api/cron/sla` and `/api/cron/reminders`.
+- In README, include a sample Worker file and `wrangler.toml`:
+
+Sample Worker (JS):
+export default {
+  async scheduled(controller, env, ctx) {
+    const base = env.BASE_URL; // e.g., https://your-app.vercel.app
+    await fetch(`${base}/api/cron/sla`);
+    await fetch(`${base}/api/cron/reminders`);
+  }
+}
+
+`wrangler.toml`:
+name = "crm-cron"
+main = "src/index.js"
+compatibility_date = "2024-07-01"
+[triggers]
+crons = ["*/5 * * * *"]  # every 5 minutes
+
+Document how to set `BASE_URL` as a Worker secret and how to deploy.
+
+──────────────────────────────────────────────────────────────────────────────
+# 10) Security, Validation, and Logging
+- Zod schema validation on all request bodies and query params.
+- Auth guards on all write routes.
+- Avoid logging raw phone/email/tokens; use mask helpers in logs.
+- Basic rate limit for webhook routes (simple in-memory or header check).
+
+──────────────────────────────────────────────────────────────────────────────
+# 11) Performance and DX
+- Server pagination and efficient `select/include` usage in Prisma to avoid N+1.
+- Table virtualization for `/leads`.
+- Short TTL caching for report GETs where safe (recompute on change).
+- Clear ESLint + Prettier setup; strict TS.
+
+──────────────────────────────────────────────────────────────────────────────
+# 12) Tests (Vitest)
+- `tests/scoring.test.ts` → unit tests for `lib/scoring.ts`.
+- `tests/dedupe.test.ts`  → unit tests for `lib/dedupe.ts`.
+- `tests/api.leads.test.ts` → validation and happy-path creation (mock DB layer if needed).
+
+──────────────────────────────────────────────────────────────────────────────
+# 13) README deliverables
+Explain clearly:
+1) Local dev: `pnpm i` → `pnpm prisma:generate` → `pnpm prisma:migrate` → `pnpm prisma:seed` → `pnpm dev`.
+2) **Neon** setup and how to paste `DATABASE_URL`.
+3) **Vercel** deploy, environment variables, and preview URLs.
+4) **Resend** API key and optional domain setup (works with API key only initially).
+5) **Cloudflare Workers Cron**: install Wrangler, set `BASE_URL` secret, add `*/5` schedule.
+6) Keyboard shortcuts quick help (C/N/S/W/T).
+7) CSV exports for reports.
+
+──────────────────────────────────────────────────────────────────────────────
+# 14) Acceptance Criteria (Done = true)
+- App starts locally; seeded data visible.
+- Telecaller Queue is fast and keyboardable; row actions open tel:/wa.me links.
+- Lead creation dedupes correctly; score is computed and stored.
+- Schedule Visit sets stage=SCHEDULED and creates Activity.
+- `/reports/source-metrics` returns Leads/SiteVisits/Bookings and **CPL/CPSV/CPB** by source/campaign in a date range.
+- Emails send via Resend if key present; no crashes if key missing.
+- Cron endpoints idempotent and safe to call repeatedly.
+- Indigo theme applied; dark mode works; PII masking respected.
+──────────────────────────────────────────────────────────────────────────────

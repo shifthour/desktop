@@ -1,0 +1,248 @@
+{
+  "name": "EdwBhiMbrEnrDsLd",
+  "properties": {
+    "parameters": {},
+    "activities": [
+      {
+        "name": "CP_EDW_W_BHI_MBR_ENR_To_Temp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "SELECT BHI_HOME_PLN_ID, HOME_PLN_PROD_ID, MBR_ID, CONSIS_MBR_ID, TRACEABILITY_FLD, MBR_DOB, MBR_CUR_PRI_ZIP_CD, MBR_S_CUR_CTRY, MBR_S_CUR_CNTY, MBR_GNDR, MBR_CONFITY_CD, ACCT, GRP_ID, SUBGRP_ID, COV_BEG_DT, COV_END_DT, MBR_RELSHP, HOME_PLN_PROD_ID_SUB, SUB_ID, ENR_ELIG_STTUS, MBR_MED_COB_CD, MBR_PDX_COB_CD, DEDCT_CAT, MHCD_ENR_BNF, PDX_BNF_IN, MHCD_BNF_IN, MED_BNF_IN, HOSP_BNF_IN, BHI_NTWK_CAT_FCLTY, BHI_NTWK_CAT_PROF, PLN_NTWK_CAT_FCLTY, PLN_NTWK_CAT_PROF, PDX_CARVE_OUT_SUBMSN_IN, PDX_BNF_TIERS, MBR_UNIQ_KEY, MBR_EFF_DT_SK, MBR_TERM_DT_SK, PROD_SK, PROD_SH_NM FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.W_BHI_MBR_ENR",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.MbrEnr_TMP_EdwBhiMbrEnrDsLd",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_EDWOwner}",
+              "param_table": "W_BHI_MBR_ENR"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "MbrEnr_TMP_EdwBhiMbrEnrDsLd"
+            }
+          }
+        ]
+      },
+      {
+        "name": "SCR_EdwBhiMbrEnrDsLd_Transform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CP_EDW_W_BHI_MBR_ENR_To_Temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_base AS ( SELECT * FROM @{pipeline().globalParameters.gbl_param_edw_staging}.MbrEnr_TMP_EdwBhiMbrEnrDsLd ), cte_member_hist AS ( SELECT BHI_HOME_PLN_ID, HOME_PLN_PROD_ID, MBR_ID, CONSIS_MBR_ID, TRACEABILITY_FLD, MBR_DOB, MBR_CUR_PRI_ZIP_CD, MBR_S_CUR_CTRY, MBR_S_CUR_CNTY, MBR_GNDR, MBR_CONFITY_CD AS MBR_CONF_CD, ACCT, GRP_ID, SUBGRP_ID, COV_BEG_DT, COV_END_DT, MBR_RELSHP, HOME_PLN_PROD_ID_SUB, SUB_ID, ENR_ELIG_STTUS, MBR_MED_COB_CD, MBR_PDX_COB_CD, DEDCT_CAT, MHCD_ENR_BNF, PDX_BNF_IN, MHCD_BNF_IN, MED_BNF_IN, HOSP_BNF_IN, BHI_NTWK_CAT_FCLTY, BHI_NTWK_CAT_PROF, PLN_NTWK_CAT_FCLTY, PLN_NTWK_CAT_PROF, PDX_CARVE_OUT_SUBMSN_IN, PDX_BNF_TIERS, MBR_UNIQ_KEY, MBR_EFF_DT_SK, MBR_TERM_DT_SK, PROD_SK, PROD_SH_NM FROM cte_base ), cte_load AS ( SELECT dbo.trim_default(MBR_ID) AS MBR_UNIQ_KEY, dbo.trim_default(HOME_PLN_PROD_ID) AS PROD_ID FROM cte_base ), cte_dedp_load AS ( SELECT MBR_UNIQ_KEY, PROD_ID FROM ( SELECT MBR_UNIQ_KEY, PROD_ID, ROW_NUMBER() OVER (PARTITION BY MBR_UNIQ_KEY, PROD_ID ORDER BY (SELECT 1)) AS rn FROM cte_load ) t WHERE t.rn = 1 ) DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.Member_Hist_Enr_TMP_EdwBhiMbrEnrDsLd SELECT BHI_HOME_PLN_ID, HOME_PLN_PROD_ID, MBR_ID, CONSIS_MBR_ID, TRACEABILITY_FLD, MBR_DOB, MBR_CUR_PRI_ZIP_CD, MBR_S_CUR_CTRY, MBR_S_CUR_CNTY, MBR_GNDR, MBR_CONF_CD, ACCT, GRP_ID, SUBGRP_ID, COV_BEG_DT, COV_END_DT, MBR_RELSHP, HOME_PLN_PROD_ID_SUB, SUB_ID, ENR_ELIG_STTUS, MBR_MED_COB_CD, MBR_PDX_COB_CD, DEDCT_CAT, MHCD_ENR_BNF, PDX_BNF_IN, MHCD_BNF_IN, MED_BNF_IN, HOSP_BNF_IN, BHI_NTWK_CAT_FCLTY, BHI_NTWK_CAT_PROF, PLN_NTWK_CAT_FCLTY, PLN_NTWK_CAT_PROF, PDX_CARVE_OUT_SUBMSN_IN, PDX_BNF_TIERS, MBR_UNIQ_KEY, MBR_EFF_DT_SK, MBR_TERM_DT_SK, PROD_SK, PROD_SH_NM INTO @{pipeline().globalParameters.gbl_param_edw_staging}.Member_Hist_Enr_TMP_EdwBhiMbrEnrDsLd FROM cte_member_hist DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.WBHI_MBR_ENR_TMP_EdwBhiMbrEnrDsLd SELECT MBR_UNIQ_KEY, PROD_ID INTO @{pipeline().globalParameters.gbl_param_edw_staging}.WBHI_MBR_ENR_TMP_EdwBhiMbrEnrDsLd FROM cte_dedp_load",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CP_MemberHistEnr_To_W_BHI_MBR_ds",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "SCR_EdwBhiMbrEnrDsLd_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "Member_Hist_Enr_TMP_EdwBhiMbrEnrDsLd"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/BHI/Member/Member_XCOM/ds')",
+              "param_filename": "W_BHI_MBR.ds",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CP_WBHI_MBR_ENR_To_ds",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "SCR_EdwBhiMbrEnrDsLd_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "WBHI_MBR_ENR_TMP_EdwBhiMbrEnrDsLd"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/BHI/Member/Member_XCOM/ds')",
+              "param_filename": "W_BHI_MBR_ENR.ds",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/BHI/Member/Member_XCOM"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2013 Blue Cross/Blue Shield of Kansas City\n\nJOB NAME:  EdwBhiMbrEnrDsLd\n\n\nDESCRIPTION: Outer join on base split and cob table to load base (main table)\n\n\nCALLED BY:  \n\nHASH FILES:  \n\n\nRERUN INFORMATION: \n\n             PREVIOUS RUN SUCCESSFUL:   Nothing to reset. \n             PREVIOUS RUN ABORTED:         Nothing to reset, just restart.\n\n\nMODIFICATIONS:\n=====================================================================================================================================\nDeveloper\\(9)Date\\(9)\\(9)Project/Ticket #\\(9)Change Description\\(9)\\(9)\\(9)Development Project\\(9)Code Reviewer\\(9)Date Reviewed       \n=====================================================================================================================================\nPraveen Annam\\(9)2014-05-06\\(9)5115 BHI\\(9)\\(9)Original programming\\(9)\\(9)EnterpriseNewDevl\\(9)\\(9)Kalyan Neelam\\(9)2014-05-12         \n\nBhoomi Dasari\\(9)7/31/2014\\(9)5115/BHI\\(9)\\(9)Added new logic tp pull PROD_ID from\\(9)EnterpriseNewDevl\\(9)\\(9)Kalyan Neelam\\(9)2014-08-04\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)W_BHI_MBR_ENR table\nAbhiram Dasarathy\\(9)2015-01-15\\(9)5212 - Payment\\(9)Added Hist_Member_Enr file extract\\(9)EnterpriseNewDevl                  Kalyan Neelam        2015-01-26\n\\(9)\\(9)\\(9)\\(9)Innovations\nJaideep Mankala\\(9)2015-02-10\\(9)5212 - Payment\\(9)Added Remove Duplicate stage\\(9)EnterpriseNewDevl                  Kalyan Neelam        2015-02-12\n\\(9)\\(9)\\(9)\\(9)Innovations              to Dedupe member, prod combination\n\nAnnotations:\nMember History Dataset for Member Demographic lookup\nDataset is deleted in the EdwBhiMbrDemoHistCntl job\nDeduping Member , Product keys\nW_BHI_MBR_ENR to W_BHI_MBR_ENR.DS For Claims look up"
+}

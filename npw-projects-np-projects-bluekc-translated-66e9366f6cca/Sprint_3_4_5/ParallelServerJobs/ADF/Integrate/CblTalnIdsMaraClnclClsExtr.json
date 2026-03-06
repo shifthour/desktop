@@ -1,0 +1,253 @@
+{
+  "name": "CblTalnIdsMaraClnclClsExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyFileToTemp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.AD9_TMP_CblTalnIdsMaraClnclClsExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'landing')",
+              "param_filename": "@{pipeline().parameters.FileName}",
+              "param_col_delimiter": "|",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "AD9_TMP_CblTalnIdsMaraClnclClsExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "FilterScript",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTemp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.AD9_TMP_CblTalnIdsMaraClnclClsExtr_DATA; DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.AD9_TMP_CblTalnIdsMaraClnclClsExtr_ERR; WITH SourceData AS (SELECT COND, MARA_SUM_GRP_CD, MARA_SUM_GRP_DESC, PRPSD_BODY_SYS_CD, PRPSD_BODY_SYS, SEC_BODY_SYS, CLNCL_LABEL, COND_CD, AHRQ_CHRNC, AHRQ_MOST_CMN_CHRNC, CASE WHEN COND IS NULL OR MARA_SUM_GRP_CD IS NULL OR MARA_SUM_GRP_DESC IS NULL OR PRPSD_BODY_SYS_CD IS NULL OR PRPSD_BODY_SYS IS NULL OR SEC_BODY_SYS IS NULL OR CLNCL_LABEL IS NULL OR COND_CD IS NULL OR AHRQ_CHRNC IS NULL OR AHRQ_MOST_CMN_CHRNC IS NULL THEN 'Y' ELSE 'N' END AS ErrInd FROM @{pipeline().globalParameters.gbl_param_ids_staging}.AD9_TMP_CblTalnIdsMaraClnclClsExtr) SELECT COND, MARA_SUM_GRP_CD, MARA_SUM_GRP_DESC, PRPSD_BODY_SYS_CD, PRPSD_BODY_SYS, SEC_BODY_SYS, CLNCL_LABEL, COND_CD, AHRQ_CHRNC, AHRQ_MOST_CMN_CHRNC INTO @{pipeline().globalParameters.gbl_param_ids_staging}.AD9_TMP_CblTalnIdsMaraClnclClsExtr_DATA FROM SourceData WHERE ErrInd = 'N'; SELECT COND, MARA_SUM_GRP_CD, MARA_SUM_GRP_DESC, PRPSD_BODY_SYS_CD, PRPSD_BODY_SYS, SEC_BODY_SYS, CLNCL_LABEL, COND_CD, AHRQ_CHRNC, AHRQ_MOST_CMN_CHRNC INTO @{pipeline().globalParameters.gbl_param_ids_staging}.AD9_TMP_CblTalnIdsMaraClnclClsExtr_ERR FROM SourceData WHERE ErrInd = 'Y';",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyDataToDS",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "FilterScript",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".ds"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "AD9_TMP_CblTalnIdsMaraClnclClsExtr_DATA"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'ds')",
+              "param_filename": "@concat('MARA_CLNCL_CLS.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyDataToErrorFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "FilterScript",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "AD9_TMP_CblTalnIdsMaraClnclClsExtr_ERR"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'external')",
+              "param_filename": "@concat(pipeline().parameters.Vendor, '_REFCOND_ERRORS.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      },
+      "FileName": {
+        "type": "String"
+      },
+      "Vendor": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/MARA/MaraClnclCls"
+    }
+  },
+  "Description": "COPYRIGHT 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #               Change Description                             Development Project      Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------     ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRaja Gummadi                  03/04/2015      5460                                Originally Programmed                            IntegrateNewDevl         Kalyan Neelam            2015-03-06\n\nKrishnakanth                    09/13/2017      30001                              Changed the Input file format                  IntegrateDev2              Kalyan Neelam            2017-09-13\n  Manivannan                                                                                    from CSV to \"|\" delimited.\n\nKrishnakanth                    12/06/2017       30001                             Parameterize the variable Vendor           IntegrateDev2              Kalyan Neelam            2017-12-06\n  Manivannan\n\nAnnotations:\nJob name: CblTalnIdsMaraClnclCLsExtr\nINPUT : MILLIMAN.MARA_RISK_COND_REF.*.TXT\nOUTPUT: MARA_CLNCL_CLS.#SrcSysCd#.extr.#RunID#.ds"
+}

@@ -1,0 +1,129 @@
+{
+  "name": "BlueKCCommonRightFaxAPIJobIDStsUpdate",
+  "properties": {
+    "parameters": {
+      "DynamicAccessToken": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "JobIDStatus": {
+        "type": "String"
+      },
+      "COMM_SK": {
+        "type": "String"
+      },
+      "StatusText": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_Create_TempTable",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_CommTrnsmsnOwner}.ADFTMP_BlueKCCommonRightFaxAPIJobIDStsUpdate; SELECT @{pipeline().parameters.COMM_SK} AS COMM_SK, 'RGHTFAX' AS COMM_SRC_SYS_CD, 'COMMTRNSMSN' AS COMM_TRGT_SYS_CD, CASE WHEN dbo.trim_default(@{pipeline().parameters.JobIDStatus}) = '' THEN 'FAILED' WHEN dbo.trim_default(@{pipeline().parameters.JobIDStatus}) = 'Succeeded' THEN 'SUCCESS' WHEN dbo.trim_default(@{pipeline().parameters.JobIDStatus}) = 'https' THEN 'FAILED' ELSE UPPER(dbo.trim_default(@{pipeline().parameters.JobIDStatus})) END AS COMM_STTUS_CD, 'FAXSTS' AS COMM_TYP_CD, CASE WHEN dbo.trim_default(@{pipeline().parameters.JobIDStatus}) = '' THEN 'Fax Failed' WHEN dbo.trim_default(@{pipeline().parameters.JobIDStatus}) = 'Succeeded' THEN 'Fax Successful' WHEN dbo.trim_default(@{pipeline().parameters.JobIDStatus}) = 'https' THEN 'Fax Failed with https Error' WHEN dbo.trim_default(@{pipeline().parameters.StatusText}) = '' THEN 'No Fax Status Text' ELSE SUBSTRING(dbo.trim_default(@{pipeline().parameters.StatusText}),1,500) END AS COMM_STTUS_CMNT_TX, CURRENT_TIMESTAMP AS LAST_UPDT_DTM, CURRENT_TIMESTAMP AS COMM_SENT_DTM INTO @{pipeline().globalParameters.gbl_param_CommTrnsmsnOwner}.ADFTMP_BlueKCCommonRightFaxAPIJobIDStsUpdate",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_FaxStatus",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Create_TempTable",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "enableStaging": false
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_CommTrnsmsnOwner}",
+              "param_table": "ADFTMP_BlueKCCommonRightFaxAPIJobIDStsUpdate"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/GuidingCare/Fullfilment')",
+              "param_filename": "GuidingCareRightFaxStatusData.txt",
+              "param_col_delimiter": "$$",
+              "param_row_delimiter": "@null",
+              "param_quote": "\\\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2017 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY : BlueKCCommonRightFaxAPIPostJobIDApigeeSeq\n\n\nPROCESSING : Job updates Status of RightJob API JobID in COMM table.\n\nMODIFICATIONS :\n\nDeveloper                               Date                         Project                                   Change Description            Development Project          Code Reviewer                   Date Reviewed       \n------------------------------              ------------------        ----------------------             ---------------------------------------       ------------------------------\\(9)----------------------------------         -------------------------------        \nBharani Chalamalasetty      04/01/2020             Fullfillment                       Original Programming               OutboundDev3                    Jaideep Mankala              04/20/2020\n\nSaranya A                                2021-06-29            US370660         Modified Job to process NextPage and RightFax    OutboundDev3          Jaideep Mankala                 06/30/2021\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)jobs in Parallel\nSaranya A                                2021-11-19           US465977             Added new Job Parameter StatusText     OutboundDev2              Jaideep Mankala         11/19/2021\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)to write Fax status description\n\nAnnotations:\nDSJobStartTimestamp used instead of Timestamp variable as rows need to be updated with new timestamp."
+}

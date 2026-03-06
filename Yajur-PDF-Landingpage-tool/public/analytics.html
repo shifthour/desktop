@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shat-R-Shield | Analytics Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: { 900:'#080C14', 800:'#0D1320', 700:'#131B2E', 600:'#1a2340', 500:'#243050' }
+          },
+          fontFamily: { sans: ['Inter', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family:'Inter',sans-serif; background:#080C14; color:#e2e8f0; }
+    .glass { background:rgba(13,19,32,0.6); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.06); }
+    .glass-bright { background:rgba(255,255,255,0.04); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.08); }
+    .gradient-text { background:linear-gradient(135deg,#00D4FF,#00E89D); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .kpi-card { transition:all 0.3s ease; }
+    .kpi-card:hover { transform:translateY(-2px); border-color:rgba(0,212,255,0.2); }
+    .filter-btn { padding:6px 16px; border-radius:9999px; font-size:13px; font-weight:500; cursor:pointer; transition:all 0.2s; border:1px solid rgba(255,255,255,0.08); background:transparent; color:#94a3b8; }
+    .filter-btn:hover { border-color:rgba(0,212,255,0.3); color:#e2e8f0; }
+    .filter-btn.active { background:linear-gradient(135deg,rgba(0,212,255,0.15),rgba(0,232,157,0.1)); border-color:rgba(0,212,255,0.4); color:#00D4FF; }
+    .funnel-step { position:relative; padding:16px 20px; border-radius:12px; transition:all 0.3s; }
+    .funnel-step:hover { transform:translateX(4px); }
+    .table-row { transition:background 0.2s; }
+    .table-row:hover { background:rgba(0,212,255,0.04); }
+    .loading-pulse { animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+    .activity-dot { width:8px; height:8px; border-radius:50%; }
+    ::-webkit-scrollbar { width:6px; }
+    ::-webkit-scrollbar-track { background:#0D1320; }
+    ::-webkit-scrollbar-thumb { background:#243050; border-radius:3px; }
+    ::-webkit-scrollbar-thumb:hover { background:#00D4FF; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-50 glass border-b border-white/5">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-white">Shat-R-Shield <span class="gradient-text">Analytics</span></h1>
+        <p class="text-xs text-gray-500 mt-0.5">Landing Page Performance Dashboard</p>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex gap-1">
+          <button class="filter-btn" onclick="setRange('today',this)">Today</button>
+          <button class="filter-btn" onclick="setRange('7d',this)">7 Days</button>
+          <button class="filter-btn active" onclick="setRange('30d',this)">30 Days</button>
+          <button class="filter-btn" onclick="setRange('all',this)">All Time</button>
+        </div>
+        <button id="refreshBtn" onclick="toggleAutoRefresh()" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium text-gray-400 border border-white/8 hover:border-cyan-500/30 transition-all cursor-pointer">
+          <span id="refreshDot" class="w-2 h-2 rounded-full bg-gray-600"></span>
+          <span id="refreshLabel">Auto-refresh</span>
+        </button>
+        <button onclick="loadAllData()" class="px-4 py-1.5 rounded-full text-xs font-semibold text-dark-900 bg-gradient-to-r from-cyan-400 to-emerald-400 cursor-pointer hover:shadow-lg hover:shadow-cyan-500/20 transition-all">
+          Refresh Now
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8 space-y-8">
+
+    <!-- Loading overlay -->
+    <div id="loading" class="hidden fixed inset-0 z-40 bg-dark-900/80 flex items-center justify-center">
+      <div class="text-center">
+        <div class="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        <p class="text-sm text-gray-400 mt-3">Loading analytics...</p>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Total Views</div>
+        <div id="kpi-views" class="text-3xl font-bold text-white mt-2 loading-pulse">—</div>
+        <div id="kpi-views-trend" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Unique Visitors</div>
+        <div id="kpi-visitors" class="text-3xl font-bold gradient-text mt-2 loading-pulse">—</div>
+        <div id="kpi-visitors-trend" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Avg Duration</div>
+        <div id="kpi-duration" class="text-3xl font-bold text-amber-400 mt-2 loading-pulse">—</div>
+        <div class="text-xs text-gray-500 mt-1">time on page</div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Conversion Rate</div>
+        <div id="kpi-conversion" class="text-3xl font-bold text-emerald-400 mt-2 loading-pulse">—</div>
+        <div class="text-xs text-gray-500 mt-1">visitors → leads</div>
+      </div>
+      <div class="kpi-card glass rounded-2xl p-5 col-span-2 md:col-span-1">
+        <div class="text-xs text-gray-500 uppercase tracking-wider font-medium">Total Leads</div>
+        <div id="kpi-leads" class="text-3xl font-bold text-purple-400 mt-2 loading-pulse">—</div>
+        <div id="kpi-leads-method" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+    </div>
+
+    <!-- Email Access Management -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">Email Access Management</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Control who can view the report by email. Add emails to pre-approve, or approve/reject incoming requests.</p>
+        </div>
+        <div id="email-access-counts" class="text-sm text-gray-500"></div>
+      </div>
+
+      <!-- Add Email Form -->
+      <div class="flex gap-2 mb-6">
+        <input type="email" id="addEmailInput" placeholder="Add email to whitelist..." onkeydown="if(event.key==='Enter')addEmailAccess()" class="flex-1 px-4 py-2.5 rounded-xl bg-dark-700 border border-white/8 text-sm text-white placeholder-gray-500 focus:border-cyan-500/40 focus:outline-none">
+        <button onclick="addEmailAccess()" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-dark-900 bg-gradient-to-r from-cyan-400 to-emerald-400 hover:shadow-lg hover:shadow-cyan-500/20 transition-all cursor-pointer whitespace-nowrap">Add & Approve</button>
+      </div>
+      <div id="addEmailMsg" class="hidden mb-4 px-4 py-2 rounded-xl text-sm"></div>
+
+      <!-- Search -->
+      <div class="mb-4">
+        <input id="emailAccessSearch" type="text" placeholder="Search emails..." oninput="filterEmailAccess()" class="px-4 py-2 rounded-xl bg-dark-700 border border-white/8 text-sm text-white placeholder-gray-500 focus:border-cyan-500/40 focus:outline-none w-full sm:w-72">
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-white/8">
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Email</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Status</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Source</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Requested</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Reviewed</th>
+              <th class="text-right py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="emailAccessBody">
+            <tr><td colspan="6" class="py-12 text-center text-gray-600">Loading email access list...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Views Over Time -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">Views Over Time</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Daily page visits</p>
+        </div>
+      </div>
+      <div style="height:280px"><canvas id="viewsChart"></canvas></div>
+    </div>
+
+    <!-- Section Engagement + Interaction Breakdown -->
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Section Engagement</h2>
+        <p class="text-xs text-gray-500 mb-6">Average time spent per section (seconds)</p>
+        <div style="height:260px"><canvas id="sectionChart"></canvas></div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Interaction Breakdown</h2>
+        <p class="text-xs text-gray-500 mb-6">User actions on the page</p>
+        <div style="height:260px"><canvas id="interactionChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Conversion Funnel + Scroll Depth -->
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Conversion Funnel</h2>
+        <p class="text-xs text-gray-500 mb-6">Visitor journey through the page</p>
+        <div id="funnel-container" class="space-y-3"></div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Scroll Depth</h2>
+        <p class="text-xs text-gray-500 mb-6">How far visitors scroll down the page</p>
+        <div style="height:260px"><canvas id="scrollChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Device + Referrer -->
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Device Breakdown</h2>
+        <p class="text-xs text-gray-500 mb-6">Visitor devices</p>
+        <div style="height:260px"><canvas id="deviceChart"></canvas></div>
+      </div>
+      <div class="glass rounded-2xl p-6">
+        <h2 class="text-lg font-bold text-white mb-1">Traffic Sources</h2>
+        <p class="text-xs text-gray-500 mb-6">Where visitors come from</p>
+        <div style="height:260px"><canvas id="referrerChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Leads Table -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">Leads</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Contact form submissions & sign-ins</p>
+        </div>
+        <input id="leadSearch" type="text" placeholder="Search by name, email, company..." oninput="filterLeads()" class="px-4 py-2 rounded-xl bg-dark-700 border border-white/8 text-sm text-white placeholder-gray-500 focus:border-cyan-500/40 focus:outline-none w-full sm:w-72">
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-white/8">
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium cursor-pointer hover:text-cyan-400" onclick="sortLeads('full_name')">Name <span class="sort-icon">↕</span></th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium cursor-pointer hover:text-cyan-400" onclick="sortLeads('work_email')">Email <span class="sort-icon">↕</span></th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium cursor-pointer hover:text-cyan-400" onclick="sortLeads('phone')">Phone <span class="sort-icon">↕</span></th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium cursor-pointer hover:text-cyan-400" onclick="sortLeads('company')">Company <span class="sort-icon">↕</span></th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Message</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium cursor-pointer hover:text-cyan-400" onclick="sortLeads('unlock_method')">Method <span class="sort-icon">↕</span></th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium cursor-pointer hover:text-cyan-400" onclick="sortLeads('created_at')">Date <span class="sort-icon">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="leadsBody">
+            <tr><td colspan="7" class="py-12 text-center text-gray-600">Loading leads...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Google Sign-ins Table -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">Google Sign-ins</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Emails captured via Google OAuth</p>
+        </div>
+        <div id="gsignin-count" class="text-sm text-gray-500"></div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-white/8">
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Profile</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Name</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Email</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">NDA</th>
+              <th class="text-left py-3 px-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Date</th>
+            </tr>
+          </thead>
+          <tbody id="gsigninBody">
+            <tr><td colspan="5" class="py-12 text-center text-gray-600">Loading Google sign-ins...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="glass rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-lg font-bold text-white">Recent Activity</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Latest visitor interactions</p>
+        </div>
+      </div>
+      <div id="activityFeed" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+        <div class="text-center text-gray-600 py-8">Loading activity...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="py-6 border-t border-white/5 mt-8">
+    <div class="max-w-7xl mx-auto px-6 flex items-center justify-between">
+      <span class="text-xs text-gray-700">Shat-R-Shield Analytics Dashboard</span>
+      <span class="text-[10px] text-gray-700">&copy; 2025 MCM Capital Partners, L.P.</span>
+    </div>
+  </footer>
+
+  <script>
+  // ===== SUPABASE CONFIG =====
+  const SUPABASE_URL = 'https://eflvzsfgoelonfclzrjy.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmbHZ6c2Znb2Vsb25mY2x6cmp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2NTYxOTAsImV4cCI6MjA2MzIzMjE5MH0.LCxuFDJuBO8ggiqdWpv5uoOkplKWbcF8z5E_kdpOEWU';
+
+  let sb = null;
+  try {
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && window.supabase) {
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch(e) { console.error('Supabase init failed:', e); }
+
+  // ===== STATE =====
+  let currentRange = '30d';
+  let autoRefreshInterval = null;
+  let allLeads = [];
+  let allEmailAccess = [];
+  let leadSortField = 'created_at';
+  let leadSortAsc = false;
+
+  // Chart instances
+  let viewsChartInstance = null;
+  let sectionChartInstance = null;
+  let interactionChartInstance = null;
+  let scrollChartInstance = null;
+  let deviceChartInstance = null;
+  let referrerChartInstance = null;
+
+  // Chart defaults
+  Chart.defaults.color = '#64748b';
+  Chart.defaults.borderColor = 'rgba(255,255,255,0.03)';
+  Chart.defaults.font.family = 'Inter';
+
+  // ===== DATE RANGE =====
+  function getDateStart() {
+    const now = new Date();
+    switch(currentRange) {
+      case 'today': return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      case '7d': return new Date(now - 7*24*60*60*1000).toISOString();
+      case '30d': return new Date(now - 30*24*60*60*1000).toISOString();
+      case 'all': return '2020-01-01T00:00:00Z';
+      default: return new Date(now - 30*24*60*60*1000).toISOString();
+    }
+  }
+
+  function setRange(range, btn) {
+    currentRange = range;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAllData();
+  }
+
+  function toggleAutoRefresh() {
+    const dot = document.getElementById('refreshDot');
+    const label = document.getElementById('refreshLabel');
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+      dot.className = 'w-2 h-2 rounded-full bg-gray-600';
+      label.textContent = 'Auto-refresh';
+    } else {
+      autoRefreshInterval = setInterval(loadAllData, 30000);
+      dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+      label.textContent = 'Live (30s)';
+    }
+  }
+
+  // ===== LOAD ALL DATA =====
+  async function loadAllData() {
+    if (!sb) {
+      showNoConnection();
+      return;
+    }
+
+    const dateStart = getDateStart();
+
+    try {
+      const [visitsRes, eventsRes, leadsRes, gsigninsRes, emailAccessRes] = await Promise.all([
+        sb.from('shatrshield_visits').select('*').gte('created_at', dateStart).order('created_at', { ascending: true }),
+        sb.from('shatrshield_events').select('*').gte('created_at', dateStart).order('created_at', { ascending: false }),
+        sb.from('shatrshield_leads').select('*').gte('created_at', dateStart).order('created_at', { ascending: false }),
+        sb.from('shatrshield_google_signins').select('*').gte('created_at', dateStart).order('created_at', { ascending: false }),
+        sb.from('shatrshield_email_access').select('*').order('created_at', { ascending: false })
+      ]);
+
+      const visits = visitsRes.data || [];
+      const events = eventsRes.data || [];
+      const leads = leadsRes.data || [];
+      const gsignins = gsigninsRes.data || [];
+      const emailAccess = emailAccessRes.data || [];
+      allLeads = leads;
+      allEmailAccess = emailAccess;
+
+      renderKPIs(visits, events, leads, gsignins);
+      renderViewsOverTime(visits);
+      renderSectionEngagement(events);
+      renderInteractionBreakdown(events);
+      renderConversionFunnel(visits, events, leads);
+      renderScrollDepth(visits);
+      renderDeviceBreakdown(visits);
+      renderReferrerSources(visits);
+      renderLeadsTable(leads);
+      renderGoogleSignins(gsignins);
+      renderEmailAccessTable(emailAccess);
+      renderActivityFeed(events);
+
+    } catch(e) {
+      console.error('Failed to load data:', e);
+    }
+  }
+
+  function showNoConnection() {
+    document.getElementById('kpi-views').textContent = '—';
+    document.getElementById('kpi-visitors').textContent = '—';
+    document.getElementById('kpi-duration').textContent = '—';
+    document.getElementById('kpi-conversion').textContent = '—';
+    document.getElementById('kpi-leads').textContent = '—';
+    document.getElementById('leadsBody').innerHTML = '<tr><td colspan="7" class="py-12 text-center text-gray-500">Configure Supabase URL and Anon Key to see analytics data.</td></tr>';
+    document.getElementById('gsigninBody').innerHTML = '<tr><td colspan="5" class="py-12 text-center text-gray-500">Configure Supabase to see Google sign-in data.</td></tr>';
+    document.getElementById('emailAccessBody').innerHTML = '<tr><td colspan="6" class="py-12 text-center text-gray-500">Configure Supabase to manage email access.</td></tr>';
+    document.getElementById('activityFeed').innerHTML = '<div class="text-center text-gray-500 py-8">No connection to Supabase.</div>';
+  }
+
+  // ===== KPI RENDERING =====
+  function renderKPIs(visits, events, leads, gsignins) {
+    // Total views
+    const totalViews = visits.length;
+    document.getElementById('kpi-views').textContent = totalViews.toLocaleString();
+    document.getElementById('kpi-views').classList.remove('loading-pulse');
+
+    // Unique visitors (distinct session_ids)
+    const uniqueSessions = new Set(visits.map(v => v.session_id)).size;
+    document.getElementById('kpi-visitors').textContent = uniqueSessions.toLocaleString();
+    document.getElementById('kpi-visitors').classList.remove('loading-pulse');
+
+    // Average duration
+    const durations = visits.filter(v => v.duration_seconds > 0).map(v => v.duration_seconds);
+    const avgDur = durations.length ? Math.round(durations.reduce((a,b)=>a+b,0)/durations.length) : 0;
+    const mins = Math.floor(avgDur/60);
+    const secs = avgDur % 60;
+    document.getElementById('kpi-duration').textContent = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    document.getElementById('kpi-duration').classList.remove('loading-pulse');
+
+    // Conversion rate
+    const rate = totalViews > 0 ? ((leads.length / totalViews) * 100).toFixed(1) : '0.0';
+    document.getElementById('kpi-conversion').textContent = rate + '%';
+    document.getElementById('kpi-conversion').classList.remove('loading-pulse');
+
+    // Total leads (form + google signins combined)
+    const gCount = gsignins ? gsignins.length : 0;
+    const totalLeads = leads.length + gCount;
+    document.getElementById('kpi-leads').textContent = totalLeads.toLocaleString();
+    document.getElementById('kpi-leads').classList.remove('loading-pulse');
+    document.getElementById('kpi-leads-method').textContent = `${leads.length} form · ${gCount} Google`;
+  }
+
+  // ===== VIEWS OVER TIME =====
+  function renderViewsOverTime(visits) {
+    const byDate = {};
+    visits.forEach(v => {
+      const d = v.created_at.split('T')[0];
+      byDate[d] = (byDate[d] || 0) + 1;
+    });
+    const labels = Object.keys(byDate).sort();
+    const data = labels.map(d => byDate[d]);
+
+    if (viewsChartInstance) viewsChartInstance.destroy();
+    const ctx = document.getElementById('viewsChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+    gradient.addColorStop(0, 'rgba(0,212,255,0.2)');
+    gradient.addColorStop(1, 'rgba(0,212,255,0)');
+
+    viewsChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels.map(d => { const dt = new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }),
+        datasets: [{
+          label: 'Page Views',
+          data: data,
+          borderColor: '#00D4FF',
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.4,
+          pointRadius: data.length > 30 ? 0 : 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#00D4FF',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0D1320',
+            borderColor: 'rgba(0,212,255,0.3)',
+            borderWidth: 1,
+            titleColor: '#fff',
+            bodyColor: '#00D4FF',
+            padding: 12,
+            callbacks: { label: ctx => ctx.raw + ' visits' }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#4a5568', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,0.03)' } },
+          y: { ticks: { color: '#4a5568', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  // ===== SECTION ENGAGEMENT =====
+  function renderSectionEngagement(events) {
+    const sectionEvents = events.filter(e => e.event_type === 'section_view' && e.event_data?.duration_seconds);
+    const sectionTotals = {};
+    const sectionCounts = {};
+    sectionEvents.forEach(e => {
+      const s = e.section_id || e.event_target || 'unknown';
+      sectionTotals[s] = (sectionTotals[s] || 0) + (e.event_data.duration_seconds || 0);
+      sectionCounts[s] = (sectionCounts[s] || 0) + 1;
+    });
+
+    const sectionNames = { hero:'Hero', market:'Market Overview', tam:'TAM Analysis', industry:'Industry Tailwinds', opportunity:'Opportunity', contact:'Contact' };
+    const orderedSections = ['hero','market','tam','industry','opportunity','contact'];
+    const labels = orderedSections.filter(s => sectionTotals[s]).map(s => sectionNames[s] || s);
+    const data = orderedSections.filter(s => sectionTotals[s]).map(s => Math.round(sectionTotals[s] / sectionCounts[s]));
+    const colors = ['#00D4FF','#00E89D','#FFB347','#A78BFA','#F472B6','#34D399'];
+
+    if (sectionChartInstance) sectionChartInstance.destroy();
+    sectionChartInstance = new Chart(document.getElementById('sectionChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Avg Time (s)',
+          data: data,
+          backgroundColor: colors.slice(0, labels.length),
+          borderRadius: 8,
+          barThickness: 28
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0D1320',
+            borderColor: 'rgba(0,212,255,0.3)',
+            borderWidth: 1,
+            titleColor: '#fff',
+            bodyColor: '#94a3b8',
+            padding: 12,
+            callbacks: { label: ctx => ctx.raw + ' seconds avg' }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#4a5568' }, grid: { color: 'rgba(255,255,255,0.03)' }, beginAtZero: true },
+          y: { ticks: { color: '#e2e8f0', font: { weight: 600 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // ===== INTERACTION BREAKDOWN =====
+  function renderInteractionBreakdown(events) {
+    const interactionTypes = events.filter(e => !['page_view','section_view','scroll_milestone'].includes(e.event_type));
+    const typeCounts = {};
+    interactionTypes.forEach(e => {
+      typeCounts[e.event_type] = (typeCounts[e.event_type] || 0) + 1;
+    });
+
+    const typeLabels = {
+      modal_open: 'Modal Opens', modal_close: 'Modal Closes', tab_switch: 'Tab Switches',
+      expand_toggle: 'Expand Toggles', cta_click: 'CTA Clicks', content_unlock: 'Unlocks',
+      form_open: 'Form Opens', chart_interaction: 'Chart Clicks', nav_click: 'Nav Clicks',
+      cycle_switch: 'Cycle Switches'
+    };
+    const typeColors = {
+      modal_open: '#00D4FF', modal_close: '#4a5568', tab_switch: '#00E89D',
+      expand_toggle: '#FFB347', cta_click: '#F472B6', content_unlock: '#A78BFA',
+      form_open: '#34D399', chart_interaction: '#60A5FA', nav_click: '#FBBF24',
+      cycle_switch: '#C084FC'
+    };
+
+    const sorted = Object.entries(typeCounts).sort((a,b) => b[1] - a[1]);
+    const labels = sorted.map(([k]) => typeLabels[k] || k);
+    const data = sorted.map(([,v]) => v);
+    const colors = sorted.map(([k]) => typeColors[k] || '#64748b');
+
+    if (interactionChartInstance) interactionChartInstance.destroy();
+    interactionChartInstance = new Chart(document.getElementById('interactionChart'), {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: colors,
+          borderWidth: 0,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '60%',
+        plugins: {
+          legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 }, padding: 8, usePointStyle: true } },
+          tooltip: {
+            backgroundColor: '#0D1320',
+            borderColor: 'rgba(0,212,255,0.3)',
+            borderWidth: 1,
+            titleColor: '#fff',
+            bodyColor: '#94a3b8',
+            padding: 12,
+            callbacks: { label: ctx => ctx.label + ': ' + ctx.raw + ' (' + ((ctx.raw/data.reduce((a,b)=>a+b,0))*100).toFixed(1) + '%)' }
+          }
+        }
+      }
+    });
+  }
+
+  // ===== CONVERSION FUNNEL =====
+  function renderConversionFunnel(visits, events, leads) {
+    const totalVisits = visits.length;
+
+    // Interacted: sessions with any interaction event
+    const interactedSessions = new Set(
+      events.filter(e => !['page_view','section_view','scroll_milestone'].includes(e.event_type)).map(e => e.session_id)
+    ).size;
+
+    // Unlocked: sessions with content_unlock event
+    const unlockedSessions = new Set(
+      events.filter(e => e.event_type === 'content_unlock').map(e => e.session_id)
+    ).size;
+
+    // Submitted form
+    const formLeads = leads.filter(l => l.unlock_method === 'form').length;
+
+    const steps = [
+      { label: 'Page Views', count: totalVisits, color: '#00D4FF', icon: '👁' },
+      { label: 'Interacted', count: interactedSessions, color: '#00E89D', icon: '👆' },
+      { label: 'Unlocked Content', count: unlockedSessions, color: '#FFB347', icon: '🔓' },
+      { label: 'Submitted Form', count: formLeads, color: '#A78BFA', icon: '📝' }
+    ];
+
+    const container = document.getElementById('funnel-container');
+    container.innerHTML = steps.map((step, i) => {
+      const pct = totalVisits > 0 ? ((step.count / totalVisits) * 100).toFixed(1) : '0';
+      const dropoff = i > 0 && steps[i-1].count > 0 ? ((1 - step.count / steps[i-1].count) * 100).toFixed(0) : null;
+      const widthPct = totalVisits > 0 ? Math.max(15, (step.count / totalVisits) * 100) : 15;
+      return `
+        <div class="funnel-step glass-bright" style="border-left:3px solid ${step.color}">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-lg">${step.icon}</span>
+              <div>
+                <div class="text-sm font-semibold text-white">${step.label}</div>
+                <div class="text-xs text-gray-500">${pct}% of visitors</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-xl font-bold" style="color:${step.color}">${step.count.toLocaleString()}</div>
+              ${dropoff !== null ? `<div class="text-[10px] text-red-400/70">-${dropoff}% drop</div>` : ''}
+            </div>
+          </div>
+          <div class="mt-2 h-1.5 bg-dark-700 rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-700" style="width:${widthPct}%;background:${step.color}"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ===== SCROLL DEPTH =====
+  function renderScrollDepth(visits) {
+    const buckets = { '0-25%': 0, '25-50%': 0, '50-75%': 0, '75-100%': 0 };
+    visits.forEach(v => {
+      const s = v.max_scroll_percent || 0;
+      if (s < 25) buckets['0-25%']++;
+      else if (s < 50) buckets['25-50%']++;
+      else if (s < 75) buckets['50-75%']++;
+      else buckets['75-100%']++;
+    });
+
+    const labels = Object.keys(buckets);
+    const data = Object.values(buckets);
+    const colors = ['#EF4444','#FFB347','#00E89D','#00D4FF'];
+
+    if (scrollChartInstance) scrollChartInstance.destroy();
+    scrollChartInstance = new Chart(document.getElementById('scrollChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Visitors',
+          data: data,
+          backgroundColor: colors,
+          borderRadius: 8,
+          barThickness: 48
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0D1320',
+            borderColor: 'rgba(0,212,255,0.3)',
+            borderWidth: 1,
+            titleColor: '#fff',
+            bodyColor: '#94a3b8',
+            padding: 12,
+            callbacks: { label: ctx => ctx.raw + ' visitors (' + (visits.length ? ((ctx.raw/visits.length)*100).toFixed(0) : 0) + '%)' }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+          y: { ticks: { color: '#4a5568', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  // ===== DEVICE BREAKDOWN =====
+  function renderDeviceBreakdown(visits) {
+    const devices = {};
+    visits.forEach(v => {
+      const d = v.device_type || 'unknown';
+      devices[d] = (devices[d] || 0) + 1;
+    });
+
+    const deviceColors = { desktop: '#00D4FF', tablet: '#FFB347', mobile: '#00E89D', unknown: '#64748b' };
+    const deviceIcons = { desktop: '💻', tablet: '📱', mobile: '📲', unknown: '❓' };
+    const labels = Object.keys(devices).map(d => (deviceIcons[d]||'') + ' ' + d.charAt(0).toUpperCase() + d.slice(1));
+    const data = Object.values(devices);
+    const colors = Object.keys(devices).map(d => deviceColors[d] || '#64748b');
+
+    if (deviceChartInstance) deviceChartInstance.destroy();
+    deviceChartInstance = new Chart(document.getElementById('deviceChart'), {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: colors,
+          borderWidth: 0,
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '60%',
+        plugins: {
+          legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 12 }, padding: 12, usePointStyle: true } },
+          tooltip: {
+            backgroundColor: '#0D1320',
+            borderColor: 'rgba(0,212,255,0.3)',
+            borderWidth: 1,
+            titleColor: '#fff',
+            bodyColor: '#94a3b8',
+            padding: 12,
+            callbacks: { label: ctx => ctx.raw + ' visitors (' + ((ctx.raw/data.reduce((a,b)=>a+b,0))*100).toFixed(1) + '%)' }
+          }
+        }
+      }
+    });
+  }
+
+  // ===== REFERRER SOURCES =====
+  function renderReferrerSources(visits) {
+    const refs = {};
+    visits.forEach(v => {
+      let r = v.referrer || 'Direct';
+      if (r !== 'Direct') {
+        try { r = new URL(r).hostname.replace('www.',''); } catch(e) { r = r.substring(0,40); }
+      }
+      refs[r] = (refs[r] || 0) + 1;
+    });
+
+    const sorted = Object.entries(refs).sort((a,b) => b[1] - a[1]).slice(0, 8);
+    const labels = sorted.map(([k]) => k);
+    const data = sorted.map(([,v]) => v);
+    const barColors = ['#00D4FF','#00E89D','#FFB347','#A78BFA','#F472B6','#34D399','#60A5FA','#FBBF24'];
+
+    if (referrerChartInstance) referrerChartInstance.destroy();
+    referrerChartInstance = new Chart(document.getElementById('referrerChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Visits',
+          data: data,
+          backgroundColor: barColors.slice(0, labels.length),
+          borderRadius: 8,
+          barThickness: 24
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0D1320',
+            borderColor: 'rgba(0,212,255,0.3)',
+            borderWidth: 1,
+            titleColor: '#fff',
+            bodyColor: '#94a3b8',
+            padding: 12,
+            callbacks: { label: ctx => ctx.raw + ' visits' }
+          }
+        },
+        scales: {
+          x: { ticks: { color: '#4a5568', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.03)' }, beginAtZero: true },
+          y: { ticks: { color: '#e2e8f0', font: { weight: 500, size: 11 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // ===== LEADS TABLE =====
+  function renderLeadsTable(leads) {
+    const body = document.getElementById('leadsBody');
+    if (!leads.length) {
+      body.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-gray-600">No leads yet. Leads will appear here when visitors submit the contact form or sign in.</td></tr>';
+      return;
+    }
+    body.innerHTML = leads.map(l => {
+      const date = new Date(l.created_at);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const methodBadge = l.unlock_method === 'form'
+        ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Form</span>'
+        : '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">Google</span>';
+      return `<tr class="table-row border-b border-white/5">
+        <td class="py-3 px-3 text-white font-medium">${l.full_name || '—'}</td>
+        <td class="py-3 px-3 text-cyan-400">${l.work_email || '—'}</td>
+        <td class="py-3 px-3 text-gray-400">${l.phone || '—'}</td>
+        <td class="py-3 px-3 text-gray-300">${l.company || '—'}</td>
+        <td class="py-3 px-3 text-gray-500 max-w-xs truncate">${l.message || '—'}</td>
+        <td class="py-3 px-3">${methodBadge}</td>
+        <td class="py-3 px-3 text-gray-500 text-xs whitespace-nowrap">${dateStr}<br>${timeStr}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterLeads() {
+    const q = document.getElementById('leadSearch').value.toLowerCase();
+    const filtered = allLeads.filter(l =>
+      (l.full_name||'').toLowerCase().includes(q) ||
+      (l.work_email||'').toLowerCase().includes(q) ||
+      (l.company||'').toLowerCase().includes(q) ||
+      (l.phone||'').toLowerCase().includes(q)
+    );
+    renderLeadsTable(filtered);
+  }
+
+  function sortLeads(field) {
+    if (leadSortField === field) {
+      leadSortAsc = !leadSortAsc;
+    } else {
+      leadSortField = field;
+      leadSortAsc = true;
+    }
+    allLeads.sort((a, b) => {
+      const va = (a[field] || '').toString().toLowerCase();
+      const vb = (b[field] || '').toString().toLowerCase();
+      return leadSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+    renderLeadsTable(allLeads);
+  }
+
+  // ===== GOOGLE SIGN-INS TABLE =====
+  function renderGoogleSignins(signins) {
+    const body = document.getElementById('gsigninBody');
+    const countEl = document.getElementById('gsignin-count');
+    countEl.textContent = signins.length + ' sign-in' + (signins.length !== 1 ? 's' : '');
+
+    if (!signins.length) {
+      body.innerHTML = '<tr><td colspan="5" class="py-12 text-center text-gray-600">No Google sign-ins yet. Emails will appear here when visitors sign in with Google.</td></tr>';
+      return;
+    }
+    body.innerHTML = signins.map(s => {
+      const date = new Date(s.created_at);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const avatar = s.picture_url
+        ? `<img src="${s.picture_url}" class="w-8 h-8 rounded-full" referrerpolicy="no-referrer" alt="">`
+        : `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center text-white text-xs font-bold">${(s.name||s.email||'?').charAt(0).toUpperCase()}</div>`;
+      return `<tr class="table-row border-b border-white/5">
+        <td class="py-3 px-3">${avatar}</td>
+        <td class="py-3 px-3 text-white font-medium">${s.name || '—'}</td>
+        <td class="py-3 px-3 text-cyan-400">${s.email}</td>
+        <td class="py-3 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-medium ${s.nda_accepted ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}">${s.nda_accepted ? 'Accepted' : 'Pending'}</span></td>
+        <td class="py-3 px-3 text-gray-500 text-xs whitespace-nowrap">${dateStr}<br>${timeStr}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ===== ACTIVITY FEED =====
+  function renderActivityFeed(events) {
+    const feed = document.getElementById('activityFeed');
+    const recent = events.slice(0, 50);
+
+    if (!recent.length) {
+      feed.innerHTML = '<div class="text-center text-gray-600 py-8">No activity recorded yet.</div>';
+      return;
+    }
+
+    const eventIcons = {
+      page_view: '👁', section_view: '📄', modal_open: '🔍', modal_close: '✕',
+      tab_switch: '📑', expand_toggle: '📖', cta_click: '🖱', scroll_milestone: '📜',
+      content_unlock: '🔓', form_open: '📋', chart_interaction: '📊', nav_click: '🧭',
+      cycle_switch: '🔄'
+    };
+    const eventLabels = {
+      page_view: 'Viewed page', section_view: 'Viewed section', modal_open: 'Opened modal',
+      modal_close: 'Closed modal', tab_switch: 'Switched tab', expand_toggle: 'Toggled detail',
+      cta_click: 'Clicked CTA', scroll_milestone: 'Scroll milestone', content_unlock: 'Unlocked content',
+      form_open: 'Opened contact form', chart_interaction: 'Clicked chart', nav_click: 'Clicked nav',
+      cycle_switch: 'Changed cycle'
+    };
+    const eventColors = {
+      page_view: '#00D4FF', section_view: '#64748b', modal_open: '#00E89D', modal_close: '#4a5568',
+      tab_switch: '#FFB347', expand_toggle: '#A78BFA', cta_click: '#F472B6', scroll_milestone: '#34D399',
+      content_unlock: '#FBBF24', form_open: '#60A5FA', chart_interaction: '#00D4FF', nav_click: '#94a3b8',
+      cycle_switch: '#C084FC'
+    };
+
+    feed.innerHTML = recent.map(e => {
+      const icon = eventIcons[e.event_type] || '•';
+      const label = eventLabels[e.event_type] || e.event_type;
+      const color = eventColors[e.event_type] || '#64748b';
+      const target = e.event_target ? ` → <span class="text-white font-medium">${e.event_target}</span>` : '';
+      const ago = timeAgo(new Date(e.created_at));
+      return `<div class="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-white/[0.02] transition-colors">
+        <div class="activity-dot mt-1.5 shrink-0" style="background:${color}"></div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm text-gray-300">${icon} ${label}${target}</div>
+          <div class="text-[10px] text-gray-600 mt-0.5">Session ${e.session_id?.substring(0,8)}... · ${ago}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function timeAgo(date) {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return Math.floor(seconds/60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds/3600) + 'h ago';
+    return Math.floor(seconds/86400) + 'd ago';
+  }
+
+  // ===== EMAIL ACCESS MANAGEMENT =====
+  function renderEmailAccessTable(data) {
+    const body = document.getElementById('emailAccessBody');
+    const countsEl = document.getElementById('email-access-counts');
+
+    const approved = data.filter(d => d.status === 'approved').length;
+    const pending = data.filter(d => d.status === 'pending').length;
+    const rejected = data.filter(d => d.status === 'rejected').length;
+    countsEl.innerHTML = `<span class="text-emerald-400">${approved} approved</span> · <span class="text-amber-400">${pending} pending</span> · <span class="text-red-400">${rejected} rejected</span>`;
+
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="6" class="py-12 text-center text-gray-600">No email access entries yet. Add emails above to pre-approve access, or they will appear when visitors request access.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = data.map(d => {
+      const date = new Date(d.created_at);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const reviewedStr = d.reviewed_at ? new Date(d.reviewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+
+      let statusBadge = '';
+      if (d.status === 'approved') statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Approved</span>';
+      else if (d.status === 'pending') statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">Pending</span>';
+      else statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">Rejected</span>';
+
+      const sourceBadge = d.added_by === 'admin'
+        ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">Admin</span>'
+        : '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-500/10 text-gray-400 border border-gray-500/20">User Request</span>';
+
+      let actions = '';
+      if (d.status === 'pending') {
+        actions = `<button onclick="updateEmailStatus(${d.id},'approved')" class="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors cursor-pointer mr-1">Approve</button><button onclick="updateEmailStatus(${d.id},'rejected')" class="px-3 py-1 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">Reject</button>`;
+      } else if (d.status === 'approved') {
+        actions = `<button onclick="updateEmailStatus(${d.id},'rejected')" class="px-3 py-1 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">Revoke</button>`;
+      } else {
+        actions = `<button onclick="updateEmailStatus(${d.id},'approved')" class="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors cursor-pointer">Approve</button>`;
+      }
+
+      return `<tr class="border-b border-white/5 hover:bg-white/2 transition-colors">
+        <td class="py-3 px-3 text-cyan-400 font-medium">${d.email}</td>
+        <td class="py-3 px-3">${statusBadge}</td>
+        <td class="py-3 px-3">${sourceBadge}</td>
+        <td class="py-3 px-3 text-gray-500 text-xs whitespace-nowrap">${dateStr}<br>${timeStr}</td>
+        <td class="py-3 px-3 text-gray-500 text-xs">${reviewedStr}</td>
+        <td class="py-3 px-3 text-right whitespace-nowrap">${actions}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterEmailAccess() {
+    const q = document.getElementById('emailAccessSearch').value.toLowerCase();
+    const filtered = allEmailAccess.filter(d => (d.email || '').toLowerCase().includes(q) || (d.status || '').toLowerCase().includes(q));
+    renderEmailAccessTable(filtered);
+  }
+
+  async function addEmailAccess() {
+    const input = document.getElementById('addEmailInput');
+    const msgEl = document.getElementById('addEmailMsg');
+    const email = (input.value || '').trim().toLowerCase();
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      msgEl.className = 'mb-4 px-4 py-2 rounded-xl text-sm border border-red-500/30 bg-red-500/10 text-red-300';
+      msgEl.textContent = 'Please enter a valid email address.';
+      msgEl.classList.remove('hidden');
+      setTimeout(() => msgEl.classList.add('hidden'), 3000);
+      return;
+    }
+
+    if (!sb) return;
+
+    try {
+      // Check if email already exists
+      const { data: existing } = await sb.from('shatrshield_email_access').select('id,status').eq('email', email).maybeSingle();
+
+      if (existing) {
+        if (existing.status === 'approved') {
+          msgEl.className = 'mb-4 px-4 py-2 rounded-xl text-sm border border-amber-500/30 bg-amber-500/10 text-amber-300';
+          msgEl.textContent = 'This email is already approved.';
+        } else {
+          // Update existing entry to approved
+          await sb.from('shatrshield_email_access').update({ status: 'approved', reviewed_at: new Date().toISOString(), added_by: 'admin' }).eq('id', existing.id);
+          msgEl.className = 'mb-4 px-4 py-2 rounded-xl text-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+          msgEl.textContent = 'Email approved successfully!';
+          loadAllData();
+        }
+      } else {
+        // Insert new email as approved
+        await sb.from('shatrshield_email_access').insert({ email: email, status: 'approved', added_by: 'admin', reviewed_at: new Date().toISOString() });
+        msgEl.className = 'mb-4 px-4 py-2 rounded-xl text-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+        msgEl.textContent = 'Email added and approved!';
+        loadAllData();
+      }
+
+      msgEl.classList.remove('hidden');
+      input.value = '';
+      setTimeout(() => msgEl.classList.add('hidden'), 3000);
+    } catch(e) {
+      msgEl.className = 'mb-4 px-4 py-2 rounded-xl text-sm border border-red-500/30 bg-red-500/10 text-red-300';
+      msgEl.textContent = 'Failed to add email. It may already exist.';
+      msgEl.classList.remove('hidden');
+      setTimeout(() => msgEl.classList.add('hidden'), 3000);
+    }
+  }
+
+  async function updateEmailStatus(id, status) {
+    if (!sb) return;
+    try {
+      await sb.from('shatrshield_email_access').update({ status: status, reviewed_at: new Date().toISOString() }).eq('id', id);
+      loadAllData();
+    } catch(e) {
+      console.error('Failed to update email status:', e);
+    }
+  }
+
+  // ===== INIT =====
+  document.addEventListener('DOMContentLoaded', () => {
+    loadAllData();
+  });
+  </script>
+</body>
+</html>

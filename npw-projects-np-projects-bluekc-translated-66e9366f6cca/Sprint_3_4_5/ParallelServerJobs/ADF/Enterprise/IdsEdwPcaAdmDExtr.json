@@ -1,0 +1,84 @@
+{
+  "name": "IdsEdwPcaAdmDExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsEdwPcaAdmDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          },
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH CTE_BASE as (SELECT PCA_ADM.PCA_ADM_SK, PCA_ADM.PCA_ADM_ID, PCA_ADM.EFF_DT_SK, PCA_ADM.DEDCT_CMPNT_SK, PCA_ADM.TERM_DT_SK, PCA_ADM.ACCUM_SFX_ID, PCA_ADM.PCA_ALLOC_PFX_ID, PCA_ADM.PCA_ADM_DESC, DEDCT_CMPNT.DEDCT_CMPNT_ID, DEDCT_CMPNT.ACCUM_NO, COALESCE(CD.TRGT_CD,'UNK') as SRC_SYS_CD, PCA_ADM.PCA_COINS_ELIG_IN, PCA_ADM.PCA_COPAY_ELIG_IN, PCA_ADM.PCA_DEDCT_ELIG_IN, PCA_ADM.PCA_ACCUM_NO FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.PCA_ADM PCA_ADM INNER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.DEDCT_CMPNT DEDCT_CMPNT ON PCA_ADM.DEDCT_CMPNT_SK = DEDCT_CMPNT.DEDCT_CMPNT_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON PCA_ADM.SRC_SYS_CD_SK = CD.CD_MPPNG_SK WHERE PCA_ADM.DEDCT_CMPNT_SK=DEDCT_CMPNT.DEDCT_CMPNT_SK) SELECT PCA_ADM_SK, CASE WHEN dbo.trim_default(SRC_SYS_CD) = '' THEN 'UNK' ELSE SRC_SYS_CD END as SRC_SYS_CD, PCA_ADM_ID, EFF_DT_SK as PCA_ADM_EFF_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' as CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' as LAST_UPDT_RUN_CYC_EXCTN_DT_SK, DEDCT_CMPNT_SK, ACCUM_NO as DEDCT_CMPNT_ACCUM_NO, DEDCT_CMPNT_ID, PCA_ACCUM_NO, ACCUM_SFX_ID as PCA_ADM_ACCUM_SFX_ID, PCA_ALLOC_PFX_ID as PCA_ADM_ALLOC_PFX_ID, PCA_ADM_DESC, TERM_DT_SK as PCA_ADM_TERM_DT_SK, PCA_COINS_ELIG_IN, PCA_COPAY_ELIG_IN, PCA_DEDCT_ELIG_IN, @{pipeline().parameters.EDWRunCycle} as CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} as LAST_UPDT_RUN_CYC_EXCTN_SK FROM CTE_BASE",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "PCA_ADM"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'Jobs/DataWarehouse/Product/EdwLoads/PcaAdmD/load')",
+              "param_filename": "PCA_ADM_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "int"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/PcaAdmD"
+    }
+  },
+  "Description": "COPYRIGHT 2006, 2007, 2008, 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nDESCRIPTION:    Pulls data from IDS Facets table PCA_ADM into EDW table PCA_ADM_D\n \n             \n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #                     Change Description                                                                           Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------   -----------------------------------             --------------------------------------------------------                                                  ----------------------------------   ---------------------------------    -------------------------   \nBhoomi Dasari                 11/28/2006                                                   Originally Programmed\n\nJudy Reynolds/Bhoomi   06/04/09       #3745 Defined Contribution     Added additional new fields to output file                                          devlEDWnew                Brent Leland                 06-09-2009\n\nArchana Palivela             05/28/2013        5114                                   Originally Programmed  (In Parallel)                                                   EnterpriseWhseDevl     Bhoomi Dasari              8/11/2013\n\nAnnotations:\nJob name: IdsEdwPcaAdmDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file.\nWritePCA_ADM_D Data into a Sequential file for Load Ready Job.\nRead data from source table \nPCA_ADM\nJob name: IdsEdwPcaAdmDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file."
+}

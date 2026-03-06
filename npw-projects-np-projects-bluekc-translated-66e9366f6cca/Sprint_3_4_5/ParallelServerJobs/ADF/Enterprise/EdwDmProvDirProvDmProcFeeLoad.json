@@ -1,0 +1,218 @@
+{
+  "name": "EdwDmProvDirProvDmProcFeeLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_WebProvProcFee_To_Stg",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.AB_TMP_EdwDmProvDirProvDmProcFeeLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "PROC_CD",
+                  "type": "VARCHAR(50)",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "PROV_SPEC_CD",
+                  "type": "VARCHAR(50)",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "PC_FEE_SCHD_ALW_AMT",
+                  "type": "DECIMAL(15,2)",
+                  "physicalType": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "PCB_FEE_SCHD_ALW_AMT",
+                  "type": "DECIMAL(15,2)",
+                  "physicalType": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 5
+                },
+                "sink": {
+                  "name": "BA_FEE_SCHD_ALW_AMT",
+                  "type": "DECIMAL(15,2)",
+                  "physicalType": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 6
+                },
+                "sink": {
+                  "name": "BC_FEE_SCHD_ALW_AMT",
+                  "type": "DECIMAL(15,2)",
+                  "physicalType": "Decimal"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 7
+                },
+                "sink": {
+                  "name": "SIMPLE_PROC_CD_DESC",
+                  "type": "VARCHAR(255)",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 8
+                },
+                "sink": {
+                  "name": "LAST_UPDT_DT",
+                  "type": "DATETIME",
+                  "physicalType": "DateTime"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/landing')",
+              "param_filename": "WebProvProcFee.dat",
+              "param_col_delimiter": "'\\t'",
+              "param_row_delimiter": "@null",
+              "param_quote": "'\"'",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "AB_TMP_EdwDmProvDirProvDmProcFeeLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Upsert_ProvDirDm",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_WebProvProcFee_To_Stg",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_1 AS (SELECT PROC_CD, PROV_SPEC_CD, PC_FEE_SCHD_ALW_AMT, PCB_FEE_SCHD_ALW_AMT, BA_FEE_SCHD_ALW_AMT, BC_FEE_SCHD_ALW_AMT, SIMPLE_PROC_CD_DESC AS WEB_PROC_CD_DESC, CAST(@{pipeline().parameters.CurrDate} AS DATETIME) AS LAST_UPDT_DT FROM @{pipeline().globalParameters.gbl_param_edw_staging}.AB_TMP_EdwDmProvDirProvDmProcFeeLoad) MERGE @{pipeline().parameters.WebProvDirOwner}.PROV_DIR_DM_PROV_PROC_FEE AS T USING cte_1 AS S ON T.PROC_CD = S.PROC_CD AND T.PROV_SPEC_CD = S.PROV_SPEC_CD WHEN MATCHED THEN UPDATE SET T.PC_FEE_SCHD_ALW_AMT = S.PC_FEE_SCHD_ALW_AMT, T.PCB_FEE_SCHD_ALW_AMT = S.PCB_FEE_SCHD_ALW_AMT, T.BA_FEE_SCHD_ALW_AMT = S.BA_FEE_SCHD_ALW_AMT, T.BC_FEE_SCHD_ALW_AMT = S.BC_FEE_SCHD_ALW_AMT, T.WEB_PROC_CD_DESC = S.WEB_PROC_CD_DESC, T.LAST_UPDT_DT = S.LAST_UPDT_DT WHEN NOT MATCHED THEN INSERT (PROC_CD, PROV_SPEC_CD, PC_FEE_SCHD_ALW_AMT, PCB_FEE_SCHD_ALW_AMT, BA_FEE_SCHD_ALW_AMT, BC_FEE_SCHD_ALW_AMT, WEB_PROC_CD_DESC, LAST_UPDT_DT) VALUES (S.PROC_CD, S.PROV_SPEC_CD, S.PC_FEE_SCHD_ALW_AMT, S.PCB_FEE_SCHD_ALW_AMT, S.BA_FEE_SCHD_ALW_AMT, S.BC_FEE_SCHD_ALW_AMT, S.WEB_PROC_CD_DESC, S.LAST_UPDT_DT);",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "WebProvDirOwner": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ProvDirArraySize": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "ProvDirRecordCount": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/WebDataMart/ProviderDirectory/ProvDirProcFee"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2009 Blue Cross/Blue Shield of Kansas City\n\n\nPROCESSING:   Retrieves the data from flat file and loads into the Web Provider Directory (One Time Job)\n\nMODIFICATIONS:\nDeveloper                                           Date                 \\(9)Project/Altiris #      \\(9) Change Description                                        \\(9) Development Project      Code Reviewer          Date Reviewed       \n---------------------------                                --------------------     \\(9)------------------------      \\(9) -----------------------------------------------------------------------         --------------------------------       -------------------------------   ----------------------------       \nRalph Tucker                                     2009-05-28\\(9)                3500 - Web Realign   Original Programming\\(9)\\(9)\\(9) devlEDWnew                  Steph Goddard          06/02/2009\n\nRajasekhar Mangalampally                2013-07-05                     5114                         Original Programming                                             EnterpriseWrhdDevl         Jag Yelavarthi            2013-08-29\n                                                                                                                                  (Server to Parallel Conversion)\n\nAnnotations:\nThis is Source extract data from an EDW table\n\nJob Name:EdwDmProvDmProcFee\n\nTable:\nPROV_DIR_DM_PROV_PROC_FEE\nRead from the file WebProvProcFee from IDS.\nAdd Defaults and Null Handling\nLoad file created in the previous job will be loaded into the target DB2 table here. \n\nLoad Type; \"Update then Insert\"\nLoad rejects are redirected into a Reject file\n\nThis file is an append"
+}

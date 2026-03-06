@@ -1,0 +1,199 @@
+{
+  "name": "IdsWClmDelLoad",
+  "properties": {
+    "parameters": {},
+    "activities": [
+      {
+        "name": "Copy_W_CLM_DEL_to_temp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.A1_TMP_IdsWClmDelLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD",
+                  "type": "VARCHAR",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "CLM_ID",
+                  "type": "VARCHAR",
+                  "physicalType": "String"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "SRC_SYS_CD_SK",
+                  "type": "INT",
+                  "physicalType": "Integer"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/load')",
+              "param_filename": "W_CLM_DEL.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "A1_TMP_IdsWClmDelLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Upsert_W_CLM_DEL",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_W_CLM_DEL_to_temp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scriptType": "SQLServer",
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte AS (SELECT SRC_SYS_CD_SK, CLM_ID, SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_edw_staging}.A1_TMP_IdsWClmDelLoad) UPDATE T SET T.SRC_SYS_CD = cte.SRC_SYS_CD FROM @{pipeline().globalParameters.gbl_param_EDWOwner}.W_CLM_DEL T JOIN cte ON T.SRC_SYS_CD_SK = cte.SRC_SYS_CD_SK AND T.CLM_ID = cte.CLM_ID;INSERT INTO @{pipeline().globalParameters.gbl_param_EDWOwner}.W_CLM_DEL(SRC_SYS_CD_SK, CLM_ID, SRC_SYS_CD) SELECT cte.SRC_SYS_CD_SK, cte.CLM_ID, cte.SRC_SYS_CD FROM cte LEFT JOIN @{pipeline().globalParameters.gbl_param_EDWOwner}.W_CLM_DEL T ON T.SRC_SYS_CD_SK = cte.SRC_SYS_CD_SK AND T.CLM_ID = cte.CLM_ID WHERE T.SRC_SYS_CD_SK IS NULL;DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.A1_TMP_IdsWClmDelLoad",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Upsert_W_CLM_DEL",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/Move_File')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "W_CLM_DEL.dat",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Claims/EdwLoads/Driver"
+    }
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "Description": "MODIFICATIONS:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \n                                                                                                                                                                                                                           \nDEVELOPER                          DATE                  PROJECT                                                    DESCRIPTION                                                   DATASTAGE                                        CODE                                      DATE \n                                                                                                                                                                                                                           ENVIRONMENT                                   REVIEWER                             REVIEW\n----------------------------------------       --------------------        -------------------------------------------------                   -----------------------------------------------------------                 -----------------------------------------------               ------------------------------                   --------------------\nLee Moore                              2013-09-05                5114                                                        convert to parallel                                                 EnterpriseWrhsDevl                           Peter Marshall                           12/19/2013\n\nAnnotations:\nRead the Load ready file created in IdsWClmDelLoad Job\nLoad rejects are redirected into a Reject file\n\nThis file is an append\nLoad file created in the previous job will be loaded into the target DB2 table here. \n\nLoad Type IS Update then Insert;\nCopy For Buffer\nJobName:IdsWClmDelLoad"
+}

@@ -1,0 +1,123 @@
+{
+  "name": "UwsProviderSubjAreaBalSumLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Script_Transform_UwsProviderSubjAreaBalSumLoad",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_uws_staging}.ABC_TMP_UwsProviderSubjAreaBalSumLoad;WITH cte_agg AS (SELECT COUNT(*) AS total_count FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM WHERE TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND SUBJ_AREA_NM = '@{pipeline().parameters.Subject}'), cte_main AS (SELECT ROW_NUMBER() OVER(ORDER BY t.BAL_DT ASC) AS rn, t.BAL_DT, CONVERT(VARCHAR(10), t.BAL_DT, 120) AS BAL_DT_str, t.ROW_CT_TLRNC_CD FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM t WHERE t.TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND t.SUBJ_AREA_NM = '@{pipeline().parameters.Subject}'), cte_recur(rn, BAL_DT, BAL_DT_str, ROW_CT_TLRNC_CD, svPrevCount, svCurrCount, svCurrTlrncCd, svTempTlrncCd, svTempRslvIn, svTempRslvIncd) AS ( SELECT m.rn, m.BAL_DT, m.BAL_DT_str, m.ROW_CT_TLRNC_CD, 0 AS svPrevCount, 1 AS svCurrCount, m.ROW_CT_TLRNC_CD AS svCurrTlrncCd, CASE WHEN m.BAL_DT_str <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN m.ROW_CT_TLRNC_CD = 'BAL' THEN 'BAL' WHEN m.ROW_CT_TLRNC_CD = 'IN' THEN 'IN' ELSE 'OUT' END END AS svTempTlrncCd, CASE WHEN m.BAL_DT_str = '@{pipeline().parameters.CurrDate}' OR m.ROW_CT_TLRNC_CD = 'BAL' OR m.ROW_CT_TLRNC_CD = 'IN' THEN 'Y' ELSE 'N' END AS svTempRslvIn, CASE WHEN m.BAL_DT_str = '@{pipeline().parameters.CurrDate}' THEN 'NA' WHEN m.ROW_CT_TLRNC_CD = 'BAL' THEN 'BAL' WHEN m.ROW_CT_TLRNC_CD = 'IN' THEN 'IN' ELSE 'OUT' END AS svTempRslvIncd FROM cte_main m WHERE m.rn = 1 UNION ALL SELECT m.rn, m.BAL_DT, m.BAL_DT_str, m.ROW_CT_TLRNC_CD, r.svCurrCount, r.svCurrCount + 1, m.ROW_CT_TLRNC_CD, CASE WHEN m.BAL_DT_str <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' ELSE CASE WHEN r.svCurrTlrncCd = 'BAL' AND r.svTempTlrncCd NOT IN ('OUT','IN') THEN 'BAL' WHEN r.svCurrTlrncCd = 'BAL' AND r.svTempTlrncCd = 'IN' THEN 'IN' WHEN r.svCurrTlrncCd = 'IN' AND r.svTempTlrncCd <> 'OUT' THEN 'IN' ELSE 'OUT' END END, CASE WHEN m.BAL_DT_str = '@{pipeline().parameters.CurrDate}' THEN 'Y' ELSE CASE WHEN r.svCurrTlrncCd = 'BAL' AND r.svTempRslvIncd <> 'OUT' THEN 'Y' WHEN r.svCurrTlrncCd = 'IN' AND r.svTempRslvIncd <> 'OUT' THEN 'Y' ELSE 'N' END END, CASE WHEN m.BAL_DT_str = '@{pipeline().parameters.CurrDate}' THEN 'NA' ELSE CASE WHEN r.svCurrTlrncCd = 'BAL' AND r.svTempRslvIncd NOT IN ('OUT','IN') THEN 'BAL' WHEN r.svCurrTlrncCd = 'BAL' AND r.svTempRslvIncd = 'IN' THEN 'IN' WHEN r.svCurrTlrncCd = 'IN' AND r.svTempRslvIncd <> 'OUT' THEN 'IN' ELSE 'OUT' END END FROM cte_main m JOIN cte_recur r ON m.rn = r.rn + 1 ), cte_final AS (SELECT r.* FROM cte_recur r JOIN cte_agg a ON r.rn = a.total_count) SELECT '@{pipeline().parameters.Target}' AS TRGT_SYS_CD, '@{pipeline().parameters.Subject}' AS SUBJ_AREA_NM, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS LAST_BAL_DT, r.svTempTlrncCd AS TLRNC_CD, r.svTempRslvIn AS PREV_ISSUE_CRCTD_IN, @{pipeline().parameters.ExtrRunCycle} AS TRGT_RUN_CYC_NO, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS CRT_DTM, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS LAST_UPDT_DTM, '@{pipeline().parameters.UWSAcct}' AS USER_ID INTO @{pipeline().globalParameters.gbl_param_uws_staging}.ABC_TMP_UwsProviderSubjAreaBalSumLoad FROM cte_final r",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "uws",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_UwsProviderSubjAreaBalSumLoad",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_Transform_UwsProviderSubjAreaBalSumLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "TRGT_SYS_CD",
+                "SUBJ_AREA_NM"
+              ]
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_uws_staging}",
+              "param_table": "ABC_TMP_UwsProviderSubjAreaBalSumLoad"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "SUBJ_AREA_BAL_SUM"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "Target": {
+        "type": "String"
+      },
+      "Subject": {
+        "type": "String"
+      },
+      "CurrDate": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "Int"
+      },
+      "UWSAcct": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Provider/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:     Both FctsProvBalCntl and DeaProvBalCntl\n\nPROCESSING:\n                  \n                The Job loads the SUBJECT_AREA_BAL_SUM table after the balancing control job is done for a given Subject Area              \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               05/24/2007          3264                              Originally Programmed                           devlIDS30                Steph Goddard             9/6/07             \n\n\n\nPooja Sunkara                   09/12/2014         5345                            Rewrite in  parallel                                    IntegrateWrhsDevl    Kalyan Neelam              2015-01-07"
+}

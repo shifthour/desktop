@@ -1,0 +1,258 @@
+{
+  "name": "IdsEdwCustSvcCustSvcFBalExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "CopyFileToTmpTbl",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.FILE_TMP_IdsEdwCustSvcCustSvcFBalExtr",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false,
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD_SK",
+                    "type": "Int32",
+                    "physicalType": "int"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "CUST_SVC_ID",
+                    "type": "String",
+                    "physicalType": "varchar"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "DISCLMR_IN",
+                    "type": "String",
+                    "physicalType": "char"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','balancing/snapshot')",
+              "param_filename": "IDS_CUST_SVC.uniq",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\\\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "FILE_TMP_IdsEdwCustSvcCustSvcFBalExtr"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ScriptJoinTransform",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTmpTbl",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.RESULT_TMP_IdsEdwCustSvcCustSvcFBalExtr; WITH cte_main AS (SELECT f.SRC_SYS_CD_SK,f.CUST_SVC_ID,f.DISCLMR_IN,d.CD_MPPNG_SK,COALESCE(d.TRGT_CD,'UNK') AS TRGT_CD,COALESCE(d.TRGT_CD_NM,'UNK') AS TRGT_CD_NM FROM @{pipeline().globalParameters.gbl_param_ids_staging}.FILE_TMP_IdsEdwCustSvcCustSvcFBalExtr f LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG d ON f.SRC_SYS_CD_SK=d.CD_MPPNG_SK ), cte_xfrm AS (SELECT CASE WHEN TRGT_CD IS NULL OR LEN(RTRIM(LTRIM(TRGT_CD)))=0 THEN 'NA' ELSE TRGT_CD END AS SRC_SYS_CD, cte_main.CUST_SVC_ID,1 AS CUST_SVC_CT FROM cte_main ) SELECT SRC_SYS_CD,CUST_SVC_ID,CUST_SVC_CT INTO @{pipeline().globalParameters.gbl_param_ids_staging}.RESULT_TMP_IdsEdwCustSvcCustSvcFBalExtr FROM cte_xfrm;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopyTmpTblToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "ScriptJoinTransform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "name": "SRC_SYS_CD"
+                  },
+                  "sink": {
+                    "name": "Column1",
+                    "type": "String",
+                    "physicalType": "varchar"
+                  }
+                },
+                {
+                  "source": {
+                    "name": "CUST_SVC_ID"
+                  },
+                  "sink": {
+                    "name": "Column2",
+                    "type": "String",
+                    "physicalType": "varchar"
+                  }
+                },
+                {
+                  "source": {
+                    "name": "CUST_SVC_CT"
+                  },
+                  "sink": {
+                    "name": "Column3",
+                    "type": "Int32",
+                    "physicalType": "int"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "RESULT_TMP_IdsEdwCustSvcCustSvcFBalExtr"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/','load')",
+              "param_filename": "B_CUST_SVC_F.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/CustSvc/EdwLoads/CustSvcF/Balancing"
+    }
+  },
+  "Description": "CALLED BY:    IdsEdwCustSvcBalSeq\n\nPROCESSING:\n                  This pulls data from the Concatenated Source Sequential file coming from IDS and loads into the B table in EDW\n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada              08/29/2007         3264                              Originally Programmed                           devlEDW10                Steph Goddard             10/21/2007                  \n\n                                                                                                         Snapshot table extract                             \nBhupinder Kaur                12/06/2013          5114                               Create Load File for                          EnterpriseWhseDevl       Jag Yelavarthi               2014-02-25\n                                                                                                             EDW Table B_CUST_SVC_F\n\nAnnotations:\nLoading Balancing Snapshot Table\nJob: IdsEdwCustSvcCustSvcDBalExtr"
+}

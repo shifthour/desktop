@@ -1,0 +1,120 @@
+{
+  "name": "PdePayblRptCntrFLoad",
+  "properties": {
+    "parameters": {},
+    "activities": [
+      {
+        "name": "Copy_RptCntrTmp",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.RPTCNTR_TMP_PdePayblRptCntrFLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'verified')",
+              "param_filename": "PDE_PAYBL_RPT_CNTR_F_Load.txt",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "RPTCNTR_TMP_PdePayblRptCntrFLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Upsert_RptCntrF",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_RptCntrTmp",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte AS (SELECT PDE_PAYBL_RPT_CNTR_SK, FILE_ID, CNTR_SEQ_ID, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CMS_CNTR_ID, AS_OF_YR, AS_OF_MO, FILE_CRTN_DT, FILE_CRTN_TM, RPT_ID, DRUG_COV_STTUS_CD_TX, BNFCRY_CT, CUR_MO_GROS_DRUG_CST_BELOW_AMT/100 AS CUR_MO_GROS_DRUG_CST_BELOW_AMT, CUR_MO_GROS_DRUG_CST_ABOVE_AMT/100 AS CUR_MO_GROS_DRUG_CST_ABOVE_AMT, CUR_MO_TOT_GROS_DRUG_CST_AMT/100 AS CUR_MO_TOT_GROS_DRUG_CST_AMT, CUR_MO_LOW_INCM_CST_SHARING_AMT/100 AS CUR_MO_LOW_INCM_CST_SHARING_AMT, CUR_MO_COV_PLN_PD_AMT/100 AS CUR_MO_COV_PLN_PD_AMT, TOT_DTL_RCRD_CT, CUR_MO_SUBMT_DUE_AMT/100 AS CUR_MO_SUBMT_DUE_AMT, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK FROM @{pipeline().globalParameters.gbl_param_edw_staging}.RPTCNTR_TMP_PdePayblRptCntrFLoad) MERGE @{pipeline().globalParameters.gbl_param_EDWOwner}.PDE_PAYBL_RPT_CNTR_F AS T USING cte AS S ON (T.PDE_PAYBL_RPT_CNTR_SK = S.PDE_PAYBL_RPT_CNTR_SK) WHEN MATCHED THEN UPDATE SET T.FILE_ID = S.FILE_ID, T.CNTR_SEQ_ID = S.CNTR_SEQ_ID, T.SRC_SYS_CD = S.SRC_SYS_CD, T.CRT_RUN_CYC_EXCTN_DT_SK = S.CRT_RUN_CYC_EXCTN_DT_SK, T.LAST_UPDT_RUN_CYC_EXCTN_DT_SK = S.LAST_UPDT_RUN_CYC_EXCTN_DT_SK, T.CMS_CNTR_ID = S.CMS_CNTR_ID, T.AS_OF_YR = S.AS_OF_YR, T.AS_OF_MO = S.AS_OF_MO, T.FILE_CRTN_DT = S.FILE_CRTN_DT, T.FILE_CRTN_TM = S.FILE_CRTN_TM, T.RPT_ID = S.RPT_ID, T.DRUG_COV_STTUS_CD_TX = S.DRUG_COV_STTUS_CD_TX, T.BNFCRY_CT = S.BNFCRY_CT, T.CUR_MO_GROS_DRUG_CST_BELOW_AMT = S.CUR_MO_GROS_DRUG_CST_BELOW_AMT, T.CUR_MO_GROS_DRUG_CST_ABOVE_AMT = S.CUR_MO_GROS_DRUG_CST_ABOVE_AMT, T.CUR_MO_TOT_GROS_DRUG_CST_AMT = S.CUR_MO_TOT_GROS_DRUG_CST_AMT, T.CUR_MO_LOW_INCM_CST_SHARING_AMT = S.CUR_MO_LOW_INCM_CST_SHARING_AMT, T.CUR_MO_COV_PLN_PD_AMT = S.CUR_MO_COV_PLN_PD_AMT, T.TOT_DTL_RCRD_CT = S.TOT_DTL_RCRD_CT, T.CUR_MO_SUBMT_DUE_AMT = S.CUR_MO_SUBMT_DUE_AMT, T.CRT_RUN_CYC_EXCTN_SK = S.CRT_RUN_CYC_EXCTN_SK, T.LAST_UPDT_RUN_CYC_EXCTN_SK = S.LAST_UPDT_RUN_CYC_EXCTN_SK WHEN NOT MATCHED THEN INSERT (PDE_PAYBL_RPT_CNTR_SK, FILE_ID, CNTR_SEQ_ID, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, CMS_CNTR_ID, AS_OF_YR, AS_OF_MO, FILE_CRTN_DT, FILE_CRTN_TM, RPT_ID, DRUG_COV_STTUS_CD_TX, BNFCRY_CT, CUR_MO_GROS_DRUG_CST_BELOW_AMT, CUR_MO_GROS_DRUG_CST_ABOVE_AMT, CUR_MO_TOT_GROS_DRUG_CST_AMT, CUR_MO_LOW_INCM_CST_SHARING_AMT, CUR_MO_COV_PLN_PD_AMT, TOT_DTL_RCRD_CT, CUR_MO_SUBMT_DUE_AMT, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK) VALUES (S.PDE_PAYBL_RPT_CNTR_SK, S.FILE_ID, S.CNTR_SEQ_ID, S.SRC_SYS_CD, S.CRT_RUN_CYC_EXCTN_DT_SK, S.LAST_UPDT_RUN_CYC_EXCTN_DT_SK, S.CMS_CNTR_ID, S.AS_OF_YR, S.AS_OF_MO, S.FILE_CRTN_DT, S.FILE_CRTN_TM, S.RPT_ID, S.DRUG_COV_STTUS_CD_TX, S.BNFCRY_CT, S.CUR_MO_GROS_DRUG_CST_BELOW_AMT, S.CUR_MO_GROS_DRUG_CST_ABOVE_AMT, S.CUR_MO_TOT_GROS_DRUG_CST_AMT, S.CUR_MO_LOW_INCM_CST_SHARING_AMT, S.CUR_MO_COV_PLN_PD_AMT, S.TOT_DTL_RCRD_CT, S.CUR_MO_SUBMT_DUE_AMT, S.CRT_RUN_CYC_EXCTN_SK, S.LAST_UPDT_RUN_CYC_EXCTN_SK)",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/P2P"
+    }
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "Description": "\u00c2\u00a9 Copyright 2007, 2008, 2009 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY:  \nSEQ Job- EdwPdePayblRptCntrFCntl\nPROCESSING:  This Job Extracts the data from P2P Source File OPTUMRX.PBM.RPT_DDPS_P2P_PAYABLE* and loads the data into EDW Table PDE_PAYBL_RPT_CNTR_F\n\n                    \nMODIFICATIONS:\n               \nDeveloper                      Date               Project/Altiris #     Change Description                                                    Development Project     Code Reviewer             Date Reviewed\n----------------------------------    -------------------    -------------------------    ------------------------------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRekha Radhakrishna    2022-02-03      408843                Initial Programming                                                       EnterpriseDev3             Jaideep Mankala          02/24/2022       \nBill Schroeder                2022-07-08      540992                Divide all _AMT columns by 100 to fix decimals           EnterpriseDev3             Jeyaprasanna               2022-07-20"
+}

@@ -1,0 +1,114 @@
+{
+  "name": "IdsEdwBClmLnFLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsEdwBClmLnFLoad_Stg",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_edw_staging}.randomTMP_IdsEdwBClmLnFLoad",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "linkedServiceName": {
+            "referenceName": "edw",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Claims/EdwLoads/ClmLnDsalwF/load')",
+              "param_filename": "CLM_LN_DSALW_F.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_edw",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_edw_staging}",
+              "param_table": "randomTMP_IdsEdwBClmLnFLoad"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_IdsEdwBClmLnFLoad",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_IdsEdwBClmLnFLoad_Stg",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte_source AS (SELECT * FROM @{pipeline().globalParameters.gbl_param_edw_staging}.randomTMP_IdsEdwBClmLnFLoad), cte_filter AS (SELECT * FROM cte_source WHERE dbo.trim_default(SRC_SYS_CD) = 'FACETS'), cte_dedup AS (SELECT SRC_SYS_CD, CLM_ID, CLM_LN_SEQ_NO, ROW_NUMBER() OVER (PARTITION BY SRC_SYS_CD, CLM_ID, CLM_LN_SEQ_NO ORDER BY (SELECT NULL)) AS rn FROM cte_filter), cte_final AS (SELECT SRC_SYS_CD, CLM_ID, CLM_LN_SEQ_NO, 0 AS CLM_LN_RVNU_CD_SK, CAST(0.00 AS decimal(38,2)) AS CLM_LN_CHRG_AMT, CAST(0.00 AS decimal(38,2)) AS CLM_LN_PAYBL_AMT, CAST(0.00 AS decimal(38,2)) AS CLM_LN_ALW_AMT, 0 AS CLM_LN_PROC_CD_SK FROM cte_dedup WHERE rn=1) TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_EDWOwner}.B_CLM_LN_F; INSERT INTO @{pipeline().globalParameters.gbl_param_EDWOwner}.B_CLM_LN_F (SRC_SYS_CD, CLM_ID, CLM_LN_SEQ_NO, CLM_LN_RVNU_CD_SK, CLM_LN_CHRG_AMT, CLM_LN_PAYBL_AMT, CLM_LN_ALW_AMT, CLM_LN_PROC_CD_SK) SELECT SRC_SYS_CD, CLM_ID, CLM_LN_SEQ_NO, CLM_LN_RVNU_CD_SK, CLM_LN_CHRG_AMT, CLM_LN_PAYBL_AMT, CLM_LN_ALW_AMT, CLM_LN_PROC_CD_SK FROM cte_final",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "edw",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {},
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Claims/EdwLoads/ClmLnDsalwF"
+    }
+  },
+  "Description": "Modifications:                        \n                                              Project/                                                                                                                          Code                    Date\nDeveloper        Date              Altiris #           Change Description                                                                                  Reviewer             Reviewed\n----------------------  -------------------   -------------------   --------------------------------------------------------------------------------------------------------------   ------------------------    -------------------   \nBrent Leland    02/16/2006                         Originally Programmed\n\nRama Kamjula    09/17/2013     5114          Rewritten from Server to Parallel version                                                 Jag Yelavarthi          2013-12-21\n                                                                                  (Original JOb: IdsClmLnDsalwSKUpdt)\n\nAnnotations:\nThis Job loads CLM_LN_DSALW_F data into B_CLM_LN_F  to check for the updated CLM LN SK's.\nRemove Duplicates based on Natural Keys\nthe daily load file created in Extract Job\nLoad daily file into B table."
+}

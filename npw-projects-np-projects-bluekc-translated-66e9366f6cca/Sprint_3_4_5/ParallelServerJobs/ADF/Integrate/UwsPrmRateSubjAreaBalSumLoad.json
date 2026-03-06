@@ -1,0 +1,113 @@
+{
+  "name": "UwsPrmRateSubjAreaBalSumLoad",
+  "properties": {
+    "parameters": {
+      "Target": {
+        "type": "string"
+      },
+      "Subject": {
+        "type": "string"
+      },
+      "CurrDate": {
+        "type": "string"
+      },
+      "ExtrRunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Script_UwsPrmRateSubjAreaBalSumLoad",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.Zz7v_TMP_UwsPrmRateSubjAreaBalSumLoad;WITH main_in AS ( SELECT TRGT_SYS_CD, SUBJ_AREA_NM, BAL_DT, ROW_CT_TLRNC_CD FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM WHERE TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND SUBJ_AREA_NM = '@{pipeline().parameters.Subject}' ), ref_balSum AS ( SELECT TRGT_SYS_CD, SUBJ_AREA_NM, COUNT(*) AS ROW_COUNT FROM @{pipeline().globalParameters.gbl_param_UWSOwner}.TBL_BAL_SUM WHERE TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND SUBJ_AREA_NM = '@{pipeline().parameters.Subject}' GROUP BY TRGT_SYS_CD, SUBJ_AREA_NM ), joined AS ( SELECT m.TRGT_SYS_CD, m.SUBJ_AREA_NM, m.BAL_DT, m.ROW_CT_TLRNC_CD, r.ROW_COUNT FROM main_in m JOIN ref_balSum r ON r.TRGT_SYS_CD = m.TRGT_SYS_CD AND r.SUBJ_AREA_NM = m.SUBJ_AREA_NM ), ordered AS ( SELECT j.*, ROW_NUMBER() OVER (ORDER BY j.BAL_DT ASC) AS rn FROM joined j ), rCTE AS (   SELECT o.rn, o.TRGT_SYS_CD, o.SUBJ_AREA_NM, o.BAL_DT, o.ROW_CT_TLRNC_CD, o.ROW_COUNT,     CASE       WHEN CONVERT(VARCHAR(10), o.BAL_DT, 120) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW'       WHEN o.ROW_CT_TLRNC_CD = 'BAL' THEN 'BAL'       WHEN o.ROW_CT_TLRNC_CD = 'IN' THEN 'IN'       ELSE 'OUT'     END AS svTempTlrncCd,     CASE       WHEN CONVERT(VARCHAR(10), o.BAL_DT,120) = '@{pipeline().parameters.CurrDate}' THEN 'Y'       WHEN o.ROW_CT_TLRNC_CD='BAL' THEN 'Y'       WHEN o.ROW_CT_TLRNC_CD='IN' THEN 'Y'       ELSE 'N'     END AS svTempRslvIn,     CASE       WHEN CONVERT(VARCHAR(10), o.BAL_DT,120) = '@{pipeline().parameters.CurrDate}' THEN 'NA'       WHEN o.ROW_CT_TLRNC_CD='BAL' THEN 'BAL'       WHEN o.ROW_CT_TLRNC_CD='IN' THEN 'IN'       ELSE 'OUT'     END AS svTempRslvIncd,     0 AS svPrevCount,     1 AS svCurrCount   FROM ordered o   WHERE o.rn=1   UNION ALL   SELECT o.rn, o.TRGT_SYS_CD, o.SUBJ_AREA_NM, o.BAL_DT, o.ROW_CT_TLRNC_CD, o.ROW_COUNT,     CASE       WHEN CONVERT(VARCHAR(10), o.BAL_DT, 120) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW'       WHEN p.ROW_CT_TLRNC_CD='BAL' AND p.svTempTlrncCd<>'OUT' AND p.svTempTlrncCd<>'IN' THEN 'BAL'       WHEN p.ROW_CT_TLRNC_CD='BAL' AND p.svTempTlrncCd='IN' THEN 'IN'       WHEN p.ROW_CT_TLRNC_CD='IN'  AND p.svTempTlrncCd<>'OUT' THEN 'IN'       ELSE 'OUT'     END AS svTempTlrncCd,     CASE       WHEN CONVERT(VARCHAR(10), o.BAL_DT,120) = '@{pipeline().parameters.CurrDate}' THEN 'Y'       WHEN p.ROW_CT_TLRNC_CD='BAL' AND p.svTempRslvIncd<>'OUT' THEN 'Y'       WHEN p.ROW_CT_TLRNC_CD='IN' AND p.svTempRslvIncd<>'OUT' THEN 'Y'       ELSE 'N'     END AS svTempRslvIn,     CASE       WHEN CONVERT(VARCHAR(10), o.BAL_DT,120) = '@{pipeline().parameters.CurrDate}' THEN 'NA'       WHEN p.ROW_CT_TLRNC_CD='BAL' AND p.svTempRslvIncd<>'OUT' AND p.svTempRslvIncd<>'IN' THEN 'BAL'       WHEN p.ROW_CT_TLRNC_CD='BAL' AND p.svTempRslvIncd='IN' THEN 'IN'       WHEN p.ROW_CT_TLRNC_CD='IN'  AND p.svTempRslvIncd<>'OUT' THEN 'IN'       ELSE 'OUT'     END AS svTempRslvIncd,     p.svCurrCount AS svPrevCount,     p.svCurrCount + 1 AS svCurrCount   FROM rCTE p   JOIN ordered o ON o.rn = p.rn + 1 ), finalRow AS ( SELECT * FROM rCTE WHERE rn = ROW_COUNT ) SELECT '@{pipeline().parameters.Target}' AS TRGT_SYS_CD, '@{pipeline().parameters.Subject}' AS SUBJ_AREA_NM, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS LAST_BAL_DT, finalRow.svTempTlrncCd AS TLRNC_CD, finalRow.svTempRslvIn AS PREV_ISSUE_CRCTD_IN, @{pipeline().parameters.ExtrRunCycle} AS TRGT_RUN_CYC_NO, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS CRT_DTM, CONVERT(DATETIME, '@{pipeline().parameters.CurrDate}',120) AS LAST_UPDT_DTM, 'ETLUSER' AS USER_ID INTO @{pipeline().globalParameters.gbl_param_ids_staging}.Zz7v_TMP_UwsPrmRateSubjAreaBalSumLoad FROM finalRow;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "uws",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Copy_UwsPrmRateSubjAreaBalSumLoad",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Script_UwsPrmRateSubjAreaBalSumLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "TRGT_SYS_CD",
+                "SUBJ_AREA_NM"
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "Zz7v_TMP_UwsPrmRateSubjAreaBalSumLoad"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_UWSOwner}",
+              "param_table": "SUBJ_AREA_BAL_SUM"
+            }
+          }
+        ]
+      }
+    ],
+    "annotations": [],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/PremiumRating/Balancing"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2007 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:   FctsPrmRateBalCntl\n\nPROCESSING:\n                  \n                The Job loads the SUBJECT_AREA_BAL_SUM table after the balancing control job is done for a given Subject Area              \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nParikshith Chada               05/02/2007          3264                              Originally Programmed                           devlIDS30                 Steph Goddard             09/19/2007       \n\nBhoomi Dasari                  5/9/2014              5345                            Reconfigured to call parallel jobs           IntegrateWrhsDevl      Kalyan Neelam             5/21/2014 \n                                                                                                                                                                                                                                                    SAndrew 2014-10-24\n\nAnnotations:\nJob Name: IdsIdsWCdmEtlDrvrLoad"
+}

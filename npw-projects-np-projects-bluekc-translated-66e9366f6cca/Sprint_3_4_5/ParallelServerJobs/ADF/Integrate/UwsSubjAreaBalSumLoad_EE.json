@@ -1,0 +1,87 @@
+{
+  "name": "UwsSubjAreaBalSumLoad_EE",
+  "properties": {
+    "parameters": {
+      "Target": {
+        "type": "String"
+      },
+      "Subject": {
+        "type": "String"
+      },
+      "CurrDate": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "Int32"
+      },
+      "UWSAcct": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_UwsSubjAreaBalSumLoad_EE",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH InputData AS (SELECT BAL_DT, ROW_CT_TLRNC_CD, COUNT(*) OVER () AS ROW_COUNT, ROW_NUMBER() OVER (ORDER BY BAL_DT ASC) AS rownum FROM UWS.TBL_BAL_SUM WHERE TRGT_SYS_CD = '@{pipeline().parameters.Target}' AND SUBJ_AREA_NM = '@{pipeline().parameters.Subject}'), Rcte AS (SELECT rownum, CAST(0 AS INT) AS svPrevCount, CAST(1 AS INT) AS svCurrCount, '' AS svTempTlrncCd, '' AS svTempRslvIn, '' AS svTempRslvIncd, InputData.ROW_CT_TLRNC_CD AS svCurrTlrncCd, BAL_DT, ROW_COUNT FROM InputData WHERE rownum = 1 UNION ALL SELECT i.rownum, rc.svCurrCount AS svPrevCount, rc.svCurrCount + 1 AS svCurrCount, CASE WHEN SUBSTRING(CONVERT(VARCHAR(10), i.BAL_DT, 120), 1, 10) <> '@{pipeline().parameters.CurrDate}' THEN 'NEXT ROW' WHEN rc.svCurrTlrncCd = 'BAL' AND rc.svTempTlrncCd <> 'OUT' AND rc.svTempTlrncCd <> 'IN' THEN 'BAL' WHEN rc.svCurrTlrncCd = 'BAL' AND rc.svTempTlrncCd = 'IN' THEN 'IN' WHEN rc.svCurrTlrncCd = 'IN' AND rc.svTempTlrncCd <> 'OUT' THEN 'IN' ELSE 'OUT' END AS svTempTlrncCd, CASE WHEN SUBSTRING(CONVERT(VARCHAR(10), i.BAL_DT, 120), 1, 10) = '@{pipeline().parameters.CurrDate}' THEN 'Y' WHEN rc.svCurrTlrncCd = 'BAL' AND rc.svTempRslvIncd <> 'OUT' THEN 'Y' WHEN rc.svCurrTlrncCd = 'IN' AND rc.svTempRslvIncd <> 'OUT' THEN 'Y' ELSE 'N' END AS svTempRslvIn, CASE WHEN SUBSTRING(CONVERT(VARCHAR(10), i.BAL_DT, 120), 1, 10) = '@{pipeline().parameters.CurrDate}' THEN 'NA' WHEN rc.svCurrTlrncCd = 'BAL' AND rc.svTempRslvIncd <> 'OUT' AND rc.svTempRslvIncd <> 'IN' THEN 'BAL' WHEN rc.svCurrTlrncCd = 'BAL' AND rc.svTempRslvIncd = 'IN' THEN 'IN' WHEN rc.svCurrTlrncCd = 'IN' AND rc.svTempRslvIncd <> 'OUT' THEN 'IN' ELSE 'OUT' END AS svTempRslvIncd, i.ROW_CT_TLRNC_CD AS svCurrTlrncCd, i.BAL_DT, i.ROW_COUNT FROM Rcte rc JOIN InputData i ON i.rownum = rc.rownum + 1) SELECT '@{pipeline().parameters.Target}' AS TRGT_SYS_CD, '@{pipeline().parameters.Subject}' AS SUBJ_AREA_NM, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_BAL_DT, rc.svTempTlrncCd AS TLRNC_CD, rc.svTempRslvIn AS PREV_ISSUE_CRCTD_IN, @{pipeline().parameters.ExtrRunCycle} AS TRGT_RUN_CYC_NO, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS CRT_DTM, CAST('@{pipeline().parameters.CurrDate}' AS DATETIME) AS LAST_UPDT_DTM, '@{pipeline().parameters.UWSAcct}' AS USER_ID FROM Rcte rc WHERE rc.rownum = rc.ROW_COUNT",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "writeBehavior": "upsert",
+            "sqlWriterUseTableLock": false,
+            "upsertSettings": {
+              "useTempDB": false,
+              "keys": [
+                "TRGT_SYS_CD",
+                "SUBJ_AREA_NM"
+              ]
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "uws",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "UWS",
+              "param_table": "TBL_BAL_SUM"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_uws",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "UWS",
+              "param_table": "SUBJ_AREA_BAL_SUM"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/Util"
+    }
+  },
+  "Description": "*****************************************************************************************************************************************************************************\nCOPYRIGHT 2015 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:   Multiple balacning process can use this job\n\nPROCESSING:\n                  \n                The Job loads the SUBJECT_AREA_BAL_SUM table after the balancing control job is done for a given Subject Area              \n\nMODIFICATIONS:\nDeveloper                          Date                 Project/Altiris #                Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------      -------------------    -----------------------------------    ---------------------------------------------------------      ----------------------------------   ---------------------------------    -------------------------   \nRaja Gummadi               2015-03-11          5460                              Orginal Programming                            IntegrateNewDevl            Kalyan Neelam             2015-03-13"
+}

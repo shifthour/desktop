@@ -1,0 +1,96 @@
+{
+  "name": "IdsEdwIhmPgmHierDExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsEdwIhmPgmHierDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH main AS (SELECT HIER.IHM_PGM_HIER_SK,HIER.PGM_ID,HIER.SBPRG_ID,HIER.RISK_SVRTY_CD,COALESCE(CD1.TRGT_CD,'UNK') AS SRC_SYS_CD,HIER.LAST_UPDT_RUN_CYC_EXCTN_SK AS IDS_LAST_UPDT_RUN_CYC_EXCTN_SK,HIER.RISK_SVRTY_CD_SK,HIER.IHM_PGM_HIER_NO,HIER.IHM_PGM_HIER_RANK_NO,HIER.LAST_UPDT_DT_SK,HIER.LAST_UPDT_USER_ID,COALESCE(CD2.TRGT_CD_NM,'UNK') AS RISK_SVRTY_NM FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.IHM_PGM_HIER HIER LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON HIER.SRC_SYS_CD_SK = CD1.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD2 ON HIER.RISK_SVRTY_CD_SK = CD2.CD_MPPNG_SK),transform AS (SELECT IHM_PGM_HIER_SK,PGM_ID,SBPRG_ID,RISK_SVRTY_CD,CASE WHEN LEN(RTRIM(LTRIM(SRC_SYS_CD)))=0 THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD,'@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK,'@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,CASE WHEN LEN(RTRIM(LTRIM(RISK_SVRTY_NM)))=0 THEN 'UNK' ELSE RISK_SVRTY_NM END AS RISK_SVRTY_NM,IHM_PGM_HIER_NO,IHM_PGM_HIER_RANK_NO,LAST_UPDT_DT_SK,LAST_UPDT_USER_ID,@{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK,@{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK,IDS_LAST_UPDT_RUN_CYC_EXCTN_SK,RISK_SVRTY_CD_SK FROM main) SELECT * FROM transform",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "dummy"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "IHM_PGM_HIER_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "Int"
+      },
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "IDSRunCycle": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/IhmPgmHierD"
+    }
+  },
+  "Description": "MODIFICATIONS:\nDeveloper                Date                 Project/Altiris #      Change Description                                                                     Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------                             --------------------------------       -------------------------------   ----------------------------       \nJudy Reynolds         2010-07-21        Project #4297       Original Programming                                                                   EnterpriseNewDevl         Steph Goddard         07/22/2010\n\nJudy Reynolds         2010-08-13        4297-Alineo Ph2   Modified to support changes to the table in IDS and EDW          EnterpriseNewDevl         Steph Goddard         08/18/2010\n\nArchana Palivela      2013-07-24       P5114                  Original Programming                                                                    EnterpriseWrhlDevl\n\nAnnotations:\nJob name: IdsEdwhmPgmHierDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file.\nRead data from source table IHM_PGM_HIER\nCode SK lookups for Denormalization\nWrite IHM_PGM_HIER_D Data into a Sequential file for Load Ready Job."
+}

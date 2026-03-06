@@ -1,0 +1,99 @@
+{
+  "name": "BlueKCCommonRightFaxAPIJobIDRspnsUpdate",
+  "properties": {
+    "parameters": {
+      "DynamicAccessToken": {
+        "type": "string"
+      },
+      "JobId": {
+        "type": "string"
+      },
+      "NoFileInd": {
+        "type": "string"
+      },
+      "COMM_SK": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyToRightFaxInitiateData",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte AS (SELECT 1 AS DefaultRow) SELECT CAST(@{pipeline().parameters.COMM_SK} as int) AS COMM_SK, 'COMMTRNSMSN' AS COMM_SRC_SYS_CD, 'RGHTFAX' AS COMM_TRGT_SYS_CD, CASE WHEN '@{pipeline().parameters.NoFileInd}' = 'Y' THEN 'FAILED' WHEN dbo.trim_default(@{pipeline().parameters.JobId}) <> '' THEN 'SUCCESS' ELSE 'FAILED' END AS COMM_STTUS_CD, 'FAXRQST' AS COMM_TYP_CD, CASE WHEN '@{pipeline().parameters.NoFileInd}' = 'Y' THEN 'File Not Found' WHEN dbo.trim_default(@{pipeline().parameters.JobId}) <> '' THEN 'Fax Request Initiated Successfully' ELSE 'Fax Request Initiated Unsuccessfull' END AS COMM_STTUS_CMNT_TX, @{pipeline().parameters.JobId} AS COMM_JOB_ID, GETDATE() AS COMM_SENT_DTM, GETDATE() AS LAST_UPDT_DTM FROM cte",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "dummy"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_published}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/Jobs/GuidingCare/Fullfilment')",
+              "param_filename": "GuidingCareRightFaxInitiateData.txt",
+              "param_col_delimiter": "$$",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Outbound/Jobs/GuidingCare/Fullfilment"
+    }
+  },
+  "Description": "\u00c2\u00a9 Copyright 2017 Blue Cross/Blue Shield of Kansas City\n\nCALLED BY : BlueKCCommonRightFaxAPIPostMetadataApigeeSeq\n\n\nPROCESSING : Job updates RightFax API JobID in COMM table.\n\nMODIFICATIONS :\n\nDeveloper                               Date                         Project                                   Change Description            Development Project          Code Reviewer                   Date Reviewed       \n------------------------------              ------------------        ----------------------             ---------------------------------------       ------------------------------\\(9)----------------------------------         -------------------------------        \nBharani Chalamalasetty      04/01/2020             Fullfillment                       Original Programming               OutboundDev3                    Jaideep Mankala              04/20/2020\n\nSaranya A                                2021-06-29            US370660         Modified Job to process NextPage and RightFax    OutboundDev3          Jaideep Mankala                 06/30/2021\n\\(9)\\(9)\\(9)\\(9)\\(9)\\(9)jobs in Parallel\n\nAnnotations:\nDSJobStartTimestamp used instead of Timestamp variable as rows need to be updated with new timestamp."
+}

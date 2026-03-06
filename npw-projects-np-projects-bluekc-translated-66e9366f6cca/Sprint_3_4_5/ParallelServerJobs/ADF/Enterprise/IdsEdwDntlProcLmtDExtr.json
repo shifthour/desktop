@@ -1,0 +1,85 @@
+{
+  "name": "IdsEdwDntlProcLmtDExtr",
+  "properties": {
+    "activities": [
+      {
+        "name": "Copy_IdsEdwDntlProcLmtDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_base AS (SELECT D.DNTL_PROC_LMT_SK, COALESCE(CD1.TRGT_CD,'UNK') AS SRC_SYS_CD, D.LMT_CMPNT_ID, D.ACCUM_NO AS DNTL_PROC_LMT_ACCUM_NO, D.PROC_CD, D.PROC_CD_TYP_CD, D.LMT_CMPNT_SK, D.PROC_CD_SK, COALESCE(CD2.TRGT_CD_NM,'UNK') AS PROC_CD_TYP_NM, D.PROC_CD_TYP_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.DNTL_PROC_LMT D LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD1 ON D.SRC_SYS_CD_SK = CD1.CD_MPPNG_SK LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD2 ON D.PROC_CD_TYP_CD_SK = CD2.CD_MPPNG_SK), cte_trans AS (SELECT DNTL_PROC_LMT_SK, LMT_CMPNT_ID, DNTL_PROC_LMT_ACCUM_NO, PROC_CD, PROC_CD_TYP_CD, CASE WHEN dbo.trim_default(SRC_SYS_CD) = '' THEN 'UNK' ELSE SRC_SYS_CD END AS SRC_SYS_CD, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, LMT_CMPNT_SK, PROC_CD_SK, CASE WHEN dbo.trim_default(PROC_CD_TYP_NM) = '' THEN 'UNK' ELSE PROC_CD_TYP_NM END AS PROC_CD_TYP_NM, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK, PROC_CD_TYP_CD_SK FROM cte_base), cte_final AS (SELECT DNTL_PROC_LMT_SK, LMT_CMPNT_ID, DNTL_PROC_LMT_ACCUM_NO, PROC_CD, PROC_CD_TYP_CD, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, LMT_CMPNT_SK, PROC_CD_SK, PROC_CD_TYP_NM, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK, PROC_CD_TYP_CD_SK FROM cte_trans) SELECT * FROM cte_final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "DNTL_PROC_LMT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'load')",
+              "param_filename": "DNTL_PROC_LMT_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/DntlProcLmtD"
+    }
+  },
+  "Description": "COPYRIGHT 2010 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:\n\nPROCESSING:\n\n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #                                                        Change Description                                  Development Project    Code Reviewer            Date Reviewed\n----------------------------------        -------------------   -----------------------------------                                  ---------------------------------------------------------                ----------------------------------   ---------------------------------    -------------------------   \nKimberly Doty                    04-29-2010     4044 Blue Renew v2                                           Original Programming                                     EnterpriseCurDevl        Steph Goddard            05/19/2010\n\nManasa Andru                   2012-05-10     4896 ICD10                                                      Added 3 new columns PROC_CD_TYP_CD,    EnterpriseNewDevl        SAndrew                     2012-05-20\n                                                                                                                                          PROC_CD_TYP_NM \n                                                                                                                                          and PROC_CD_TYP_CD_SK\n\nSrikanth Mettpalli               05/29/2013        5114                                                              Original Programming                                        EnterpriseWrhsDevl       Jag Yelavarthi             2013-08-11\n                                                                                                                                           (Server to Parallel Conversion)\n\nAnnotations:\nCode SK lookups for Denormalization\n\nLookup Keys:\nCD_MPPNG_SK   PROC_CD_TYP_CD_SK\nWrite DNTL_PROC_LMT Data into a Sequential file for Load Job IdsEdwDntlProcLmtDLoad.\nRead all the Data from IDS DNTL_PROC_LMT Table;\nAdd Defaults and Null Handling.\nReference Code Mapping Data for Code SK lookups\nJob Name: IdsEdwDntlProcLmtDExtr"
+}

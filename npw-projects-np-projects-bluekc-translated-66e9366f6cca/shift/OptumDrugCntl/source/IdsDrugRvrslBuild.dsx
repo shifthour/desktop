@@ -1,0 +1,1101 @@
+BEGIN HEADER
+   CharacterSet "ENGLISH"
+   ExportingTool "IBM InfoSphere DataStage Export"
+   ToolVersion "8"
+   ServerName "BCKCDSP1:31538"
+   ToolInstanceID "Integrate"
+   MDISVersion "1.0"
+   Date "2025-01-12"
+   Time "08.02.08"
+   ServerVersion "11.7"
+END HEADER
+BEGIN DSJOB
+   Identifier "IdsDrugRvrslBuild"
+   DateModified "2023-05-09"
+   TimeModified "22.26.04"
+   BEGIN DSRECORD
+      Identifier "ROOT"
+      OLEType "CJobDefn"
+      Readonly "0"
+      Name "IdsDrugRvrslBuild"
+      Description "IDS Drug adjustments - Reversal process"
+      NextID "24"
+      Container "V0"
+      FullDescription =+=+=+=
+COPYRIGHT 2005 BLUE CROSS/BLUE SHIELD OF KANSAS CITY 
+COPYRIGHT 2008 BLUE CROSS/BLUE SHIELD OF KANSAS CITY 
+
+DESCRIPTION:     Build P_CLM_RVRSL to use in IdsDrugReversal
+
+PROCESSING: build file with adjusted to and adjusted from ids for reversals to use in IdsDrugReversal. associate the reversal claim with the original claim
+
+OUTPUTS:  W_CLM_RVRSL used in IdsDrugReversal
+MODIFICATIONS:
+            BJ Luce               2005/05           originally programmed
+            Steph Goddard    2006/04/17     changed where statement to cast fill_dt to match fill_dt_sk 
+            Brent Leland        2006-04-20      Change DB2 insert to sequential file.
+                                                                Changed parameters to envrionment values.
+MODIFICATIONS:
+Developer         Date               Project/Altiris #      Change Description                                                                    Development Project          Code Reviewer           Date Reviewed
+------------------       ----------------       ------------------------      -----------------------------------------------------------------------                             --------------------------------       -------------------------------   ----------------------------       
+Sandrew          2008-10-03       3784(PBM)           Added extraction criteria to include ESI drug claims                     devlIDSnew                    Steph Goddard          10/28/2008
+KNeelam         2010-12-21        4616                    Added extraction criteria for new source MEDTRAK                    IntegrateNewDevl          Steph Goddard          12/23/2010
+KNeelam         2012-01-17        4784                    Added extraction criteria for new source BCBSSC                        IntegrateCurDevl            Brent Leland               02-09-2012
+SAndrew         2014-07-21        ServiceNowINC0107293                                                                                                                                   Kalyan Neelam          2014-09-08
+The ESI data has changed due to Anchor to F14 ESI System conversion.    The input file.field ESI_ADJ_REF_NO is mapped to the IDS.DRUG_CLM.VNDR_CLM_ID.  This used to be unquie for every claim and its finacial adjustments.   Example, f a claim was entered into ESI System, it received value of 100 for ESI_ADJ_REF_NO.   If they adjusted the claim, they would send the same claim, with same ESI_ADJ_REF_NO but the claim would have a different claim status.   Then if ESI decided to then pay the claim again (they corrected Deduct Amt, COB Amounts, the member ended up purchasing the claim after the first filled version was shelved while waiting fo rmember to pick up and then ultimiately purchased the drug, the claim data would be sent with a diffrent ESI_ADJ_REF_NO.  This is important to understand becuase the ESI_ADJ_REF_NO -> DRUG_CLM.CLM_VNDR_NO was used to tie the IDS.CLM.ESI.CLM_ID"R" of A08  back to the original claim IDS.CLM.ESI.CLM of A02 that it was to adjust.
+Now ESI is populating the  ESI_ADJ_REF_NO with the same value for every tweek to the claim.   There needed to be a business rule updates made in order to identify the origina claim, the IDS.CLM.ESI.CLM of A02, the Adjusting claim record is to negate out, the IDS.CLM.ESI.CLM_ID"R" of A08.   The criteria used to only be:
+                                                                                     UNION
+                                                                                     SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+                                                                                     FROM   #$IDSOwner#.W_DRUG_CLM ADJ,   #$IDSOwner#.DRUG_CLM        D,    #$IDSOwner#.CLM                    ORIG_CLM,  #$IDSOwner#.CLM                    ADJ_CLM,  #$IDSOwner#.CD_MPPNG       MAP1
+                                                                                     WHERE ADJ.SRC_SYS_CD = 'ESI'
+                                                                                            AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+                                                                                           AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+                                                                                           AND ADJ.CLM_SK <> D.CLM_SK
+                                                                                           AND ADJ.CLM_SK = ADJ_CLM.CLM_SK
+                                                                                           AND D.CLM_SK   = ORIG_CLM.CLM_SK
+Then it became 
+                                                                                     UNION
+                                                                                     SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+                                                                                     FROM   #$IDSOwner#.W_DRUG_CLM ADJ,   #$IDSOwner#.DRUG_CLM        D,   #$IDSOwner#.CLM                    ORIG_CLM,   #$IDSOwner#.CLM                    ADJ_CLM,   #$IDSOwner#.CD_MPPNG       MAP1
+                                                                                     WHERE ADJ.SRC_SYS_CD = 'ESI'
+                                                                                            AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+                                                                                           AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+                                                                                           AND ADJ.CLM_SK <> D.CLM_SK
+                                                                                           AND ADJ.CLM_SK = ADJ_CLM.CLM_SK
+                                                                                           AND D.CLM_SK   = ORIG_CLM.CLM_SK
+                                                                                           AND ADJ_CLM.PAYMT_REF_ID > ORIG_CLM.PAYMT_REF_ID
+                                                                                           AND ORIG_CLM.CLM_STTUS_CD_SK = MAP1.CD_MPPNG_SK
+                                                                                           AND MAP1.TRGT_CD='A02'
+                                                                                           AND ORIG_CLM.PAYMT_REF_ID = 
+                                                                                                               (SELECT MAX( MAX_CLM.PAYMT_REF_ID) 
+                                                                                                                FROM #$IDSOwner#.CLM MAX_CLM,    #$IDSOwner#.DRUG_CLM MAX_DRUG
+                                                                                                               WHERE MAX_CLM.CLM_SK = MAX_DRUG.CLM_SK
+                                                                                                                      AND MAX_DRUG.VNDR_CLM_NO =  ADJ.VNDR_CLM_NO
+                                                                                                                      AND MAX_CLM.PAYMT_REF_ID < ADJ_CLM.PAYMT_REF_ID)
+It now makes sure it looks for a paid claim with an A02 that was loaded to the system from a prior run before it looks at any A02 that was loaded as part of this batch run.   the key difference is the claims input date.
+
+
+KapoorK               2018-01-24        5828              Added Query for SAVRX                                                                   IntegrateDev2                   Kalyan Neelam                                       2018-02-26 
+KapoorK               2018-03-15        5828              Added Query for LDI                                                                         IntegrateDev2                   Jaideep Mankala                                    03/20/2018
+KapoorK               2018-09-20        5828              Added Query for CVS                                                                        IntegrateDev2                   Kalyan Neelam                                       2018-10-01
+
+Rekha Radhakrishna 2019-11-01    6131           Added Query for OPTUMRX                                                             IntegrateDev2                    KalyanNeelam                                        2019-11-20
+
+Peter Gichiri               2020 -05-27    6131          Added the filter criteria 'A09'  to the OPTUMRX SQL                        IntegrateDev2             Jaideep Mankala                            05/29/2020      
+
+Goutham Kalidindi     2020-10-22   US283560   Added Query for MEDIMPACT                                                           IntegrateDev2                    Kalyan Neelam                                       2020-11-03
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=+=+=+=
+      JobVersion "56.1.3"
+      ControlAfterSubr "1"
+      Parameters "CParameters"
+      BEGIN DSSUBRECORD
+         Name "$FilePath"
+         Prompt "IDS File Path"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Source"
+         Prompt "Source System"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSInstance"
+         Prompt "IDS Instance"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSDB"
+         Prompt "IDS Database"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSOwner"
+         Prompt "IDS Table Owner"
+         Default "$PROJDEF"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSAcct"
+         Prompt "IDS Account"
+         ParamType "0"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "$IDSPW"
+         Prompt "IDS Password"
+         ParamType "1"
+         ParamLength "0"
+         ParamScale "0"
+      END DSSUBRECORD
+      MetaBag "CMetaProperty"
+      BEGIN DSSUBRECORD
+         Owner "APT"
+         Name "AdvancedRuntimeOptions"
+         Value "#DSProjectARTOptions#"
+      END DSSUBRECORD
+      NULLIndicatorPosition "0"
+      IsTemplate "0"
+      FromTemplate "DBSourceExampleExtr"
+      NLSLocale ",,,,"
+      JobType "0"
+      Category "\\Jobs\\claim\\DrugReversal"
+      CenturyBreakYear "30"
+      NextAliasID "2"
+      ParameterFileDDName "DD00001"
+      ReservedWordCheck "1"
+      TransactionSize "0"
+      ValidationStatus "0"
+      Uploadable "0"
+      PgmCustomizationFlag "0"
+      JobReportFlag "0"
+      AllowMultipleInvocations "1"
+      Act2ActOverideDefaults "1"
+      Act2ActEnableRowBuffer "1"
+      Act2ActUseIPC "1"
+      Act2ActBufferSize "512"
+      Act2ActIPCTimeout "300"
+      ExpressionSemanticCheckFlag "0"
+      TraceOption "0"
+      EnableCacheSharing "0"
+      RuntimeColumnPropagation "0"
+      RelStagesInJobStatus "-1"
+      WebServiceEnabled "0"
+      MFProcessMetaData "0"
+      MFProcessMetaDataXMLFileExchangeMethod "0"
+      IMSProgType "0"
+      CopyLibPrefix "ARDT"
+      RecordPerformanceResults "0"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0"
+      OLEType "CContainerView"
+      Readonly "0"
+      Name "Job"
+      NextID "1"
+      IsTopLevel "0"
+      StageList "V0A5|V0A7|V0S111|V0A131|V0S132|V0A133|V23A0|V0A136"
+      StageXPos "54|33|143|68|443|374|41|60"
+      StageYPos "17|68|159|239|158|238|322|160"
+      StageTypes "ID_PALETTEJOBANNOTATION|ID_PALETTEANNOTATION|CCustomStage.CC_GUI|ID_PALETTEANNOTATION|CSeqFileStage|ID_PALETTEANNOTATION|ID_PALETTEANNOTATION|ID_PALETTEANNOTATION"
+      NextStageID "137"
+      SnapToGrid "2"
+      GridLines "0"
+      ZoomValue "80"
+      StageXSize "216|254|45|190|48|181|686|72"
+      StageYSize "43|72|47|50|48|48|173|72"
+      ContainerViewSizing "0001 0009 0805 0659 0000 0001 0000 0080"
+      StageNames " | |ids| |W_CLM_RVRSL| | | "
+      StageTypeIDs " | |DB2Connector| |CSeqFileStage| | | "
+      LinkNames " | |orig_clm_hash| | | | | "
+      LinkHasMetaDatas " | |True| | | | | "
+      LinkTypes " | |1| | | | | "
+      LinkNamePositionXs " | |244| | | | | "
+      LinkNamePositionYs " | |182| | | | | "
+      TargetStageIDs " | |V0S132| | | | | "
+      SourceStageEffectiveExecutionModes " | |0| | | | | "
+      SourceStageRuntimeExecutionModes " | |0| | | | | "
+      TargetStageEffectiveExecutionModes " | |0| | | | | "
+      TargetStageRuntimeExecutionModes " | |0| | | | | "
+      LinkIsSingleOperatorLookup " | |False| | | | | "
+      LinkIsSortSequential " | |False| | | | | "
+      LinkSortMode " | |0| | | | | "
+      LinkPartColMode " | |0| | | | | "
+      LinkSourcePinIDs " | |V0S111P5| | | | | "
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0A131"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V0A131"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText "W_DRUG_CLM table created in IdsDrugClmFkey job."
+      TextFont "MS Sans Serif\\10\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "8454143"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0A133"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V0A133"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText "Used in IdsDrugReversal"
+      TextFont "MS Sans Serif\\10\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "8454143"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0A136"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V0A136"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText "OPTUMRX added to SQL"
+      TextFont "MS Shell Dlg\\10\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "255"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0A5"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V0A5"
+      NextID "0"
+      AnnotationType "1"
+      TextFont "MS Sans Serif\\10\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "0"
+      TextColor "0"
+      BackgroundColor "8454143"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0A7"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V0A7"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText "Pull original claim and drug claim paid data for adjusted claims"
+      TextFont "MS Sans Serif\\10\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "8454143"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S111"
+      OLEType "CCustomStage"
+      Readonly "0"
+      Name "ids"
+      NextID "6"
+      OutputPins "V0S111P5"
+      StageType "DB2Connector"
+      AllowColumnMapping "0"
+      Properties "CCustomProperty"
+      BEGIN DSSUBRECORD
+         Name "VariantName"
+         Value "9.1"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "VariantLibrary"
+         Value "ccdb2"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "VariantVersion"
+         Value "1.0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SupportedVariants"
+         Value "V1;9.1::ccdb2"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SupportedVariantsLibraries"
+         Value "ccdb2"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SupportedVariantsVersions"
+         Value "1.0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "XMLConnectorDescriptor"
+         Value "<?xml version=\"1.0\"?><asc:Connector xmlns:asc=\"http://www.ibm.com\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" schemaVersion=\"1.0\" version=\"1.0\" xsi:schemaLocation=\"http://www.ibm.com ../CC_Common/XML/CC_Connector.xsd\"><MetaData><Id>DB2Connector</Id><Type>database</Type><DisplayName>DB2 Connector</DisplayName><Description><ShortVersion>IBM InfoSphere DB2 Connector</ShortVersion><LongVersion>IBM InfoSphere DB2 Connector. Use this connector to access data in DB2 tables.</LongVersion></Description><Author>IBM Corp.</Author><Vendor>IBM Corp.</Vendor><Copyright>Licensed Materials - Property of IBM (C) Copyright IBM Corp. 2005, 2011 All Rights Reserved.</Copyright><Icons><SmallVersion>[Path to small icon]</SmallVersion><LargeVersion>[Path to large icon]</LargeVersion></Icons><DependentLibraries/><ImportClasses/></MetaData><Variants><Variant><Name>9.1</Name><Library>ccdb2</Library><Version>1.0</Version></Variant></Variants><Capabilities><SupportedEngines>ee se</SupportedEngines><SupportedPlatforms><Platform level=\"XP\" mode=\"32\">windows</Platform></SupportedPlatforms><SupportedContexts>source target request</SupportedContexts><SupportedTransactionModels><Local/></SupportedTransactionModels><SupportsBrowsing>source target request</SupportsBrowsing><SupportsPartitioning>DB2 connector</SupportsPartitioning><SupportedSQLBuilderGrammars><Grammar id=\"DSPXDB2UDB71DML\" label=\"DB2 UDB 7.1 SQL syntax\"/><Grammar id=\"DSPXDB2UDB82DML\" label=\"DB2 UDB 8.2 SQL syntax\"/></SupportedSQLBuilderGrammars><Listener>none</Listener><ConnectionScope>thread</ConnectionScope><Reject><SupportedContexts>target request</SupportedContexts><RejectConditions><Error code=\"0\">SQL error</Error><Error code=\"1\">Row not updated.</Error></RejectConditions><DataElements><DataElement>ERRORCODE</DataElement><DataElement>ERRORTEXT</DataElement></DataElements></Reject><SeCapabilities><RepositoryLocation>\\Stage Types\\Server\\Database</RepositoryLocation><StageType>passive</StageType><SupportsRef>true</SupportsRef><InputLinks max=\"-1\" min=\"0\"/><OutputLinks max=\"-1\" min=\"0\"/><RejectLinks max=\"0\" min=\"0\"/><SuperIconName>DB2 UDB</SuperIconName><SuperIconDefaultPriority>90</SuperIconDefaultPriority><HelpFileName>db2conn.chm</HelpFileName></SeCapabilities><PxCapabilities><RepositoryLocation>\\Stage Types\\Parallel\\Database</RepositoryLocation><StageType>passive</StageType><SupportsRef>true</SupportsRef><InputLinks max=\"-1\" min=\"0\"/><RejectLinks max=\"-1\" min=\"0\"/><SuperIconName>DB2 UDB</SuperIconName><SuperIconDefaultPriority>90</SuperIconDefaultPriority><HelpFileName>db2conn.chm</HelpFileName><SupportedLookupTypes/></PxCapabilities></Capabilities><MetaDataImport><Connection><Property description=\"Specifies the name of the instance to use as the active instance at run time. If not specified, the value of the DB2INSTANCE environment variable is used.\" label=\"Instance\" maxLength=\"256\" minLength=\"1\" name=\"Instance\" required=\"false\" type=\"string\"/><Property callout=\"getList\" calloutDescription=\"Lists the detected databases. The value for the Instance property does not affect the databases that are detected. The list includes only the databases for the currently configured, active DB2 instance in the DB2 Connector environment.\" calloutLabel=\"Database\" calloutType=\"enumerator\" description=\"Specifies the name of the database/location to connect to.\" label=\"Database/Location\" maxLength=\"256\" minLength=\"1\" name=\"Database\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"class\">Databases</CalloutArgument></Property><Property description=\"Specifies the user name to use for connecting to the database.\" label=\"User name\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"Username\" required=\"false\" type=\"string\"/><Property description=\"Specifies the password to use for connecting to the database.\" label=\"Password\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"Password\" required=\"false\" type=\"protectedstring\"/></Connection><SchemaClasses><Class description=\"Specifies the import schema for the data collection (database table or view).\" label=\"Data collection\" name=\"DataCollection\"><Connection/><Group description=\"Specify the search criteria for the data collections that are available to import.\" label=\"Filter\" name=\"Filter\"><Property callout=\"getList\" calloutDescription=\"Select the schema where you want to look for the objects to import.\" calloutLabel=\"Choose schema\" calloutType=\"enumerator\" copyValueTo=\"/MetaDataImport/NonSchemaClasses/DataCollections/Filter/schema\" description=\"Select the database schema that is associated with the objects to import.\" label=\"Schema\" maxOccurs=\"1\" minOccurs=\"0\" name=\"schema\" required=\"false\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"class\">DataSchemas</CalloutArgument></Property><Property copyValueTo=\"/MetaDataImport/NonSchemaClasses/DataCollections/Filter/includeViews\" default=\"true\" description=\"Specify whether to include views in the list of objects to be imported.\" label=\"Include views\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeViews\" required=\"false\" type=\"bool\"/><Property copyValueTo=\"/MetaDataImport/NonSchemaClasses/DataCollections/Filter/includeTables\" default=\"true\" description=\"Specify whether to include tables in the list of objects to be imported.\" label=\"Include tables\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeTables\" required=\"false\" type=\"bool\"/><Property copyValueTo=\"/MetaDataImport/NonSchemaClasses/DataCollections/Filter/includeNicknames\" default=\"false\" description=\"Specify whether to include nicknames in the list of objects to be imported. This option requires support for federated databases.\" label=\"Include nicknames\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeNicknames\" required=\"false\" type=\"bool\"/><Property copyValueTo=\"/MetaDataImport/NonSchemaClasses/DataCollections/Filter/includeAliases\" default=\"false\" description=\"Specify whether to include aliases in the list of objects to be imported.\" label=\"Include aliases\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeAliases\" required=\"false\" type=\"bool\"/><Property copyValueTo=\"/MetaDataImport/NonSchemaClasses/DataCollections/Filter/nameFilter\" default=\"\" description=\"Specify the search expression to apply when looking for objects to be imported.\" label=\"Name search filter\" maxOccurs=\"1\" minOccurs=\"0\" name=\"nameFilter\" required=\"false\" type=\"string\"/></Group><Group description=\"Select the data collection and specify additional import options.\" label=\"Selection\" name=\"Selection\"><Property callout=\"query\" calloutDescription=\"Select a table name or a view name from the list of available data collections.\" calloutLabel=\"Choose table or view name\" calloutType=\"enumerator\" description=\"Specify the name of the table or view.\" label=\"Table or view\" maxOccurs=\"1\" minOccurs=\"1\" name=\"name\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"class\">DataCollections</CalloutArgument></Property><Property default=\"\" hidden=\"true\" maxOccurs=\"1\" minOccurs=\"0\" name=\"schema\" required=\"false\" type=\"string\"/><Property default=\"false\" description=\"Specifies that XML columns are treated as LOBs when importing table definitions.\" label=\"XML columns as LOBs\" maxOccurs=\"1\" minOccurs=\"0\" name=\"XMLColumnAsLOB\" required=\"false\" type=\"bool\"/></Group></Class><Class description=\"Import data collections\" label=\"Bulk data collections\" name=\"BulkDataCollections\"><Group description=\"Specify the filtering criteria for the list of data collections.\" label=\"Filter\" name=\"SubtypeFilter\"><Property default=\"true\" description=\"Specify whether to include tables in the list of objects to be imported.\" label=\"Include tables\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeTables\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Specify whether to include views in the list of objects to be imported.\" label=\"Include views\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeViews\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Specify whether to include nicknames in the list of objects to be imported. This option requires support for federated databases.\" label=\"Include nicknames\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeNicknames\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Specify whether to include aliases in the list of objects to be imported.\" label=\"Include aliases\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeAliases\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Specifies that XML columns are treated as LOBs when importing table definitions.\" label=\"XML columns as LOBs\" maxOccurs=\"1\" minOccurs=\"0\" name=\"importXmlAsLob\" required=\"false\" type=\"bool\"/></Group></Class></SchemaClasses><NonSchemaClasses><Class description=\"Import database information.\" label=\"Database\" name=\"Database\"><Connection/><Attributes><Attribute>vendor</Attribute><Attribute>version</Attribute><Attribute>DBMS</Attribute><Attribute>path</Attribute><Attribute>server</Attribute><Attribute>host</Attribute><Attribute>description</Attribute></Attributes></Class><Class description=\"Import a list of schemas that are defined in the database.\" label=\"Schemas\" name=\"DataSchemas\"><Connection/><Attributes><Attribute>isSystem</Attribute></Attributes></Class><Class description=\"Import a list of data collections that are in the database.\" label=\"Data collections\" name=\"DataCollections\"><Connection/><Attributes><Attribute>schema</Attribute><Attribute>nameQualifier</Attribute><Attribute>subType</Attribute><Attribute>isView</Attribute><Attribute>viewExpression</Attribute><Attribute>nameQuotingChar</Attribute><Attribute>isSystem</Attribute><Attribute>description</Attribute></Attributes><Group description=\"Filter\" label=\"Filter\" name=\"Filter\"><Property default=\"\" description=\"Select the database schema that is associated with the objects to import.\" label=\"Schema\" maxOccurs=\"1\" minOccurs=\"0\" name=\"schema\" required=\"false\" type=\"string\"/><Property default=\"true\" description=\"Specify whether to include views in the list of objects to be imported.\" label=\"Include views\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeViews\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Specify whether to include tables in the list of objects to be imported.\" label=\"Include tables\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeTables\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"Specify whether to include nicknames in the list of objects to be imported. This option requires support for federated databases.\" label=\"Include nicknames\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeNicknames\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"Specify whether to include aliases in the list of objects to be imported.\" label=\"Include aliases\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeAliases\" required=\"false\" type=\"bool\"/><Property default=\"\" description=\"Specify the search expression to apply when looking for objects to be imported.\" label=\"Name search filter\" maxOccurs=\"1\" minOccurs=\"0\" name=\"nameFilter\" required=\"false\" type=\"string\"/></Group></Class><Class description=\"Related data collections\" label=\"Related data collections\" name=\"RelatedDataCollections\"><Connection/><Group description=\"Specify the search criteria for the data collection for which the list of related data collections is imported.\" label=\"Filter\" name=\"Filter\"><Property callout=\"query\" calloutDescription=\"Select a table name or a view name from the list of available data collections.\" calloutLabel=\"Choose table or view name\" calloutType=\"enumerator\" description=\"Specify the name of the table or view.\" label=\"Table or view\" maxOccurs=\"1\" minOccurs=\"1\" name=\"name\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"class\">DataCollections</CalloutArgument></Property><Property default=\"\" hidden=\"true\" maxOccurs=\"1\" minOccurs=\"0\" name=\"schema\" required=\"false\" type=\"string\"/><Property default=\"true\" description=\"Specify whether to include parent data collections in the list of related data collections.\" label=\"Include parent data collections\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeParents\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Specify whether to include child data collections in the list of related data collections.\" label=\"Include child data collections\" maxOccurs=\"1\" minOccurs=\"0\" name=\"includeChildren\" required=\"false\" type=\"bool\"/></Group></Class><Class description=\"Databases\" label=\"Databases\" name=\"Databases\"><Attributes><Attribute>description</Attribute></Attributes></Class><Class description=\"Import a list of users in the database.\" label=\"Users\" name=\"Users\"><Connection/></Class><Class description=\"Import a list of zOS Databases that are defined in the Location.\" label=\"zOSDatabases\" name=\"zOSDatabases\"><Connection/></Class><Class description=\"Identify if its a zOS database.\" label=\"isZOS\" name=\"isZOS\"><Connection/></Class></NonSchemaClasses></MetaDataImport><Properties><Connection><Property description=\"Specifies the name of the instance to use as the active instance at run time. If not specified, the value of the DB2INSTANCE environment variable is used.\" label=\"Instance\" maxLength=\"256\" minLength=\"1\" name=\"Instance\" required=\"false\" transactionModels=\"local\" type=\"string\"/><Property callout=\"getList\" calloutDescription=\"Lists the detected databases. The value for the Instance property does not affect the databases that are detected. The list includes only the databases for the currently configured, active DB2 instance in the DB2 Connector environment.\" calloutLabel=\"Database\" calloutType=\"enumerator\" description=\"Specifies the name of the database/location to connect to.\" label=\"Database/Location\" maxLength=\"256\" minLength=\"1\" name=\"Database\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"class\">Databases</CalloutArgument></Property><Property description=\"Specifies the user name to use for connecting to the database.\" label=\"User name\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"Username\" required=\"false\" transactionModels=\"local\" type=\"string\"/><Property description=\"Specifies the password to use for connecting to the database.\" label=\"Password\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"Password\" required=\"false\" transactionModels=\"local\" type=\"protectedstring\"/><Property description=\"Specifies the full path to the DB2 client library file. If not specified, the system default library name for the currently configured DB2 environment is used.\" label=\"DB2 client library file\" maxLength=\"256\" minLength=\"1\" name=\"DB2ClientLibFile\" required=\"false\" transactionModels=\"local\" type=\"string\"/><Property default=\"false\" description=\"Select this option if you want to provide alternate connection settings to use on the conductor node. The stage is configured to run in parallel mode.\" engines=\"ee\" filterChildPropertiesOnValue=\"true\" label=\"Alternate conductor settings\" name=\"Conductor\" required=\"false\" type=\"bool\"><Property description=\"Specifies the name of the instance to use as active instance for running parallel jobs and on the conductor node. If not specified, the value of the DB2INSTANCE environment variable on the conductor node is used. You must specify the same value for this property in all of the DB2 Connector stages in the job.\" label=\"Instance\" maxLength=\"256\" minLength=\"1\" name=\"Instance\" required=\"false\" transactionModels=\"local\" type=\"string\"/><Property callout=\"getList\" calloutDescription=\"Lists the detected databases. The value for the Instance property does not affect the databases that are detected. The list includes only the databases for the currently configured, active DB2 instance in the DB2 Connector environment.\" calloutLabel=\"Database\" calloutType=\"enumerator\" description=\"Specifies the name of the database/location to connect to for running parallel jobs and on the conductor node. If not specified, the default database/location for the active instance on the conductor node is used (specified through the DB2DBDFT DB2 registry variable).\" label=\"Database/Location\" maxLength=\"256\" minLength=\"1\" name=\"Database\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"class\">Databases</CalloutArgument></Property><Property description=\"Specifies the user name to use for connecting to the database for running parallel jobs and on the conductor node.\" label=\"User name\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"Username\" required=\"false\" type=\"string\"/><Property description=\"Specifies the password to use for connecting to the database for running parallel jobs and on the conductor node.\" label=\"Password\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"Password\" required=\"false\" type=\"protectedstring\"/><Property description=\"Specifies the full path to the DB2 client library file on the conductor node. If not specified, the system default library name for the currently configured DB2 environment is used.\" label=\"DB2 client library file\" maxLength=\"256\" minLength=\"1\" name=\"DB2ClientLibFile\" required=\"false\" transactionModels=\"local\" type=\"string\"/></Property><Property default=\"false\" description=\"Setting this property to Yes causes the connector player processes to use a modified Database name property. Using this property requires advanced configuration of the DB2 client. See the connector documentation for more information.\" engines=\"ee\" label=\"Use direct connections\" maxOccurs=\"1\" minOccurs=\"1\" name=\"UseDirectConnections\" required=\"false\" transactionModels=\"local\" type=\"bool\"/><Property default=\"true\" description=\"Setting this property to No causes the connector conductor process to disconnect from the database while player processes run. The conductor reconnects when the player processes are complete. Setting this property to Yes causes the connector conductor process to remain connected for the duration of the job.\" engines=\"ee\" label=\"Keep conductor connection alive\" maxOccurs=\"1\" minOccurs=\"1\" name=\"KeepConductorConnectionAlive\" required=\"false\" transactionModels=\"local\" type=\"bool\"/></Connection><Usage><Property contexts=\"all\" default=\"false\" description=\"Specifies whether the job has been migrated or not\" hidden=\"true\" label=\"Migrated Job\" maxOccurs=\"1\" minOccurs=\"1\" name=\"MigratedJob\" required=\"false\" type=\"bool\"/><Property contexts=\"target\" default=\"0\" description=\"The mode to be used when writing to a database table\" label=\"Write mode\" maxOccurs=\"1\" minOccurs=\"1\" name=\"WriteMode\" required=\"true\" type=\"int\"><Value code=\"0\">Insert</Value><Value code=\"8\">Insert new rows only</Value><Value code=\"1\">Update</Value><Value code=\"2\">Delete</Value><Value code=\"3\">Insert then update</Value><Value code=\"4\">Update then insert</Value><Value code=\"5\">Delete then insert</Value><Value code=\"6\" transactionModels=\"local\">Bulk load</Value><Value code=\"7\">User-defined SQL</Value></Property><Property contexts=\"all\" default=\"false\" description=\"Specifies whether to generate SQL statements at run time.\" filterContexts=\"target\" filterProperty=\"/Usage/WriteMode\" filterValue=\"0 1 2 3 4 5 8\" label=\"Generate SQL\" maxOccurs=\"1\" minOccurs=\"0\" name=\"GenerateSQL\" required=\"false\" type=\"bool\"/><Property contexts=\"all\" description=\"The table name to be used in generated SQL\" label=\"Table name\" maxOccurs=\"1\" minOccurs=\"1\" name=\"TableName\" required=\"true\" type=\"string\"><Filter logic=\"or\"><FilterProperty logic=\"or\" property=\"/Usage/WriteMode\">6</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/TableAction\">1 2 3</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/GenerateSQL\">true</FilterProperty></Filter></Property><Property contexts=\"all\" default=\"false\" description=\"Specifies whether or not to enclose database object names in quotes when generating DDL and DML\" label=\"Enable quoted identifiers\" maxOccurs=\"1\" minOccurs=\"1\" name=\"EnableQuotedIDs\" required=\"false\" type=\"bool\"/><Property contexts=\"all\" default=\"false\" description=\"Specifies whether XML columns are treated as LOBs.\" hidden=\"true\" label=\"XML column as LOB\" maxOccurs=\"1\" minOccurs=\"1\" name=\"XMLColumnAsLOB\" required=\"false\" type=\"bool\"/><Property contexts=\"all\" default=\"EXPR\" description=\"Specifies the prefix for columns that contain the result of expressions.\" label=\"Prefix for expression columns\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"PrefixForExpressionColumns\" required=\"true\" type=\"string\"/><Property description=\"SQL statement properties\" label=\"SQL\" maxOccurs=\"1\" minOccurs=\"0\" name=\"SQL\" required=\"false\" type=\"category\"><Property calloutFilterProperty=\"/Usage/SQL/SelectStatement/ReadFromFileSelect\" calloutFilterValue=\"1\" contexts=\"source request\" description=\"Statement to be executed when reading rows from the database or the fully qualified name of the file that contains the statement.\" label=\"Select statement\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"true\" name=\"SelectStatement\" required=\"true\" sqlBuilderDescription=\"Select a SQL statement tool\" sqlBuilderLabel=\"Tools\" statementType=\"SELECT\" type=\"string\" xsi:type=\"asc:SQLBuilderProperty\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/GenerateSQL\">false</FilterProperty></Filter><Callouts><Callout callout=\"generateSQL\" calloutFilterProperty=\"/Usage/SQL/SelectStatement/ReadFromFileSelect\" calloutFilterValue=\"1\" calloutLabel=\"Generate SQL statement\" calloutType=\"builder\"><CalloutArgument name=\"statementType\">SelectStatementSQL</CalloutArgument></Callout><Callout callout=\"validateSQL\" calloutFilterProperty=\"/Usage/SQL/SelectStatement/ReadFromFileSelect\" calloutFilterValue=\"1\" calloutLabel=\"Validate SQL statement\" calloutType=\"validator\"/></Callouts><Property contexts=\"source request\" default=\"false\" description=\"Select YES to read the SELECT statement from the file that is specified in the SELECT statement property.\" label=\"Read select statement from file\" maxOccurs=\"1\" minOccurs=\"1\" name=\"ReadFromFileSelect\" required=\"false\" type=\"bool\"/><Property description=\"List of tables used in the statement\" hidden=\"true\" label=\"Table list\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Tables\" required=\"false\" type=\"category\"><Property description=\"Name of a table used in the statement\" label=\"Table name\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Table\" required=\"false\" type=\"string\"/></Property><Property description=\"List of statement parameters\" hidden=\"true\" label=\"Parameter list\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Parameters\" required=\"false\" type=\"category\"><Property description=\"Statement parameter represented as a comma delimited triplet containing ORCHESTRATE variable name, corresponding field name, and table name\" label=\"Parameter\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Parameter\" required=\"false\" type=\"string\"/></Property><Property description=\"Select statement columns\" hidden=\"true\" label=\"Select statement columns\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Columns\" required=\"false\" type=\"category\"><Property description=\"Select statement column\" label=\"Select statement column\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Column\" required=\"false\" type=\"string\"/></Property><Property description=\"The where clause predicate of the SQL statement\" hidden=\"true\" label=\"Where clause\" maxOccurs=\"1\" minOccurs=\"0\" name=\"WhereClause\" required=\"false\" type=\"string\"/><Property description=\"The other clause predicate of the SQL statement\" hidden=\"true\" label=\"Other clause\" maxOccurs=\"1\" minOccurs=\"0\" name=\"OtherClause\" required=\"false\" type=\"string\"/></Property><Property contexts=\"target\" description=\"Statement to be executed when inserting rows into the database\" label=\"Insert statement\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"true\" name=\"InsertStatement\" required=\"true\" sqlBuilderDescription=\"Select a SQL statement tool\" sqlBuilderLabel=\"Tools\" statementType=\"INSERT\" type=\"string\" xsi:type=\"asc:SQLBuilderProperty\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/GenerateSQL\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/WriteMode\">0 3 4 5 8</FilterProperty></Filter><Callouts><Callout callout=\"generateSQL\" calloutLabel=\"Generate SQL statement\" calloutType=\"builder\"><CalloutArgument name=\"statementType\">InsertStatementSQL</CalloutArgument></Callout><Callout callout=\"validateSQL\" calloutLabel=\"Validate SQL statement\" calloutType=\"validator\"/></Callouts><Property description=\"Statement to be executed when inserting rows into the database\" hidden=\"true\" label=\"Insert statement\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Tables\" required=\"false\" type=\"category\"><Property description=\"Statement to be executed when inserting rows into the database\" label=\"Insert statement\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Table\" required=\"false\" type=\"string\"/></Property><Property description=\"List of statement parameters\" hidden=\"true\" label=\"Parameter list\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Parameters\" required=\"false\" type=\"category\"><Property description=\"Statement parameter represented as a comma delimited triplet containing ORCHESTRATE variable name, corresponding field name, and table name\" label=\"Parameter\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Parameter\" required=\"false\" type=\"string\"/></Property><Property description=\"Statement to be executed when inserting rows into the database\" hidden=\"true\" label=\"Insert statement\" maxOccurs=\"1\" minOccurs=\"0\" name=\"WhereClause\" required=\"false\" type=\"string\"/></Property><Property contexts=\"target\" description=\"Statement to be executed when updating rows in the database\" label=\"Update statement\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"true\" name=\"UpdateStatement\" required=\"true\" sqlBuilderDescription=\"Select a SQL statement tool\" sqlBuilderLabel=\"Tools\" statementType=\"UPDATE\" type=\"string\" xsi:type=\"asc:SQLBuilderProperty\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/GenerateSQL\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/WriteMode\">1 3 4</FilterProperty></Filter><Callouts><Callout callout=\"generateSQL\" calloutLabel=\"Generate SQL statement\" calloutType=\"builder\"><CalloutArgument name=\"statementType\">UpdateStatementSQL</CalloutArgument></Callout><Callout callout=\"validateSQL\" calloutLabel=\"Validate SQL statement\" calloutType=\"validator\"/></Callouts><Property description=\"Statement to be executed when updating rows in the database\" hidden=\"true\" label=\"Update statement\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Tables\" required=\"false\" type=\"category\"><Property description=\"Statement to be executed when updating rows in the database\" label=\"Update statement\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Table\" required=\"false\" type=\"string\"/></Property><Property description=\"List of statement parameters\" hidden=\"true\" label=\"Parameter list\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Parameters\" required=\"false\" type=\"category\"><Property description=\"Statement parameter represented as a comma delimited triplet containing ORCHESTRATE variable name, corresponding field name, and table name\" label=\"Parameter\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Parameter\" required=\"false\" type=\"string\"/></Property><Property description=\"Statement to be executed when updating rows in the database\" hidden=\"true\" label=\"Update statement\" maxOccurs=\"1\" minOccurs=\"0\" name=\"WhereClause\" required=\"false\" type=\"string\"/></Property><Property contexts=\"target\" description=\"Statement to be executed when deleting rows from the database\" label=\"Delete statement\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"true\" name=\"DeleteStatement\" required=\"true\" sqlBuilderDescription=\"Select a SQL statement tool\" sqlBuilderLabel=\"Tools\" statementType=\"DELETE\" type=\"string\" xsi:type=\"asc:SQLBuilderProperty\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/GenerateSQL\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/WriteMode\">2 5</FilterProperty></Filter><Callouts><Callout callout=\"generateSQL\" calloutLabel=\"Generate SQL statement\" calloutType=\"builder\"><CalloutArgument name=\"statementType\">DeleteStatementSQL</CalloutArgument></Callout><Callout callout=\"validateSQL\" calloutLabel=\"Validate SQL statement\" calloutType=\"validator\"/></Callouts><Property description=\"Statement to be executed when deleting rows from the database\" hidden=\"true\" label=\"Delete statement\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Tables\" required=\"false\" type=\"category\"><Property description=\"Statement to be executed when deleting rows from the database\" label=\"Delete statement\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Table\" required=\"false\" type=\"string\"/></Property><Property description=\"List of statement parameters\" hidden=\"true\" label=\"Parameter list\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Parameters\" required=\"false\" type=\"category\"><Property description=\"Statement parameter represented as a comma delimited triplet containing ORCHESTRATE variable name, corresponding field name, and table name\" label=\"Parameter\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Parameter\" required=\"false\" type=\"string\"/></Property><Property description=\"Statement to be executed when deleting rows from the database\" hidden=\"true\" label=\"Delete statement\" maxOccurs=\"1\" minOccurs=\"0\" name=\"WhereClause\" required=\"false\" type=\"string\"/></Property><Property contexts=\"target\" default=\"1\" description=\"Source of the user-defined SQL statements\" filterProperty=\"/Usage/WriteMode\" filterValue=\"7\" label=\"User-defined SQL\" maxOccurs=\"1\" minOccurs=\"1\" name=\"UserDefinedSQL\" required=\"true\" type=\"int\"><Value code=\"1\">Statements</Value><Value code=\"2\">File</Value><Property description=\"SQL statements to be executed for each input row\" filterProperty=\"/Usage/SQL/UserDefinedSQL\" filterValue=\"1\" label=\"Statements\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"true\" name=\"Statements\" required=\"true\" type=\"string\"/><Property description=\"File on the conductor node that contains SQL statements to be executed for each input row\" filterProperty=\"/Usage/SQL/UserDefinedSQL\" filterValue=\"2\" label=\"File\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"1\" name=\"File\" required=\"true\" type=\"string\"><Property description=\"IANA character set name\" label=\"Character set\" maxLength=\"256\" maxOccurs=\"1\" minLength=\"1\" minOccurs=\"0\" name=\"CharacterSet\" required=\"false\" type=\"string\"/></Property><Property default=\"true\" description=\"Abort the statement sequence when an error occurs\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"Do not abort the job when a DB2 Warning is encountered, report as an information messsage.\" label=\"Treat warnings as info\" maxOccurs=\"1\" minOccurs=\"0\" name=\"SuppressWarnings\" required=\"false\" type=\"bool\"/></Property><Property contexts=\"source\" default=\"false\" description=\"Enable or disable partitioned reads by using the selected partitioning method.\" engines=\"ee\" filterChildPropertiesOnValue=\"true\" label=\"Enable partitioned reads\" name=\"EnablePartitioning\" required=\"false\" type=\"bool\"><Property contexts=\"source\" default=\"1\" description=\"The method to use for partitioned reads.\" label=\"Partitioned reads method\" name=\"PartitioningMethod\" required=\"false\" type=\"int\"><Value code=\"0\" filterProperty=\"/Connection/UseDirectConnections\" filterValue=\"0\">Modulus</Value><Value code=\"1\" filterProperty=\"/Connection/UseDirectConnections\" filterValue=\"0\">Minimum and maximum range</Value><Value code=\"2\">DB2 connector</Value><Property description=\"Specifies the table that is used by the selected partitioned reads method.\" filterProperty=\"/Usage/SQL/EnablePartitioning/PartitioningMethod\" filterValue=\"1 2\" label=\"Table name\" name=\"TableName\" required=\"true\" type=\"string\"/><Property description=\"Specifies the key column that is used by the selected partitioned reads method. This column must a numeric data type.\" filterProperty=\"/Usage/SQL/EnablePartitioning/PartitioningMethod\" filterValue=\"0 1\" label=\"Column name\" maxLength=\"256\" minLength=\"1\" name=\"KeyField\" required=\"true\" type=\"string\"/><Property default=\"true\" description=\"Specifies whether the connector should modify the SELECT statement at run-time and generate the required partitioning clause\" label=\"Generate partitioning SQL\" maxOccurs=\"1\" minOccurs=\"0\" name=\"GenPartitioningSQL\" required=\"false\" type=\"bool\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/SQL/EnablePartitioning/PartitioningMethod\">2</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/GenerateSQL\">false</FilterProperty></Filter></Property></Property></Property></Property><Property contexts=\"target\" default=\"0\" description=\"Select the action to perform on the database table\" label=\"Table action\" maxOccurs=\"1\" minOccurs=\"0\" name=\"TableAction\" required=\"true\" type=\"int\"><Value code=\"0\">Append</Value><Value code=\"1\">Create</Value><Value code=\"2\">Replace</Value><Value code=\"3\">Truncate</Value><Property contexts=\"target\" default=\"true\" description=\"Specifies whether to generate a create table statement at runtime\" filterProperty=\"/Usage/TableAction\" filterValue=\"1 2\" label=\"Generate create statement at runtime\" maxOccurs=\"1\" name=\"GenerateCreateStatement\" required=\"false\" type=\"bool\"><Property default=\"true\" description=\"Abort the job if there is an error executing a command\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/><Property callout=\"generateSQL\" calloutDescription=\"Generate a create table statement\" calloutLabel=\"Generate\" calloutRequiresConnection=\"true\" calloutType=\"builder\" contexts=\"target\" default=\"\" description=\"A statement to be executed when creating the target database table\" filterProperty=\"/Usage/TableAction/GenerateCreateStatement\" filterValue=\"false\" label=\"Create statement\" maxOccurs=\"1\" minOccurs=\"0\" multiline=\"true\" name=\"CreateStatement\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"statementType\">CreateTableSQL</CalloutArgument></Property></Property><Property contexts=\"target\" default=\"true\" description=\"Specifies whether to generate a drop table statement at runtime\" filterProperty=\"/Usage/TableAction\" filterValue=\"2\" label=\"Generate drop statement at runtime\" maxOccurs=\"1\" minOccurs=\"0\" name=\"GenerateDropStatement\" required=\"false\" type=\"bool\"><Property default=\"false\" description=\"Abort the job if there is an error executing a command\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/><Property callout=\"generateSQL\" calloutDescription=\"Generate a drop table statement\" calloutLabel=\"Generate\" calloutType=\"builder\" contexts=\"target\" default=\"\" description=\"A statement to be executed when dropping the target database table\" filterProperty=\"/Usage/TableAction/GenerateDropStatement\" filterValue=\"false\" label=\"Drop statement\" maxOccurs=\"1\" minOccurs=\"0\" multiline=\"true\" name=\"DropStatement\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"statementType\">DropTableSQL</CalloutArgument></Property></Property><Property contexts=\"target\" default=\"true\" description=\"Specifies whether to generate a truncate table statement at runtime\" filterProperty=\"/Usage/TableAction\" filterValue=\"3\" label=\"Generate truncate statement at runtime\" maxOccurs=\"1\" name=\"GenerateTruncateStatement\" required=\"false\" type=\"bool\"><Property default=\"true\" description=\"Abort the job if there is an error executing a command\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/><Property callout=\"generateSQL\" calloutDescription=\"Generate a truncate table statement\" calloutLabel=\"Generate\" calloutRequiresConnection=\"true\" calloutType=\"builder\" contexts=\"target\" default=\"\" description=\"A statement to be executed when truncating the database table\" filterProperty=\"/Usage/TableAction/GenerateTruncateStatement\" filterValue=\"false\" label=\"Truncate statement\" maxOccurs=\"1\" minOccurs=\"0\" multiline=\"true\" name=\"TruncateStatement\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"statementType\">TruncateTableSQL</CalloutArgument></Property></Property></Property><Property description=\"Transaction properties\" inputLinkCountConstraint=\"single\" label=\"Transaction\" name=\"Transaction\" transactionModels=\"local\" type=\"category\"><Property default=\"2000\" description=\"Number of records per transaction. The value 0 means all available records\" inputLinkCountConstraint=\"single\" label=\"Record count\" maxValue=\"999999999\" minValue=\"0\" name=\"RecordCount\" required=\"false\" transactionModels=\"local\" type=\"int\"/><Property contexts=\"target\" default=\"0\" description=\"Specify the amount of time to pass before a commit is issued. If you set a small value you force frequent commits and therefore if your program terminates unexpectedly, your table can still contain partial results. However, you may pay a performance penalty because of the high frequency of commits. If you set a large value, DB2 must log a correspondingly large amount of rollback information which may also slow your job.\" filterProperty=\"/Usage/WriteMode\" filterValue=\"2 3 4\" label=\"Time Commit Interval\" maxOccurs=\"1\" minOccurs=\"1\" minValue=\"0\" name=\"TimeInterval\" required=\"false\" type=\"int\"/><Property contexts=\"source request\" default=\"0\" description=\"Specify settings for the end of wave handling. None means EOW markers are never inserted, Before means EOW markers are inserted before committing the transaction, After means EOW markers are inserted after committing the transaction\" engines=\"ee\" filterChildPropertiesOnValue=\"1 2\" label=\"End of wave\" name=\"EndOfWave\" required=\"false\" type=\"int\"><Value code=\"0\">None</Value><Value code=\"1\">Before</Value><Value code=\"2\">After</Value><Property default=\"false\" description=\"Specifies whether to insert an EOW marker for the last set of records when the number is less than the specified transaction record count value\" label=\"End of data\" name=\"EndOfData\" required=\"false\" type=\"bool\"/></Property></Property><Property default=\"false\" description=\"Transaction grouping allows operations on multiple links to be executed within a single transaction.\" engines=\"se\" inputLinkCountConstraint=\"multiple\" label=\"Enable transaction grouping\" maxOccurs=\"1\" minOccurs=\"0\" name=\"EnableTransactionGrouping\" required=\"false\" scope=\"stage\" specialFilter=\"1\" type=\"bool\"/><Property contexts=\"target\" description=\"Transaction grouping settings\" engines=\"se\" inputLinkCountConstraint=\"multiple\" label=\"Transaction grouping\" maxOccurs=\"1\" minOccurs=\"0\" name=\"TransactionGrouping\" required=\"false\" scope=\"link\" specialFilter=\"1\" type=\"category\"><Property default=\"0\" description=\"The action to be taken when a link is skipped\" label=\"Action on skip\" maxOccurs=\"1\" minOccurs=\"0\" name=\"ActionOnSkip\" required=\"false\" type=\"int\"><Value code=\"0\">Continue</Value><Value code=\"1\">Rollback</Value></Property><Property default=\"1\" description=\"The action to be taken when a failure occurs on a link\" label=\"Action on failure\" maxOccurs=\"1\" minOccurs=\"0\" name=\"ActionOnFailure\" required=\"false\" type=\"int\"><Value code=\"0\">Continue</Value><Value code=\"1\">Rollback</Value></Property></Property><Property description=\"Session properties\" label=\"Session\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Session\" required=\"false\" scope=\"all\" type=\"category\"><Property default=\"1\" description=\"Specifies the isolation level that is used for all database transactions.\" label=\"Isolation level\" maxOccurs=\"1\" minOccurs=\"0\" name=\"IsolationLevel\" required=\"true\" scope=\"stage\" transactionModels=\"local\" type=\"int\"><Value code=\"0\">Read uncommitted</Value><Value code=\"1\">Cursor stability</Value><Value code=\"2\">Read stability</Value><Value code=\"3\">Repeatable read</Value></Property><Property default=\"0\" description=\"Specifies whether the connector commits transactions manually, or allows the database to commit transactions automatically at its discretion.\" label=\"Auto commit mode\" maxOccurs=\"1\" minOccurs=\"0\" name=\"AutocommitMode\" required=\"false\" scope=\"stage\" transactionModels=\"local\" type=\"int\"><Value code=\"0\">Off</Value><Value code=\"1\">On</Value></Property><Property default=\"2000\" description=\"The array size to be used for all read and write database operations\" label=\"Array size\" maxOccurs=\"1\" minOccurs=\"0\" minValue=\"1\" name=\"ArraySize\" required=\"false\" type=\"int\"/><Property description=\"Properties that affect schema reconciliation\" label=\"Schema reconciliation\" maxOccurs=\"1\" minOccurs=\"0\" name=\"SchemaReconciliation\" required=\"false\" type=\"category\"><Property default=\"true\" description=\"Fail if the sizes of numeric and string fields are not compatible when validating the design schema against the database\" label=\"Fail on size mismatch\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnSizeMismatch\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Fail if the types of fields are not compatible when validating the design schema against the database\" label=\"Fail on type mismatch\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnTypeMismatch\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"Fail if the code pages of fields are not compatible when validating the design schema against the database\" hidden=\"true\" label=\"Fail on code page mismatch\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnCodePageMismatch\" required=\"false\" type=\"bool\"/><Property contexts=\"target\" default=\"true\" description=\"Drop fields that don't exist in the input schema\" label=\"Drop unmatched fields\" maxOccurs=\"1\" minOccurs=\"0\" name=\"DropUnmatchedFields\" required=\"false\" type=\"bool\"/></Property><Property contexts=\"target\" default=\"true\" description=\"Fail the job if a write operation to the target is unsuccessful\" engines=\"ee\" filterForRejectLinks=\"absent\" filterProperty=\"/Usage/WriteMode\" filterValue=\"0 1 2 3 4 5 7 8\" label=\"Fail on row error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnRowErrorPX\" required=\"false\" type=\"bool\"/><Property contexts=\"target\" default=\"false\" description=\"Fail the job if a write operation to the target is unsuccessful\" engines=\"se\" filterProperty=\"/Usage/WriteMode\" filterValue=\"0 1 2 3 4 5 7 8\" label=\"Fail on row error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnRowErrorSE\" required=\"false\" type=\"bool\"/><Property contexts=\"source request\" default=\"false\" description=\"Enables/disables the ability to specify LOB columns to be passed using locator (reference) information. LOB columns not specified will be passed inline\" filterChildPropertiesOnValue=\"true\" label=\"Enable LOB references\" name=\"PassLobLocator\" required=\"false\" type=\"bool\"><Property callout=\"lobCandidateColumns\" calloutDescription=\"Choose columns containing LOBs to be passed by reference (locator). Columns that are not selected will be passed inline\" calloutLabel=\"Available columns\" calloutType=\"builder\" default=\"\" description=\"Use to choose columns containing LOBs to be passed by locator (reference)\" label=\"Columns\" maxOccurs=\"unbounded\" minOccurs=\"0\" name=\"Column\" required=\"true\" type=\"string\" xsi:type=\"asc:CalloutProperty\"/></Property><Property contexts=\"request\" default=\"0\" description=\"Specifies the type of message logged when the lookup query returns more than one match for a set of keys\" engines=\"se\" label=\"Log multiple matches\" name=\"LogMultipleMatches\" required=\"false\" type=\"int\"><Value code=\"0\">None</Value><Value code=\"1\">Informational</Value><Value code=\"2\">Warning</Value><Value code=\"3\">Fatal</Value></Property><Property contexts=\"target\" default=\"0\" description=\"Specifies whether to enable the insert buffering optimization in partitioned database environments.\" filterProperty=\"/Usage/WriteMode\" filterValue=\"0\" label=\"Insert buffering\" name=\"InsertBuffering\" required=\"false\" type=\"int\"><Value code=\"0\">Default</Value><Value code=\"1\">Off</Value><Value code=\"2\">On</Value><Value code=\"3\">Ignore duplicates</Value><Property contexts=\"target\" default=\"0\" description=\"Specifies whether arrays should be inserted atomically.  Insert buffering with non-atomic arrays does not report errors accurately.\" filterProperty=\"/Usage/Session/InsertBuffering\" filterValue=\"0 2 3\" label=\"Atomic arrays\" name=\"AtomicArrays\" required=\"false\" type=\"int\"><Value code=\"0\">Auto</Value><Value code=\"1\">No</Value><Value code=\"2\">Yes</Value><Value code=\"3\">Simulated</Value></Property></Property></Property><Property contexts=\"target\" description=\"Properties that affect logging\" filterProperty=\"/Usage/WriteMode\" filterValue=\"0 1 2 3 4 5 7 8\" label=\"Logging\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Logging\" required=\"false\" type=\"category\"><Property default=\"false\" description=\"Specifies whether to log column values for the first row that fails to be written\" filterChildPropertiesOnValue=\"true\" label=\"Log column values on first row error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"LogColumnValues\" required=\"false\" type=\"bool\"><Property default=\"false\" description=\"Specifies whether to log key columns or all columns for failing statements\" label=\"Log key values only\" maxOccurs=\"1\" minOccurs=\"0\" name=\"LogKeysOnly\" required=\"false\" type=\"bool\"/><Property default=\"0\" description=\"Specifies the delimiter to use between columns\" label=\"Column delimiter\" maxOccurs=\"1\" minOccurs=\"0\" name=\"Delimiter\" required=\"false\" type=\"int\"><Value code=\"0\">Space</Value><Value code=\"1\">Newline</Value><Value code=\"2\">Tab</Value><Value code=\"3\">Comma</Value></Property></Property></Property><Property default=\"false\" description=\"Before/After SQL properties\" filterChildPropertiesOnValue=\"true\" label=\"Before/After SQL\" maxOccurs=\"1\" minOccurs=\"0\" name=\"BeforeAfter\" required=\"false\" type=\"bool\"><Property default=\"\" description=\"Enter the SQL statement or the fully-qualified name of the file that contains the SQL statement to run once before any data is processed.\" label=\"Before SQL\" maxOccurs=\"1\" minOccurs=\"0\" multiline=\"true\" name=\"before\" required=\"false\" type=\"string\"><Property default=\"false\" description=\"Select Yes to read the SQL statement from the file that is specified in the Before SQL statement property.\" label=\"Read Before SQL statement from file\" maxOccurs=\"1\" minOccurs=\"1\" name=\"ReadFromFileBeforeSQL\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Abort the job if there is an error executing a command\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/></Property><Property default=\"\" description=\"Enter the SQL statement or the fully-qualified name of the file that contains the SQL statement to run once after all data is processed.\" label=\"After SQL\" maxOccurs=\"1\" minOccurs=\"0\" multiline=\"true\" name=\"after\" required=\"false\" type=\"string\"><Property default=\"false\" description=\"Select Yes to read the SQL statement from the file that is specified in the After SQL statement property.\" label=\"Read After SQL statement from file\" maxOccurs=\"1\" minOccurs=\"1\" name=\"ReadFromFileAfterSQL\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Abort the job if there is an error executing a command\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/></Property><Property default=\"\" description=\"Enter the SQL statement or the fully-qualified name of the file that contains the SQL statement to run once on each node before any data is processed on that node.\" engines=\"ee\" label=\"Before SQL (node)\" maxOccurs=\"1\" minOccurs=\"0\" multiline=\"true\" name=\"beforeNode\" required=\"false\" type=\"string\"><Property default=\"false\" description=\"Select Yes to read the SQL statement from the file that is specified in the Before SQL (node) statement property.\" label=\"Read Before SQL (node) statement from file\" maxOccurs=\"1\" minOccurs=\"1\" name=\"ReadFromFileBeforeSQLNode\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Abort the job if there is an error executing a command\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/></Property><Property default=\"\" description=\"Enter the SQL statement or the fully-qualified name of the file that contains the SQL statement to run once one each node after all data is processed on that node.\" engines=\"ee\" label=\"After SQL (node)\" maxOccurs=\"1\" minOccurs=\"0\" multiline=\"true\" name=\"afterNode\" required=\"false\" type=\"string\"><Property default=\"false\" description=\"Select Yes to read the SQL statement from the file that is specified in the After SQL (node) statement property.\" label=\"Read After SQL (node) statement from file\" maxOccurs=\"1\" minOccurs=\"1\" name=\"ReadFromFileAfterSQLNode\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Abort the job if there is an error executing a command\" label=\"Fail on error\" maxOccurs=\"1\" minOccurs=\"0\" name=\"FailOnError\" required=\"false\" type=\"bool\"/></Property></Property><Property contexts=\"target\" default=\"0\" deprecated=\"false\" description=\"Determines how records should be ordered across multiple links.\" engines=\"ee\" filterContexts=\"all\" filterEngines=\"all\" hidden=\"false\" inputLinkCountConstraint=\"multiple\" label=\"Record ordering\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"false\" name=\"RecordOrdering\" required=\"false\" scope=\"stage\" transactionModels=\"local\" type=\"int\"><Value code=\"0\">All records</Value><Value code=\"1\">First record</Value><Value code=\"2\">Ordered</Value><Property default=\"false\" description=\"A column to be used for sorting.\" filterContexts=\"all\" filterEngines=\"all\" filterProperty=\"/Usage/RecordOrdering\" filterValue=\"2\" hidden=\"false\" label=\"Key column\" maxOccurs=\"unbounded\" minOccurs=\"1\" multiline=\"false\" name=\"KeyColumn\" required=\"false\" scope=\"stage\" transactionModels=\"local\" type=\"category\"><Property callout=\"columns\" calloutDescription=\"Choose columns to define cross-link ordering\" calloutLabel=\"Available columns\" calloutType=\"builder\" description=\"The name of a column to be used for sorting.\" filterContexts=\"all\" filterEngines=\"all\" hidden=\"false\" label=\"Column name\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"false\" name=\"ColumnName\" required=\"true\" scope=\"stage\" transactionModels=\"local\" type=\"string\" xsi:type=\"asc:CalloutProperty\"><CalloutArgument name=\"columnSelection\">commonInput</CalloutArgument></Property><Property default=\"0\" description=\"Specifies whether sorting should be in ascending or descending order.\" filterContexts=\"all\" filterEngines=\"all\" hidden=\"false\" label=\"Sort order\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"false\" name=\"SortOrder\" required=\"false\" scope=\"stage\" transactionModels=\"local\" type=\"int\"><Value code=\"0\">Ascending</Value><Value code=\"1\">Descending</Value></Property><Property default=\"0\" description=\"Specifies whether null values should appear before or after non-null values.\" filterContexts=\"all\" filterEngines=\"all\" hidden=\"false\" label=\"Null order\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"false\" name=\"NullOrder\" required=\"false\" scope=\"stage\" transactionModels=\"local\" type=\"int\"><Value code=\"0\">Before</Value><Value code=\"1\">After</Value></Property><Property default=\"false\" description=\"Specifies whether strings should be compared using a case sensitive or insensitive comparison.\" filterContexts=\"all\" filterEngines=\"all\" hidden=\"false\" label=\"Case sensitive\" maxOccurs=\"1\" minOccurs=\"1\" multiline=\"false\" name=\"CaseSensitive\" required=\"false\" scope=\"stage\" transactionModels=\"local\" type=\"bool\"/></Property></Property><Property default=\"2\" description=\"Specifies the type of reoptimization that is done by DB2.\" label=\"Reoptimization\" name=\"ReOptimization\" required=\"false\" scope=\"stage\" type=\"int\"><Value code=\"2\">None</Value><Value code=\"3\">Once</Value><Value code=\"4\">Always</Value></Property><Property default=\"1\" description=\"Specifies the lock wait strategy that is used when a lock cannot be obtained immediately.\" filterChildPropertiesOnValue=\"3\" filterContexts=\"target\" filterProperty=\"/Usage/WriteMode\" filterValue=\"0 1 2 3 4 5 7 8\" label=\"Lock wait mode\" name=\"LockWaitMode\" required=\"false\" scope=\"stage\" transactionModels=\"local\" type=\"int\"><Value code=\"0\">Return an SQLCODE and SQLSTATE</Value><Value code=\"1\">Use the lock timeout database configuration parameter</Value><Value code=\"2\">Wait indefinitely</Value><Value code=\"3\">User specified</Value><Property description=\"Time to wait for a lock\" label=\"Lock wait time\" maxValue=\"32767\" minValue=\"1\" name=\"LockWaitModeTime\" required=\"true\" type=\"int\"/></Property><Property contexts=\"target request\" description=\"Specifies the pad character that is used in the WHERE clause for string columns that are smaller than the column size.\" label=\"Pad character\" maxLength=\"256\" minLength=\"1\" name=\"PadCharacter\" required=\"false\" type=\"string\"/><Property contexts=\"target\" default=\"false\" description=\"By default the connector runs one player process per database partition. If you want to force the connector to run fewer player processes, set this property to Yes\" engines=\"ee\" filterChildPropertiesOnValue=\"true\" filterProperty=\"/Usage/WriteMode\" filterValue=\"6\" label=\"Limit parallelism\" name=\"LimitParallelism\" required=\"false\" type=\"bool\"><Property contexts=\"target\" description=\"The total number of player processes across all processing nodes.\" label=\"Total number of player processes\" minValue=\"1\" name=\"PlayerProcessLimit\" required=\"true\" type=\"int\"/></Property><Property contexts=\"target\" default=\"false\" description=\"Determines whether the target table is on DB2 for z/OS.\" filterChildPropertiesOnValue=\"true\" filterProperty=\"/Usage/WriteMode\" filterValue=\"6\" label=\"Bulk load to DB2 on z/OS\" name=\"LoadToZOS\" required=\"false\" transactionModels=\"local\" type=\"bool\"><Property default=\"0\" description=\"Load method to be used for loading input data into DB2 for z/OS.\" filterProperty=\"/Usage/LoadToZOS/Transfer/TransferType\" filterValue=\"0\" label=\"Load method\" name=\"LoadMethod\" required=\"false\" type=\"int\"><Value code=\"0\">MVS dataset(s)</Value><Value code=\"1\">Batch pipe(s)</Value><Value code=\"2\">USS pipe(s)</Value></Property><Property description=\"Transfer properties\" label=\"Transfer\" name=\"Transfer\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"Determines the method of transferring data to the z/OS machine.\" label=\"Transfer type\" name=\"TransferType\" required=\"false\" type=\"int\"><Value code=\"0\">ftp</Value><Value code=\"1\">sftp</Value></Property><Property description=\"Name of the target machine to which the data is sent.\" label=\"Transfer to\" maxLength=\"256\" minLength=\"1\" name=\"TransferTo\" required=\"true\" type=\"string\"/><Property description=\"Determines the user name for transferring.\" label=\"User\" maxLength=\"256\" minLength=\"1\" name=\"User\" required=\"false\" type=\"string\"/><Property description=\"Determines the password for transferring.\" label=\"Password\" maxLength=\"256\" minLength=\"1\" name=\"Password\" required=\"false\" type=\"protectedstring\"/><Property description=\"The presence of this option indicates that HFS files is to be used and gives the directory name where the files will be created.  The value should be a fully qualified HFS directory name.\" filterProperty=\"/Usage/LoadToZOS/Transfer/TransferType\" filterValue=\"1\" label=\"HFS file directory\" maxLength=\"512\" minLength=\"1\" name=\"USSFileDirectory\" required=\"true\" type=\"string\"/><Property description=\"User-entered command sent just before data transfer begins.  FTP example:  quote site vcount=7 datakeepalive=60\" label=\"Transfer command\" maxLength=\"2000\" minLength=\"1\" name=\"TransferCmd\" required=\"false\" type=\"string\"/><Property default=\"true\" description=\"Select Yes to try to establish a connection again when the initial attempt to connect is unsuccessful.\" filterChildPropertiesOnValue=\"true\" label=\"Retry on connection failure\" name=\"RetryConnection\" required=\"false\" type=\"bool\"><Property default=\"3\" description=\"Enter the number of times to try to establish a connection after a failure on the initial attempt.\" label=\"Number of retries\" maxValue=\"999999999\" minValue=\"1\" name=\"RetryCount\" required=\"true\" type=\"int\"/><Property default=\"10\" description=\"Enter the time in seconds to wait between retries to establish a connection.\" label=\"Interval between retries\" maxValue=\"999999999\" minValue=\"1\" name=\"RetryInterval\" required=\"true\" type=\"int\"/></Property></Property><Property description=\"This option identifies a prefix to be used when creating MVS dataset names.  If omitted, the transfer user name is used.\" label=\"DSN prefix\" maxLength=\"256\" minLength=\"1\" name=\"DSNPrefix\" required=\"false\" type=\"string\"/><Property description=\"If the data is to be transferred to a Batch pipes system on z/OS, this option identifies its name.\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"1\" label=\"Batch pipe system ID\" maxLength=\"256\" minLength=\"1\" name=\"BatchPipeSystemID\" required=\"true\" type=\"string\"/><Property description=\"The presence of this option indicates that USS piping is to be used and gives the directory name where the pipes will be created.  The value should be a fully qualified USS directory name.\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"2\" label=\"USS pipe directory\" maxLength=\"512\" minLength=\"1\" name=\"USSPipeDirectory\" required=\"true\" type=\"string\"/><Property default=\"false\" description=\"LOAD will not actually be executed, only MVS datasets are created.\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File(s) only\" name=\"FilesOnly\" required=\"false\" type=\"bool\"/><Property default=\"SYSDA\" description=\"This option specifies the device type to be used for various datasets that the LOAD utility may need.  If omitted, the default is SYSDA.\" label=\"Device type\" maxLength=\"8\" minLength=\"1\" name=\"DeviceType\" required=\"false\" type=\"string\"/><Property description=\"If this option is present, then only the indicated partition will be loaded.  If this option is omitted, all partitions of the DB2 for z/OS database table will be loaded.\" label=\"Partition number\" minValue=\"1\" name=\"PartitionNumber\" required=\"false\" type=\"int\"/><Property default=\"1000\" description=\"This option specifies an estimated count of the total number of rows to be loaded into all partitions combined.  This estimate is used to calculate the amount of disk space which will be needed on z/OS for various datasets.  If not present, a row estimate of 1000 is used.\" label=\"Row count estimate\" minValue=\"0\" name=\"RowCountEstimate\" required=\"false\" type=\"int\"/><Property default=\"0\" description=\"This option requests that statistics be displayed at the end of the load.\" label=\"Statistics\" name=\"Statistics\" required=\"false\" type=\"int\"><Value code=\"0\">None</Value><Value code=\"1\">All</Value><Value code=\"2\">Index</Value><Value code=\"3\">Table</Value></Property><Property default=\"DB2ZLOAD\" description=\"This is a unique identifier within DB2 for the execution of the LOAD utility.  The default value is DB2ZLOAD.\" label=\"Utility ID\" maxLength=\"16\" minLength=\"1\" name=\"UtilityID\" required=\"false\" type=\"string\"/><Property default=\"false\" description=\"Indicates whether logging is to occur during the load process.\" label=\"Load with logging\" name=\"LoadWithLogging\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"Specifies whether or not the table space is set to the copy-pending status.  (Applicable only when Load with logging = No)\" filterProperty=\"/Usage/LoadToZOS/LoadWithLogging\" filterValue=\"false\" label=\"Set copy-pending\" name=\"SetCopyPending\" required=\"false\" type=\"bool\"/><Property default=\"0\" description=\"Specifies the input dataset encoding\" label=\"Encoding\" name=\"Encoding\" required=\"false\" type=\"int\"><Value code=\"0\">EBCDIC</Value><Value code=\"1\">ASCII</Value><Value code=\"2\">UNICODE</Value><Value code=\"3\">CCSID</Value><Property description=\"The IANA character set name for the encoding.  If not specified, ibm-1047-s390 will be used for EBCDIC, ASCII for ASCII, and UTF-16BE for UNICODE.\" label=\"Character set\" maxLength=\"256\" minLength=\"1\" name=\"CharacterSet\" required=\"false\" type=\"string\"/><Property description=\"The IANA character set name for the graphic encoding.  If not specified, UTF-16BE is the default.\" label=\"Graphic character set\" maxLength=\"256\" minLength=\"1\" name=\"GraphicCharacterSet\" required=\"false\" type=\"string\"/><Property description=\"Specifies the coded character set identifier (CCSID) for SBCS data, Mixed data, and DBCS data in the input file.\" filterProperty=\"/Usage/LoadToZOS/Encoding\" filterValue=\"3\" label=\"CCSID\" maxLength=\"256\" minLength=\"1\" name=\"CCSID\" required=\"true\" type=\"string\"/></Property><Property default=\"0\" description=\"Specifies whether to run an Image-copy function after Load\" filterChildPropertiesOnValue=\"1 2 3\" label=\"Image-copy function\" name=\"ImageCopyFunction\" required=\"false\" type=\"int\"><Value code=\"0\">No</Value><Value code=\"1\">Full</Value><Value code=\"2\">Concurrent</Value><Value code=\"3\">Incremental</Value><Property default=\"0\" description=\"Scope of the image-copy\" label=\"Scope\" name=\"Scope\" required=\"false\" type=\"int\"><Value code=\"0\">Full</Value><Value code=\"1\">Single partition</Value></Property><Property description=\"Image-copy file attributes\" label=\"Image-copy file\" name=\"ImageCopyFile\" required=\"false\" type=\"category\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"2\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"2\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property default=\"false\" description=\"Specifies whether or not to create a backup of the image-copy file\" filterChildPropertiesOnValue=\"true\" label=\"Image-copy backup file\" name=\"ImageCopyBackupFile\" required=\"false\" type=\"bool\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"2\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"2\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property default=\"false\" description=\"Specifies whether or not to create the image-copy recovery file\" filterChildPropertiesOnValue=\"true\" label=\"Recovery file\" name=\"RecoveryFile\" required=\"false\" type=\"bool\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"2\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"2\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property default=\"false\" description=\"Specifies whether or not to create a backup of the image-copy recovery file\" filterChildPropertiesOnValue=\"true\" filterProperty=\"/Usage/LoadToZOS/ImageCopyFunction/RecoveryFile\" filterValue=\"true\" label=\"Recovery backup file\" name=\"RecoveryBackup\" required=\"false\" type=\"bool\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"2\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"2\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property description=\"Specifies the percentage limit of changed pages in the table space at which an incremental image-copy is to be taken\" filterProperty=\"/Usage/LoadToZOS/ImageCopyFunction\" filterValue=\"3\" label=\"Change limit percent 1\" maxValue=\"100\" minValue=\"1\" name=\"ChangeLimitPercent1\" required=\"false\" type=\"int\"/><Property description=\"Specifies the percentage limit of changed pages in the table space at which an incremental image-copy is to be taken\" filterProperty=\"/Usage/LoadToZOS/ImageCopyFunction\" filterValue=\"3\" label=\"Change limit percent 2\" maxValue=\"100\" minValue=\"1\" name=\"ChangeLimitPercent2\" required=\"false\" type=\"int\"/><Property default=\"false\" description=\"Run utility to produce report only\" filterProperty=\"/Usage/LoadToZOS/ImageCopyFunction\" filterValue=\"3\" label=\"Report only\" name=\"ReportOnly\" required=\"false\" type=\"bool\"/><Property default=\"true\" description=\"Specifies whether the copy utility puts system pages at the beginning of the image-copy file\" filterProperty=\"/Usage/LoadToZOS/ImageCopyFunction\" filterValue=\"1 3\" label=\"System pages\" name=\"SystemPages\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"Indicates whether other programs can update the table space while COPY is running\" label=\"Allow changes\" name=\"AllowChanges\" required=\"false\" type=\"bool\"/></Property><Property description=\"Data file attributes\" filterProperty=\"/Usage/LoadToZOS/Transfer/TransferType\" filterValue=\"0\" label=\"Data file attributes\" name=\"DataFileAttributes\" required=\"false\" type=\"category\"><Property description=\"Input data file attributes\" label=\"Input data file(s)\" name=\"InputDataFiles\" required=\"false\" type=\"category\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value></Property><Property default=\"0\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"0\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property description=\"Discard dataset attributes\" label=\"Discard dataset\" name=\"DiscardDataSet\" required=\"false\" type=\"category\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"2\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"2\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property description=\"Error dataset attributes\" label=\"Error dataset\" name=\"ErrorDataSet\" required=\"false\" type=\"category\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"2\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"2\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property description=\"Map dataset attributes\" label=\"Map dataset\" name=\"MapDataSet\" required=\"false\" type=\"category\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"2\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"2\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property description=\"Work1 dataset attributes\" label=\"Work1 dataset\" name=\"Work1DataSet\" required=\"false\" type=\"category\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"1\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"1\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property><Property description=\"Work2 dataset attributes\" label=\"Work2 dataset\" name=\"Work2DataSet\" required=\"false\" type=\"category\"><Property description=\"Dataset name used by the Load utility.\" label=\"Dataset name\" maxLength=\"256\" minLength=\"1\" name=\"DatasetName\" required=\"false\" type=\"string\"/><Property description=\"Specifies the number of buffers to use\" label=\"Number of buffers\" maxValue=\"99\" minValue=\"1\" name=\"NumberOfBuffers\" required=\"false\" type=\"int\"/><Property description=\"Specifies the device number, device type (generic), or group name for the data set.\" label=\"Unit\" maxLength=\"256\" minLength=\"1\" name=\"Unit\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS data class.  The name must be a valid SMS data class and must not exceed 8 characters in length.\" label=\"Data class\" maxLength=\"8\" minLength=\"1\" name=\"DataClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS management class.  The name must be a valid SMS management class and must not exceed 8 characters in length.\" label=\"Management class\" maxLength=\"8\" minLength=\"1\" name=\"ManagementClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies the SMS storage class.  The name must be a valid SMS storage class and must not exceed 8 characters in length.\" label=\"Storage class\" maxLength=\"8\" minLength=\"1\" name=\"StorageClass\" required=\"false\" type=\"string\"/><Property description=\"Specifies a list of volume serial numbers for this allocation.  The value should be a string value or a comma-separated list of string values.  The value or list of values may be entered by the user with or without enclosing parentheses.  In the TEMPLATE statement, however, the parentheses are required.  So, if the user does not enter them, the syntax generator should add them.\" label=\"Volume(s)\" maxLength=\"256\" minLength=\"1\" name=\"Volumes\" required=\"false\" type=\"string\"/><Property description=\"File disposition properties\" filterProperty=\"/Usage/LoadToZOS/LoadMethod\" filterValue=\"0\" label=\"File disposition\" name=\"FileDisposition\" required=\"false\" type=\"category\"><Property default=\"0\" description=\"This option specifies the disposition status of the dataset(s) used by the LOAD utility.\" label=\"Status\" name=\"Status\" required=\"false\" type=\"int\"><Value code=\"0\">Replace</Value><Value code=\"1\">New</Value><Value code=\"2\">Old</Value><Value code=\"3\">Share</Value><Value code=\"4\">Append</Value></Property><Property default=\"1\" description=\"This option specifies the normal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Normal termination\" name=\"NormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property><Property default=\"1\" description=\"This option specifies the abnormal termination disposition of the dataset(s) used by the LOAD utility.\" label=\"Abnormal termination\" name=\"AbnormalTermination\" required=\"false\" type=\"int\"><Value code=\"0\">Keep</Value><Value code=\"1\">Delete</Value><Value code=\"2\">Catalog</Value><Value code=\"3\">Uncatalog</Value></Property></Property><Property default=\"0\" description=\"Specifies the z/OS disk space allocation unit type\" label=\"Space type\" name=\"SpaceType\" required=\"false\" type=\"int\"><Value code=\"0\">Cylinders</Value><Value code=\"1\">Tracks</Value></Property><Property description=\"Specifies the z/OS disk primary space allocation parameters in the range from 1 to 1677215.\" label=\"Primary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"PrimaryAllocation\" required=\"false\" type=\"int\"/><Property description=\"Specifies the z/OS disk secondary space allocation parameters in the range from 1 to 1677215.\" label=\"Secondary allocation\" maxValue=\"1677215\" minValue=\"1\" name=\"SecondaryAllocation\" required=\"false\" type=\"int\"/></Property></Property></Property><Property contexts=\"target\" description=\"Specifies the properties that control the bulk load operations.\" label=\"Load control\" name=\"LoadControl\" required=\"false\" transactionModels=\"local\" type=\"category\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/WriteMode\">6</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/LoadToZOS\">false</FilterProperty></Filter><Property default=\"0\" description=\"Specifies the mode where the load operates.\" filterProperty=\"/Usage/TableAction\" filterValue=\"0\" label=\"Load mode\" name=\"LoadMode\" required=\"false\" type=\"int\"><Value code=\"0\">Insert</Value><Value code=\"1\">Replace</Value><Value code=\"2\" filterProperty=\"/Usage/LoadControl/BulkloadWithLobXML\" filterValue=\"0\">Restart</Value><Value code=\"3\" filterProperty=\"/Usage/LoadControl/BulkloadWithLobXML\" filterValue=\"0\">Terminate</Value></Property><Property default=\"0\" description=\"Specifies which DB2 load phase is to be restarted. The original input data needs to be reproduced for restarting the Load phase. Build and Delete phases ignore the input data.\" filterProperty=\"/Usage/LoadControl/LoadMode\" filterValue=\"2\" label=\"Restart phase\" name=\"RestartPhase\" required=\"false\" type=\"int\"><Value code=\"0\">Load</Value><Value code=\"1\">Build</Value><Value code=\"2\">Delete</Value></Property><Property default=\"false\" description=\"Indicates whether there are any LOB or XML columns in the target DB2 table.\" label=\"Bulk load with LOB or XML column(s)\" name=\"BulkloadWithLobXML\" required=\"false\" type=\"bool\"/><Property default=\"1\" description=\"Determines the load method to use.\" filterProperty=\"/Usage/LoadControl/BulkloadWithLobXML\" filterValue=\"false\" label=\"Load method\" name=\"LoadMethod\" required=\"false\" type=\"int\"><Value code=\"0\">Sequential File(s)</Value><Value code=\"1\">Named Pipe(s)</Value></Property><Property description=\"Name of tables where rows that violate constraints will be stored.\" label=\"Exception table name\" maxLength=\"512\" minLength=\"1\" name=\"ExceptionTable\" required=\"false\" type=\"string\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/BulkloadWithLobXML\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/TableAction\">0 3</FilterProperty></Filter></Property><Property default=\"90\" description=\"Specifies the time in seconds to attempt opening a socket for the load operation before timing out.\" filterProperty=\"/Usage/LoadControl/BulkloadWithLobXML\" filterValue=\"false\" label=\"Load timeout\" minValue=\"0\" name=\"LoadTimeout\" required=\"false\" type=\"int\"/><Property default=\"false\" description=\"Indicates whether input files should be created without executing the load operation.\" label=\"File(s) only\" name=\"FilesOnly\" required=\"false\" type=\"bool\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/BulkloadWithLobXML\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/LoadMethod\">0</FilterProperty></Filter></Property><Property description=\"Specifies the location where the command file and data file (used by the load operation) should be created.\" label=\"Directory for data and command files\" maxLength=\"512\" minLength=\"1\" name=\"DataFilePath\" required=\"true\" type=\"string\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/BulkloadWithLobXML\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/LoadMethod\">0</FilterProperty></Filter></Property><Property default=\"true\" description=\"Select Yes to remove the intermediate data file after completing the load operation.\" filterProperty=\"/Usage/LoadControl/FilesOnly\" filterValue=\"false\" label=\"Remove intermediate data file\" name=\"RemoveIntermediateDataFile\" required=\"false\" type=\"bool\"/><Property default=\"0\" description=\"Specifies the format of the data in the data file.\" filterProperty=\"/Usage/LoadControl/BulkloadWithLobXML\" filterValue=\"false\" label=\"File type\" name=\"FileType\" required=\"false\" type=\"int\"><Value code=\"0\">ASC</Value><Value code=\"1\">DEL</Value></Property><Property description=\"A list of fully qualified paths or devices to identify the location of the individual LOB files to be loaded.\" filterProperty=\"/Usage/LoadControl/BulkloadWithLobXML\" filterValue=\"false\" label=\"Lob Path List\" maxLength=\"512\" minLength=\"1\" name=\"LobPathList\" required=\"false\" type=\"string\"/><Property default=\"false\" description=\"Select Yes to add the WITHOUT PROMPTING parameter to the LOAD command in the generated command file.\" label=\"Without prompting\" name=\"WithoutPrompting\" required=\"false\" type=\"bool\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/BulkloadWithLobXML\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/LoadMethod\">0</FilterProperty></Filter></Property><Property default=\"/tmp\" description=\"Specifies the location where the named pipe used by the load operation should be created. This property applies to Unix systems only.\" label=\"Directory for named pipe (Unix only)\" maxLength=\"512\" minLength=\"1\" name=\"DirectoryForNamedPipe\" required=\"false\" type=\"string\"><Filter logic=\"and\"><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/BulkloadWithLobXML\">false</FilterProperty><FilterProperty logic=\"or\" property=\"/Usage/LoadControl/LoadMethod\">1</FilterProperty></Filter></Property><Property description=\"Specifies the modifiers used with the 'MODIFIED BY' keyword of the DB2 load utility\" filterProperty=\"/Usage/LoadControl/BulkloadWithLobXML\" filterValue=\"false\" label=\"File type modifiers\" name=\"FileTypeModifiers\" required=\"false\" type=\"category\"><Property description=\"Specifies a fully qualified file path to use with the 'dumpfile' file type modifier. If no path is specified, the 'dumpfile' modifier is not used\" label=\"Dump file\" maxLength=\"512\" minLength=\"1\" name=\"DumpFile\" required=\"false\" type=\"string\"/></Property><Property default=\"false\" description=\"Clean-up on failures during stage execution.\" label=\"Clean-up on failure\" name=\"CleanupOnFail\" required=\"false\" type=\"bool\"/><Property default=\"0\" description=\"Specifies the number of records to load before establishing a consistency point.\" label=\"Save count\" minValue=\"0\" name=\"SaveCount\" required=\"false\" type=\"int\"/><Property default=\"0\" description=\"Specifies the number of warnings that are allowed before the load operation stops.\" label=\"Warning count\" minValue=\"0\" name=\"WarningCount\" required=\"false\" type=\"int\"/><Property default=\"0\" description=\"The number of physical records to be loaded. Allows a user to load only the first rowcnt rows in a file.\" label=\"Row Count\" minValue=\"0\" name=\"IRowCount\" required=\"false\" type=\"int\"/><Property default=\"loadMsgs.out\" description=\"Specifies the file where DB2 writes diagnostic messages.\" label=\"Message file\" maxLength=\"256\" minLength=\"1\" name=\"MessageFile\" required=\"true\" type=\"string\"/><Property description=\"Specifies the path name that is used by the DB2 server to store temporary files.\" label=\"Temporary files directory\" maxLength=\"512\" minLength=\"1\" name=\"DirectoryForTmpFiles\" required=\"false\" type=\"string\"/><Property default=\"false\" description=\"Specifies the type of statistics that are gathered for the table.\" filterProperty=\"/Usage/LoadControl/LoadMode\" filterValue=\"1\" label=\"Statistics\" name=\"Statistics\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"The load transaction is marked as non-recoverable.\" label=\"Non-recoverable load\" name=\"NonRecoverableTX\" required=\"false\" type=\"bool\"/><Property default=\"0\" description=\"Specifies the method that is used for making a copy of the loaded data.\" filterProperty=\"/Usage/LoadControl/NonRecoverableTX\" filterValue=\"false\" label=\"Copy loaded data\" name=\"CopyLoadedData\" required=\"false\" type=\"int\"><Value code=\"0\">No copy</Value><Value code=\"1\">Use device or directory</Value><Value code=\"2\">Use shared library</Value><Value code=\"3\">Use Tivoli to make a copy</Value><Property default=\"\" description=\"A comma-separated list of devices or directories where the copy is generated.\" filterProperty=\"/Usage/LoadControl/CopyLoadedData\" filterValue=\"1\" label=\"Loaded data copy location\" maxLength=\"512\" minLength=\"1\" name=\"CopyToDeviceOrDirectory\" required=\"true\" type=\"string\"/><Property default=\"\" description=\"Specifies the name of the library that is used to generate the copy.\" filterProperty=\"/Usage/LoadControl/CopyLoadedData\" filterValue=\"2\" label=\"Library used to copy\" maxLength=\"256\" minLength=\"1\" name=\"CopyLoadLibraryName\" required=\"true\" type=\"string\"/></Property><Property default=\"false\" description=\"If selected, the table remains in quiesced exclusive state after the load operation.\" hidden=\"true\" label=\"Hold quiesce\" name=\"HoldQuiesce\" required=\"false\" type=\"bool\"/><Property default=\"0\" description=\"Specifies the number of pages (size 4KB) that are used as buffered space for transferring data within the load utility.\" label=\"Data buffer size\" minValue=\"0\" name=\"DataBufferSize\" required=\"false\" type=\"int\"/><Property default=\"0\" description=\"Specifies the number of pages (size 4KB) of memory that are used for sorting index keys during a load operation.\" filterProperty=\"/Usage/LoadControl/IndexingMode\" filterValue=\"0 1 2\" label=\"Sort buffer size\" minValue=\"0\" name=\"SortBufferSize\" required=\"false\" type=\"int\"/><Property default=\"0\" description=\"Specifies the number of processes or threads that the load utility spawns for processing records.\" label=\"CPU parallelism\" minValue=\"0\" name=\"CPUParallelism\" required=\"false\" type=\"int\"/><Property default=\"0\" description=\"Specifies the number of processes or threads that the load utility spawns for writing data.\" label=\"Disk parallelism\" minValue=\"0\" name=\"DiskParallelism\" required=\"false\" type=\"int\"/><Property default=\"0\" description=\"Specifies whether indexes are rebuilt or extended incrementally.\" label=\"Indexing mode\" name=\"IndexingMode\" required=\"false\" type=\"int\"><Value code=\"0\">Automatic selection</Value><Value code=\"1\">Rebuild table indexes</Value><Value code=\"2\">Extend existing indexes</Value><Value code=\"3\">Do not update table indexes</Value></Property><Property default=\"0\" description=\"Specifies the level of access on the table that is to be loaded.\" filterChildPropertiesOnValue=\"1\" label=\"Allow access mode\" name=\"AllowAccessMode\" required=\"false\" type=\"int\"><Value code=\"0\">No access</Value><Value code=\"1\">Read</Value><Property description=\"Specifies the table space that is used for building a shadow copy of the index if the indexes are being rebuilt.\" label=\"Name of table space\" maxLength=\"256\" minLength=\"1\" name=\"TableSpace\" required=\"false\" type=\"string\"/></Property><Property default=\"1\" description=\"Specifies whether the check pending state of the loaded table is immediately cascaded to all descendants.\" label=\"Check pending cascade\" name=\"CheckPendingCascade\" required=\"false\" type=\"int\"><Value code=\"0\">Immediate</Value><Value code=\"1\">Deferred</Value></Property><Property default=\"false\" description=\"If selected, the load operation forces off other applications that hold conflicting locks.\" label=\"Lock with force\" name=\"LockWithForce\" required=\"false\" type=\"bool\"/><Property default=\"false\" description=\"If selected, data is loaded into a partitioned table.\" filterChildPropertiesOnValue=\"true\" label=\"Partitioned database configuration\" name=\"PartitionedDBConfig\" required=\"false\" type=\"bool\"><Property description=\"Lists the output database partition numbers.\" label=\"Output partition numbers\" maxLength=\"256\" minLength=\"1\" name=\"OutputDBPartNums\" required=\"false\" type=\"string\"/><Property description=\"Lists the partition numbers that are used in the partitioning process.\" label=\"Partitioning partition numbers\" maxLength=\"256\" minLength=\"1\" name=\"PartitioningDBPartNums\" required=\"false\" type=\"string\"/><Property default=\"25\" description=\"Specifies the maximum number of partitioning agents.\" label=\"Maximum partitioning agents\" minValue=\"1\" name=\"MaxNumPartAgents\" required=\"false\" type=\"int\"/><Property default=\"1\" description=\"Specifies the reaction of the load operation to errors that occur on individual partitions.\" label=\"Isolate partition errors\" name=\"IsolatePartErrors\" required=\"false\" type=\"int\"><Value code=\"0\">Setup errors only</Value><Value code=\"1\">Load errors only</Value><Value code=\"2\">Setup and load errors</Value><Value code=\"3\">No isolation</Value></Property><Property default=\"100\" description=\"Specifies the number of megabytes of data to load before generating a progress message.\" label=\"Status interval\" maxValue=\"4000\" minValue=\"1\" name=\"StatusInterval\" required=\"false\" type=\"int\"/><Property description=\"Specifies the range of TCP ports that are used to create sockets for internal communications.\" filterChildPropertiesOnValue=\"true\" label=\"Port range\" name=\"PortRange\" required=\"false\" type=\"bool\"><Property description=\"Lower port number of the port range\" label=\"Lower port number\" maxValue=\"65535\" minValue=\"0\" name=\"MinValue\" required=\"true\" type=\"int\"/><Property description=\"Higher port number of the port range\" label=\"Higher port number\" maxValue=\"65535\" minValue=\"0\" name=\"MaxValue\" required=\"true\" type=\"int\"/></Property><Property default=\"false\" description=\"If selected, data records are checked for truncation at input and output.\" label=\"Check truncation\" name=\"CheckTruncation\" required=\"false\" type=\"bool\"/><Property default=\"0\" description=\"Specifies the number of records to trace in a dump of the data conversion process and the output of the hashing values.\" label=\"Trace\" minValue=\"0\" name=\"Trace\" required=\"false\" type=\"int\"/><Property description=\"Specifies the name of the partitioned distribution file.\" label=\"Partitioned distribution file\" maxLength=\"256\" minLength=\"1\" name=\"DistFile\" required=\"false\" type=\"string\"/><Property default=\"false\" description=\"If selected, the partition map header is not included in the partition file.\" hidden=\"true\" label=\"Omit header\" name=\"OmitHeader\" required=\"false\" type=\"bool\"/><Property default=\"-1\" description=\"Specifies the database partition where statistics are collected.\" filterProperty=\"/Usage/LoadControl/Statistics\" filterValue=\"true\" label=\"Partition collecting statistics\" maxValue=\"32767\" minValue=\"-1\" name=\"RunStatDBPartnum\" required=\"false\" type=\"int\"/></Property></Property><Property contexts=\"source\" default=\"false\" description=\"Select Yes to limit the number of rows that are returned by the connector.\" filterChildPropertiesOnValue=\"true\" label=\"Limit number of returned rows\" name=\"LimitRows\" required=\"false\" type=\"bool\"><Property default=\"1000\" description=\"Enter the maximum number of rows that will be returned by the connector.\" label=\"Limit\" minValue=\"1\" name=\"Limit\" required=\"false\" type=\"int\"/></Property></Usage></Properties><MetaBag><MetaProperty Name=\"InputLinkOrder\" Owner=\"APT\" Value=\"#\"/><MetaProperty Name=\"OutputLinkOrder\" Owner=\"APT\" Value=\"!#\"/></MetaBag><ModelMappings><DataConnection><ConnectionString>/Connection/Database</ConnectionString><Username>/Connection/Username</Username><Password>/Connection/Password</Password><Private name=\"Instance\">/Connection/Instance</Private><Private name=\"DB2ClientLibFile\" usage=\"runtime\">/Connection/DB2ClientLibFile</Private><Private name=\"Conductor\" usage=\"runtime\">/Connection/Conductor</Private><Private name=\"ConductorInstance\" usage=\"runtime\">/Connection/Conductor/Instance</Private><Private name=\"ConductorDatabase\" usage=\"runtime\">/Connection/Conductor/Database</Private><Private name=\"ConductorUsername\" usage=\"runtime\">/Connection/Conductor/Username</Private><Private name=\"ConductorPassword\" usage=\"runtime\">/Connection/Conductor/Password</Private><Private name=\"ConductorDB2ClientLibFile\" usage=\"runtime\">/Connection/Conductor/DB2ClientLibFile</Private></DataConnection></ModelMappings></asc:Connector>"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "XMLProperties"
+         Value =+=+=+=
+<?xml version='1.0' encoding='UTF-16'?><Properties version='1.1'><Common><Context type='int'>1</Context><Variant type='string'>9.1</Variant><DescriptorVersion type='string'>1.0</DescriptorVersion><PartitionType type='int'>-1</PartitionType><RCP type='int'>0</RCP></Common><Connection><Database type='string'><![CDATA[#$IDSDB#]]></Database><Username type='string'><![CDATA[#$IDSAcct#]]></Username><Password type='string'><![CDATA[#$IDSPW#]]></Password></Connection><Usage><MigratedJob type='bool'><![CDATA[1]]></MigratedJob><GenerateSQL type='bool'><![CDATA[0]]></GenerateSQL><EnableQuotedIDs type='bool'><![CDATA[0]]></EnableQuotedIDs><XMLColumnAsLOB type='bool'><![CDATA[0]]></XMLColumnAsLOB><PrefixForExpressionColumns type='string'><![CDATA[EXPR]]></PrefixForExpressionColumns><SQL><SelectStatement modified='1' type='string'><![CDATA[SELECT 
+A02_CLM.CLM_SK,  
+A02_CLM.SRC_SYS_CD_SK, 
+A02_CLM.CLM_ID, 
+A08_CLM.CLM_SK, 
+A08_CLM.CLM_ID
+FROM  #$IDSOwner#.W_DRUG_CLM         	ADJ_DRVR,
+          #$IDSOwner#.DRUG_CLM   	     	  A02_DRUG_CLM, 
+      	#$IDSOwner#.DRUG_CLM             	 A08_DRUG_CLM,
+      	#$IDSOwner#.CLM        	      	 A02_CLM,
+      	#$IDSOwner#.CLM        	     	  A08_CLM,
+     	 #$IDSOwner#.CD_MPPNG   	  MAP1,
+     	 #$IDSOwner#.CD_MPPNG   	  MAP2
+WHERE     	   ADJ_DRVR.SRC_SYS_CD       IN ( 'MEDIMPACT')
+      	AND    ADJ_DRVR.SRC_SYS_CD_SK   =  A08_DRUG_CLM.SRC_SYS_CD_SK
+      	AND    ADJ_DRVR.DRUG_CLM_SK       =  A08_DRUG_CLM.DRUG_CLM_SK
+                AND    ADJ_DRVR.DRUG_CLM_SK       =  A08_CLM.CLM_SK  
+      	AND    A08_CLM.CLM_STTUS_CD_SK  =  MAP2.CD_MPPNG_SK
+      	AND    MAP2.TRGT_CD	                  = 'A08'
+
+         AND trim (A08_DRUG_CLM.VNDR_CLM_NO) 	= trim(A02_DRUG_CLM.VNDR_CLM_NO)
+         AND trim (A08_DRUG_CLM.RX_NO )          = trim(A02_DRUG_CLM.RX_NO)
+         and trim (A08_DRUG_CLM.RFL_NO)          = TRIM(A02_DRUG_CLM.RFL_NO)
+     	AND A08_DRUG_CLM.FILL_DT_SK 		    = A02_DRUG_CLM.FILL_DT_SK
+         AND A08_DRUG_CLM.FILL_DT_SK             = A02_CLM.SVC_STRT_DT_SK
+         AND trim (A08_CLM.SUB_ID)           	= trim (A02_CLM.SUB_ID)
+         AND trim (A08_CLM.MBR_SFX_NO)           = trim (A02_CLM.MBR_SFX_NO)
+
+         AND ADJ_DRVR.SRC_SYS_CD_SK              =  A02_CLM.SRC_SYS_CD_SK
+         AND A08_DRUG_CLM.CLM_SK       	   <> A02_DRUG_CLM.CLM_SK 
+         AND A02_DRUG_CLM.CLM_SK      	       =  A02_CLM.CLM_SK
+         AND A02_CLM.CLM_STTUS_CD_SK          =  MAP1.CD_MPPNG_SK
+         AND SUBSTRING(ADJ_DRVR.CLM_ID, 1, LENGTH (ADJ_DRVR.CLM_ID)-1)  = TRIM(A02_CLM.CLM_ID )       
+         AND MAP1.TRGT_CD  IN ( 'A02', 'A09' )
+
+UNION 
+
+SELECT 
+A02_CLM.CLM_SK,  
+A02_CLM.SRC_SYS_CD_SK, 
+A02_CLM.CLM_ID, 
+A08_CLM.CLM_SK, 
+A08_CLM.CLM_ID
+FROM  #$IDSOwner#.W_DRUG_CLM         	ADJ_DRVR,
+          #$IDSOwner#.DRUG_CLM   	     	  A02_DRUG_CLM, 
+      	#$IDSOwner#.DRUG_CLM             	 A08_DRUG_CLM,
+      	#$IDSOwner#.CLM        	      	 A02_CLM,
+      	#$IDSOwner#.CLM        	     	  A08_CLM,
+     	 #$IDSOwner#.CD_MPPNG   	  MAP1,
+     	 #$IDSOwner#.CD_MPPNG   	  MAP2
+WHERE     	   ADJ_DRVR.SRC_SYS_CD       IN ( 'OPTUMRX')
+      	AND    ADJ_DRVR.SRC_SYS_CD_SK   =  A08_DRUG_CLM.SRC_SYS_CD_SK
+      	AND    ADJ_DRVR.DRUG_CLM_SK       =  A08_DRUG_CLM.DRUG_CLM_SK
+                AND    ADJ_DRVR.DRUG_CLM_SK       =  A08_CLM.CLM_SK  
+      	AND    A08_CLM.CLM_STTUS_CD_SK  =  MAP2.CD_MPPNG_SK
+      	AND    MAP2.TRGT_CD	                  = 'A08'
+
+         AND trim (A08_DRUG_CLM.VNDR_CLM_NO) 	= trim(A02_DRUG_CLM.VNDR_CLM_NO)
+         AND trim (A08_DRUG_CLM.RX_NO )          = trim(A02_DRUG_CLM.RX_NO)
+         and trim (A08_DRUG_CLM.RFL_NO)          = TRIM(A02_DRUG_CLM.RFL_NO)
+     	AND A08_DRUG_CLM.FILL_DT_SK 		    = A02_DRUG_CLM.FILL_DT_SK
+         AND A08_DRUG_CLM.FILL_DT_SK             = A02_CLM.SVC_STRT_DT_SK
+         AND trim (A08_CLM.SUB_ID)           	= trim (A02_CLM.SUB_ID)
+         AND trim (A08_CLM.MBR_SFX_NO)           = trim (A02_CLM.MBR_SFX_NO)
+
+         AND ADJ_DRVR.SRC_SYS_CD_SK              =  A02_CLM.SRC_SYS_CD_SK
+         AND A08_DRUG_CLM.CLM_SK       	   <> A02_DRUG_CLM.CLM_SK 
+         AND A02_DRUG_CLM.CLM_SK      	       =  A02_CLM.CLM_SK
+         AND A02_CLM.CLM_STTUS_CD_SK          =  MAP1.CD_MPPNG_SK
+         AND SUBSTRING(ADJ_DRVR.CLM_ID, 1, LENGTH (ADJ_DRVR.CLM_ID)-1)  = TRIM(A02_CLM.CLM_ID )       
+         AND MAP1.TRGT_CD  IN ( 'A02', 'A09' )
+      
+
+union
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM #$IDSOwner#.W_DRUG_CLM    ADJ,
+            #$IDSOwner#.DRUG_CLM           D 
+WHERE ADJ.SRC_SYS_CD            = 'PCS' 
+      AND ADJ.SRC_SYS_CD_SK      = D.SRC_SYS_CD_SK 
+      AND ADJ.RX_NO                       = D.RX_NO 
+      AND ADJ.FILL_DT_SK               = D.FILL_DT_SK
+      AND ADJ.CLM_SK                    <> D.CLM_SK
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+FROM   #$IDSOwner#.W_DRUG_CLM ADJ,
+             #$IDSOwner#.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'WELLDYNERX' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM #$IDSOwner#.W_DRUG_CLM ADJ,
+            #$IDSOwner#.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'MEDTRAK' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      /*AND ADJ.FILL_DT_SK = D.FILL_DT_SK*/
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM #$IDSOwner#.W_DRUG_CLM ADJ,
+            #$IDSOwner#.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'BCBSSC' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+
+UNION
+SELECT 
+A02_CLM.CLM_SK,  
+A02_CLM.SRC_SYS_CD_SK, 
+A02_CLM.CLM_ID, 
+A08_CLM.CLM_SK, 
+A08_CLM.CLM_ID
+
+FROM   #$IDSOwner#.W_DRUG_CLM    ADJ_DRVR,
+           #$IDSOwner#.DRUG_CLM   	  A02_DRUG_CLM, 
+      	#$IDSOwner#.DRUG_CLM         A08_DRUG_CLM,
+      	#$IDSOwner#.CLM        	  A02_CLM,
+      	#$IDSOwner#.CLM        	  A08_CLM,
+     	#$IDSOwner#.CD_MPPNG   	  MAP1,
+     	#$IDSOwner#.CD_MPPNG   	  MAP2
+
+WHERE     	ADJ_DRVR.SRC_SYS_CD                	IN ('ESI')
+      	AND    ADJ_DRVR.SRC_SYS_CD_SK 	 	=  A08_DRUG_CLM.SRC_SYS_CD_SK
+      	AND    ADJ_DRVR.DRUG_CLM_SK                	=  A08_DRUG_CLM.DRUG_CLM_SK  
+                AND A08_DRUG_CLM.CLM_SK      	                = A08_CLM.CLM_SK
+     	AND A08_CLM.PAYMT_REF_ID                     	<> 'NA'
+      	AND A08_CLM.CLM_STTUS_CD_SK 		=  MAP2.CD_MPPNG_SK
+      	AND MAP2.TRGT_CD		              = 'A08'
+
+                 AND A08_DRUG_CLM.VNDR_CLM_NO	=  A02_DRUG_CLM.VNDR_CLM_NO      
+                AND A08_DRUG_CLM.RX_NO              	=  A02_DRUG_CLM.RX_NO
+      	AND A08_DRUG_CLM.FILL_DT_SK 		=  A02_DRUG_CLM.FILL_DT_SK
+      	AND A08_DRUG_CLM.CLM_SK      		<> A02_DRUG_CLM.CLM_SK 
+               AND  A08_CLM.SUB_ID                		= A02_CLM.SUB_ID
+                AND A08_CLM.MBR_SFX_NO                               = A02_CLM.MBR_SFX_NO
+      	
+                AND A02_DRUG_CLM.CLM_SK      	                = A02_CLM.CLM_SK
+      	AND A02_CLM.CLM_STTUS_CD_SK 		=  MAP1.CD_MPPNG_SK
+      	AND MAP1.TRGT_CD			= 'A02'
+      	AND A02_CLM.ADJ_TO_CLM_ID	 	= 'NA'
+                AND (
+                  ( A02_CLM.RCVD_DT_SK < A08_CLM.RCVD_DT_SK  )
+                  OR 
+                  ( A02_CLM.RCVD_DT_SK = A08_CLM.RCVD_DT_SK
+                    AND NOT EXISTS 	(SELECT NO_PRIOR_A02_CLM.CLM_SK 
+     	 			FROM  	#$IDSOwner#.DRUG_CLM                            NO_PRIOR_A02_DRUG_CLM, 
+     	 			            #$IDSOwner#.CLM                                      NO_PRIOR_A02_CLM,
+     	 			            #$IDSOwner#.CD_MPPNG                            MAP3
+				WHERE   NO_PRIOR_A02_DRUG_CLM.VNDR_CLM_NO 	=  A08_DRUG_CLM.VNDR_CLM_NO
+      				AND 	NO_PRIOR_A02_DRUG_CLM.RX_NO        	=  A08_DRUG_CLM.RX_NO
+     				AND 	NO_PRIOR_A02_DRUG_CLM.FILL_DT_SK   	=  A08_DRUG_CLM.FILL_DT_SK
+      				AND 	NO_PRIOR_A02_DRUG_CLM.CLM_SK       	<> A08_DRUG_CLM.CLM_SK
+      				AND        NO_PRIOR_A02_DRUG_CLM.CLM_SK                =  NO_PRIOR_A02_CLM.CLM_SK
+      				AND        NO_PRIOR_A02_CLM.SUB_ID                               = A08_CLM.SUB_ID
+      				 AND        NO_PRIOR_A02_CLM.MBR_SFX_NO                   =  A08_CLM.MBR_SFX_NO  
+     				AND 	NO_PRIOR_A02_CLM.CLM_STTUS_CD_SK 	=  MAP3.CD_MPPNG_SK
+    				AND 	MAP3.TRGT_CD				= 'A02'
+      				AND 	NO_PRIOR_A02_CLM.ADJ_TO_CLM_ID	= 'NA'
+      				 AND       NO_PRIOR_A02_CLM.CLM_SK          	               <>  A02_CLM.CLM_SK
+				AND	NO_PRIOR_A02_CLM.RCVD_DT_SK                  < A02_CLM.RCVD_DT_SK)
+              )
+            )
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM #$IDSOwner#.W_DRUG_CLM ADJ,
+            #$IDSOwner#.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'SAVRX' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM #$IDSOwner#.W_DRUG_CLM ADJ,
+            #$IDSOwner#.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'LDI' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM #$IDSOwner#.W_DRUG_CLM ADJ,
+            #$IDSOwner#.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'CVS' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      AND ADJ.CLM_SK <> D.CLM_SK
+]]><ReadFromFileSelect type='bool'><![CDATA[0]]></ReadFromFileSelect><Tables collapsed='1'></Tables><Parameters collapsed='1'></Parameters><Columns collapsed='1'></Columns></SelectStatement></SQL><Transaction><RecordCount type='int'><![CDATA[0]]></RecordCount></Transaction><Session><IsolationLevel type='int'><![CDATA[0]]></IsolationLevel><AutocommitMode type='int'><![CDATA[0]]></AutocommitMode><ArraySize type='int'><![CDATA[10000]]></ArraySize><SchemaReconciliation><FailOnSizeMismatch type='bool'><![CDATA[0]]></FailOnSizeMismatch><FailOnTypeMismatch type='bool'><![CDATA[0]]></FailOnTypeMismatch><FailOnCodePageMismatch type='bool'><![CDATA[0]]></FailOnCodePageMismatch></SchemaReconciliation><PassLobLocator collapsed='1' type='bool'><![CDATA[0]]></PassLobLocator></Session><BeforeAfter type='bool'><![CDATA[0]]></BeforeAfter><ReOptimization type='int'><![CDATA[2]]></ReOptimization><LockWaitMode collapsed='1' type='int'><![CDATA[1]]></LockWaitMode><LimitRows collapsed='1' type='bool'><![CDATA[0]]></LimitRows></Usage></Properties >
+=+=+=+=
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Orientation"
+         Value "link"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RejectFromLink"
+         Value "-1"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RejectThreshold"
+         Value "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RejectNumber"
+         Value "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RejectUsesPercentage"
+         Value "false"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RejectConditions"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RejectDataElements"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "XMLRejectSettings"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ConnectorName"
+         Value "DB2Connector"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Engine"
+         Value "SE"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Context"
+         Value "source"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ConnectionString"
+         Value "/Connection/Database"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Username"
+         Value "/Connection/Username"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Password"
+         Value "/Connection/Password"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Instance"
+         Value "/Connection/Instance"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "DB2ClientLibFile"
+         Value "/Connection/DB2ClientLibFile"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "Conductor"
+         Value "/Connection/Conductor"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ConductorInstance"
+         Value "/Connection/Conductor/Instance"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ConductorDatabase"
+         Value "/Connection/Conductor/Database"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ConductorUsername"
+         Value "/Connection/Conductor/Username"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ConductorPassword"
+         Value "/Connection/Conductor/Password"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ConductorDB2ClientLibFile"
+         Value "/Connection/Conductor/DB2ClientLibFile"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "transactionModel"
+         Value "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "transactionManager"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "supportedTransactionModel"
+         Value "local"
+      END DSSUBRECORD
+      NextRecordID "0"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S111P5"
+      OLEType "CCustomOutput"
+      Readonly "0"
+      Name "orig_clm_hash"
+      Description =+=+=+=
+SELECT 
+ADJ_DRVR.CLM_ID, 
+'A02', A02_CLM.CLM_SK, A02_DRUG_CLM.CLM_ID, A02_CLM.CLM_ID, MAP1.TRGT_CD, A02_DRUG_CLM.VNDR_CLM_NO,
+'A08', A08_CLM.CLM_SK, A08_DRUG_CLM.CLM_ID, A08_CLM.CLM_ID, MAP2.TRGT_CD, A08_DRUG_CLM.VNDR_CLM_NO
+FROM  DEVL.W_DRUG_CLM    ADJ_DRVR,
+          DEVL.DRUG_CLM   	  A02_DRUG_CLM, 
+      	DEVL.DRUG_CLM         A08_DRUG_CLM,
+      	DEVL.CLM        	  A02_CLM,
+      	DEVL.CLM        	  A08_CLM,
+     	 DEVL.CD_MPPNG   	  MAP1,
+     	 DEVL.CD_MPPNG   	  MAP2
+WHERE     	   ADJ_DRVR.SRC_SYS_CD       IN ( 'OPTUMRX')
+      	AND    ADJ_DRVR.SRC_SYS_CD_SK   =  A08_DRUG_CLM.SRC_SYS_CD_SK
+      	AND    ADJ_DRVR.DRUG_CLM_SK     =  A08_DRUG_CLM.DRUG_CLM_SK
+          AND    ADJ_DRVR.DRUG_CLM_SK     =  A08_CLM.CLM_SK  
+      	AND A08_CLM.CLM_STTUS_CD_SK 	=  MAP2.CD_MPPNG_SK
+      	AND MAP2.TRGT_CD		        = 'A08'
+
+         AND trim (A08_DRUG_CLM.VNDR_CLM_NO) 	= trim(A02_DRUG_CLM.VNDR_CLM_NO)
+         AND trim (A08_DRUG_CLM.RX_NO )          = trim(A02_DRUG_CLM.RX_NO)
+         and trim (A08_DRUG_CLM.RFL_NO)          = TRIM(A02_DRUG_CLM.RFL_NO)
+     	AND A08_DRUG_CLM.FILL_DT_SK 		    = A02_DRUG_CLM.FILL_DT_SK
+         AND A08_DRUG_CLM.FILL_DT_SK             = A02_CLM.SVC_STRT_DT_SK
+    
+         AND trim (A08_CLM.SUB_ID)           	= trim (A02_CLM.SUB_ID)
+         AND trim (A08_CLM.MBR_SFX_NO)           = trim (A02_CLM.MBR_SFX_NO)
+
+         AND ADJ_DRVR.SRC_SYS_CD_SK              =  A02_CLM.SRC_SYS_CD_SK
+         AND A08_DRUG_CLM.CLM_SK      		   <> A02_DRUG_CLM.CLM_SK 
+         AND A02_DRUG_CLM.CLM_SK      	       =  A02_CLM.CLM_SK
+         AND A02_CLM.CLM_STTUS_CD_SK 		    =  MAP1.CD_MPPNG_SK
+         and A08_DRUG_CLM.CLM_ID = '192894500225003999R' 
+         AND A02_DRUG_CLM.LAST_UPDT_RUN_CYC_EXCTN_SK = 170
+         AND MAP1.TRGT_CD			= 'A02'
+
+
+
+
+
+SELECT 
+A02_CLM.CLM_SK,  
+A02_CLM.SRC_SYS_CD_SK, 
+A02_CLM.CLM_ID, 
+A08_CLM.CLM_SK, 
+A08_CLM.CLM_ID
+
+FROM   #$IDSOwner#.W_DRUG_CLM    ADJ_DRVR,
+           #$IDSOwner#.DRUG_CLM   	  A02_DRUG_CLM, 
+      	#$IDSOwner#.DRUG_CLM         A08_DRUG_CLM,
+      	#$IDSOwner#.CLM        	  A02_CLM,
+      	#$IDSOwner#.CLM        	  A08_CLM,
+     	#$IDSOwner#.CD_MPPNG   	  MAP1,
+     	#$IDSOwner#.CD_MPPNG   	  MAP2
+
+WHERE     	ADJ_DRVR.SRC_SYS_CD                	IN ( 'OPTUMRX')
+      	AND    ADJ_DRVR.SRC_SYS_CD_SK 	 	=  A08_DRUG_CLM.SRC_SYS_CD_SK
+      	AND    ADJ_DRVR.DRUG_CLM_SK                	=  A08_DRUG_CLM.DRUG_CLM_SK  
+      	AND A08_CLM.CLM_STTUS_CD_SK 		=  MAP2.CD_MPPNG_SK
+      	AND MAP2.TRGT_CD		              = 'A08'
+        AND A08_DRUG_CLM.VNDR_CLM_NO	=  A02_DRUG_CLM.VNDR_CLM_NO      
+        AND A08_DRUG_CLM.RX_NO              	=  A02_DRUG_CLM.RX_NO
+      	AND A08_DRUG_CLM.FILL_DT_SK 		=  A02_DRUG_CLM.FILL_DT_SK
+      	AND A08_DRUG_CLM.CLM_SK      		<> A02_DRUG_CLM.CLM_SK 
+        AND  A08_CLM.SUB_ID                		= A02_CLM.SUB_ID
+        AND A08_CLM.MBR_SFX_NO                               = A02_CLM.MBR_SFX_NO
+        AND A02_DRUG_CLM.CLM_SK      	                = A02_CLM.CLM_SK
+      	AND A02_CLM.CLM_STTUS_CD_SK 		=  MAP1.CD_MPPNG_SK
+      	AND MAP1.TRGT_CD			= 'A02'
+      	AND A02_CLM.ADJ_TO_CLM_ID	 	= 'NA'
+=+=+=+=
+      Partner "V0S132|V0S132P1"
+      Properties "CCustomProperty"
+      BEGIN DSSUBRECORD
+         Name "SOURCETABLES"
+         Value "#IDSInstance#.CLM CLM, #IDSInstance#.P_DRUG_CLM ADJ,#IDSInstance#.CLM_PROV PROV,#IDSInstance#.DRUG_CLM D,#IDSInstance#.CD_MPPNG G"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "PREFETCH"
+         Value "10000"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "WHERE_CLAUSE"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "OTHER_CLAUSES"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "USERSQL"
+         Value =+=+=+=
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM devl.W_DRUG_CLM    ADJ,
+            devl.DRUG_CLM           D 
+WHERE ADJ.SRC_SYS_CD            = 'PCS' 
+      AND ADJ.SRC_SYS_CD_SK      = D.SRC_SYS_CD_SK 
+      AND ADJ.RX_NO                       = D.RX_NO 
+      AND ADJ.FILL_DT_SK               = D.FILL_DT_SK
+      AND ADJ.CLM_SK                    <> D.CLM_SK
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+FROM   devl.W_DRUG_CLM ADJ,
+             devl.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'WELLDYNERX' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM devl.W_DRUG_CLM ADJ,
+            devl.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'MEDTRAK' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      /*AND ADJ.FILL_DT_SK = D.FILL_DT_SK*/
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+UNION
+SELECT D.CLM_SK,ADJ.SRC_SYS_CD_SK,D.CLM_ID,ADJ.CLM_SK,ADJ.CLM_ID
+ FROM devl.W_DRUG_CLM ADJ,
+            devl.DRUG_CLM D 
+WHERE ADJ.SRC_SYS_CD = 'BCBSSC' 
+      AND ADJ.SRC_SYS_CD_SK = D.SRC_SYS_CD_SK 
+      AND ADJ.VNDR_CLM_NO = D.VNDR_CLM_NO
+      AND ADJ.CLM_SK <> D.CLM_SK
+
+
+UNION
+SELECT 
+A02_CLM.CLM_SK,  
+A02_CLM.SRC_SYS_CD_SK, 
+A02_CLM.CLM_ID, 
+A08_CLM.CLM_SK, 
+A08_CLM.CLM_ID
+
+FROM   devl.W_DRUG_CLM    ADJ_DRVR,
+           devl.DRUG_CLM   	  A02_DRUG_CLM, 
+      	devl.DRUG_CLM         A08_DRUG_CLM,
+      	devl.CLM        	  A02_CLM,
+      	devl.CLM        	  A08_CLM,
+     	devl.CD_MPPNG   	  MAP1,
+     	devl.CD_MPPNG   	  MAP2
+
+WHERE     	ADJ_DRVR.SRC_SYS_CD                	=   'ESI'
+      	AND    ADJ_DRVR.SRC_SYS_CD_SK 	 	=  A08_DRUG_CLM.SRC_SYS_CD_SK
+      	AND    ADJ_DRVR.DRUG_CLM_SK                	=  A08_DRUG_CLM.DRUG_CLM_SK  
+                AND A08_DRUG_CLM.CLM_SK      	                = A08_CLM.CLM_SK
+     	AND A08_CLM.PAYMT_REF_ID                     	<> 'NA'
+      	AND A08_CLM.CLM_STTUS_CD_SK 		=  MAP2.CD_MPPNG_SK
+      	AND MAP2.TRGT_CD		              = 'A08'
+
+                 AND A08_DRUG_CLM.VNDR_CLM_NO	=  A02_DRUG_CLM.VNDR_CLM_NO      
+                AND A08_DRUG_CLM.RX_NO              	=  A02_DRUG_CLM.RX_NO
+      	AND A08_DRUG_CLM.FILL_DT_SK 		=  A02_DRUG_CLM.FILL_DT_SK
+      	AND A08_DRUG_CLM.CLM_SK      		<> A02_DRUG_CLM.CLM_SK 
+               AND  A08_CLM.SUB_ID                		= A02_CLM.SUB_ID
+                AND A08_CLM.MBR_SFX_NO                               = A02_CLM.MBR_SFX_NO
+      	
+                AND A02_DRUG_CLM.CLM_SK      	                = A02_CLM.CLM_SK
+      	AND A02_CLM.CLM_STTUS_CD_SK 		=  MAP1.CD_MPPNG_SK
+      	AND MAP1.TRGT_CD			= 'A02'
+      	AND A02_CLM.ADJ_TO_CLM_ID	 	= 'NA'
+                AND (
+                  ( A02_CLM.RCVD_DT_SK < A08_CLM.RCVD_DT_SK  )
+                  OR 
+                  ( A02_CLM.RCVD_DT_SK = A08_CLM.RCVD_DT_SK
+                    AND NOT EXISTS 	(SELECT NO_PRIOR_A02_CLM.CLM_SK 
+     	 			FROM  	devl.DRUG_CLM                            NO_PRIOR_A02_DRUG_CLM, 
+     	 			            devl.CLM                                      NO_PRIOR_A02_CLM,
+     	 			            devl.CD_MPPNG                            MAP3
+				WHERE   NO_PRIOR_A02_DRUG_CLM.VNDR_CLM_NO 	=  A08_DRUG_CLM.VNDR_CLM_NO
+      				AND 	NO_PRIOR_A02_DRUG_CLM.RX_NO        	=  A08_DRUG_CLM.RX_NO
+     				AND 	NO_PRIOR_A02_DRUG_CLM.FILL_DT_SK   	=  A08_DRUG_CLM.FILL_DT_SK
+      				AND 	NO_PRIOR_A02_DRUG_CLM.CLM_SK       	<> A08_DRUG_CLM.CLM_SK
+      				AND        NO_PRIOR_A02_DRUG_CLM.CLM_SK                =  NO_PRIOR_A02_CLM.CLM_SK
+      				AND        NO_PRIOR_A02_CLM.SUB_ID                               = A08_CLM.SUB_ID
+      				 AND        NO_PRIOR_A02_CLM.MBR_SFX_NO                   =  A08_CLM.MBR_SFX_NO  
+     				AND 	NO_PRIOR_A02_CLM.CLM_STTUS_CD_SK 	=  MAP3.CD_MPPNG_SK
+    				AND 	MAP3.TRGT_CD				= 'A02'
+      				AND 	NO_PRIOR_A02_CLM.ADJ_TO_CLM_ID	= 'NA'
+      				 AND       NO_PRIOR_A02_CLM.CLM_SK          	               <>  A02_CLM.CLM_SK
+				AND	NO_PRIOR_A02_CLM.RCVD_DT_SK                  < A02_CLM.RCVD_DT_SK)
+              )
+            )
+
+
+
+
+=+=+=+=
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "BEFORESQL"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "CONTBEFORESQL"
+         Value "YES"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "AFTERSQL"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "CONTAFTERSQL"
+         Value "YES"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "GENSQL"
+         Value "No"
+      END DSSUBRECORD
+      Columns "COutputColumn"
+      BEGIN DSSUBRECORD
+         Name "ORIG_CLM_SK"
+         SqlType "4"
+         Precision "0"
+         Scale "0"
+         Nullable "0"
+         KeyPosition "1"
+         DisplaySize "0"
+         Derivation "CLM.CLM_SK"
+         Group "0"
+         SortKey "0"
+         SortType "0"
+         TableDef "DB2/UDB\\IDS\\W_CLM_RVRSL"
+         AllowCRLF "0"
+         LevelNo "0"
+         Occurs "0"
+         PadNulls "0"
+         SignOption "0"
+         SortingOrder "0"
+         ArrayHandling "0"
+         SyncIndicator "0"
+         PadChar ""
+         ColumnReference "ORIG_CLM_SK"
+         ExtendedPrecision "0"
+         TaggedSubrec "0"
+         OccursVarying "0"
+         PKeyIsCaseless "0"
+         SCDPurpose "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "SRC_SYS_CD_SK"
+         Description "The Source System Code SK is the generated unique ifentifier for the processing source system for the data."
+         SqlType "4"
+         Precision "0"
+         Scale "0"
+         Nullable "0"
+         KeyPosition "0"
+         DisplaySize "10"
+         Derivation "ADJ.SRC_SYS_CD_SK"
+         Group "0"
+         SortKey "0"
+         SortType "0"
+         TableDef "DB2/UDB\\IDS\\W_CLM_RVRSL"
+         AllowCRLF "0"
+         LevelNo "0"
+         Occurs "0"
+         PadNulls "0"
+         SignOption "0"
+         SortingOrder "0"
+         ArrayHandling "0"
+         SyncIndicator "0"
+         PadChar ""
+         ColumnReference "SRC_SYS_CD_SK"
+         ExtendedPrecision "0"
+         TaggedSubrec "0"
+         OccursVarying "0"
+         PKeyIsCaseless "0"
+         SCDPurpose "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "ORIG_CLM_ID"
+         SqlType "12"
+         Precision "20"
+         Scale "0"
+         Nullable "0"
+         KeyPosition "0"
+         DisplaySize "20"
+         Derivation "CLM.CLM_ID"
+         Group "0"
+         SortKey "0"
+         SortType "0"
+         TableDef "DB2/UDB\\IDS\\W_CLM_RVRSL"
+         AllowCRLF "0"
+         LevelNo "0"
+         Occurs "0"
+         PadNulls "0"
+         SignOption "0"
+         SortingOrder "0"
+         ArrayHandling "0"
+         SyncIndicator "0"
+         PadChar ""
+         ColumnReference "ORIG_CLM_ID"
+         ExtendedPrecision "0"
+         TaggedSubrec "0"
+         OccursVarying "0"
+         PKeyIsCaseless "0"
+         SCDPurpose "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RVRSL_CLM_SK"
+         Description =+=+=+=
+<none>
+Searchable? N 
+=+=+=+=
+         SqlType "4"
+         Precision "0"
+         Scale "0"
+         Nullable "0"
+         KeyPosition "0"
+         DisplaySize "10"
+         Group "0"
+         SortKey "0"
+         SortType "0"
+         TableDef "DB2/UDB\\IDS\\W_CLM_RVRSL"
+         AllowCRLF "0"
+         LevelNo "0"
+         Occurs "0"
+         PadNulls "0"
+         SignOption "0"
+         SortingOrder "0"
+         ArrayHandling "0"
+         SyncIndicator "0"
+         PadChar ""
+         ColumnReference "RVRSL_CLM_SK"
+         ExtendedPrecision "0"
+         TaggedSubrec "0"
+         OccursVarying "0"
+         PKeyIsCaseless "0"
+         SCDPurpose "0"
+      END DSSUBRECORD
+      BEGIN DSSUBRECORD
+         Name "RVRSL_CLM_ID"
+         Description =+=+=+=
+<none>
+Searchable? N 
+=+=+=+=
+         SqlType "12"
+         Precision "20"
+         Scale "0"
+         Nullable "0"
+         KeyPosition "0"
+         DisplaySize "20"
+         Group "0"
+         SortKey "0"
+         SortType "0"
+         TableDef "DB2/UDB\\IDS\\W_CLM_RVRSL"
+         AllowCRLF "0"
+         LevelNo "0"
+         Occurs "0"
+         PadNulls "0"
+         SignOption "0"
+         SortingOrder "0"
+         ArrayHandling "0"
+         SyncIndicator "0"
+         PadChar ""
+         ColumnReference "RVRSL_CLM_ID"
+         ExtendedPrecision "0"
+         TaggedSubrec "0"
+         OccursVarying "0"
+         PKeyIsCaseless "0"
+         SCDPurpose "0"
+      END DSSUBRECORD
+      LeftTextPos "244"
+      TopTextPos "182"
+      LinkMinimised "0"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S132"
+      OLEType "CSeqFileStage"
+      Readonly "0"
+      Name "W_CLM_RVRSL"
+      NextID "2"
+      InputPins "V0S132P1"
+      UnixFormat "1"
+      PipeStage "0"
+      UnicodeBOM "1"
+      UnicodeSwapped "1"
+      AllowColumnMapping "0"
+      WithFilter "0"
+      StageType "CSeqFileStage"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V0S132P1"
+      OLEType "CSeqInput"
+      Readonly "0"
+      Name "orig_clm_hash"
+      Partner "V0S111|V0S111P5"
+      FileName "#$FilePath#/load/W_CLM_RVRSL.#Source#.dat"
+      Delimiter ","
+      QuoteChar "\""
+      ColHeaders "0"
+      OmitNewLine "0"
+      Append "0"
+      Backup "0"
+      FixedWidth "0"
+      ColSpace "0"
+      EnforceMetaData "0"
+      Writetime "0"
+      WaitforReader "0"
+      Flushrow "0"
+      PadChar "#"
+   END DSRECORD
+   BEGIN DSRECORD
+      Identifier "V23A0"
+      OLEType "CAnnotation"
+      Readonly "0"
+      Name "V23A0"
+      NextID "0"
+      AnnotationType "0"
+      AnnotationText "For IDS drug Claims: need to determine if the ClmR is for a claim in the input file or for a claim already loaded to IDS from a previous run.    If there is a claim on the IDS CLM table for the same person, drug, fill date AND that claim's status is A02 then the reversal is for that claim.   If there is no A02 claim on the IDS CLM table, then begin assuming the ClaimR is for a claim on the input file.   If the ClmR is for the claimon the input file, then they both should have the same Received Dt."
+      TextFont "MS Sans Serif\\10\\0\\0\\0\\400\\0"
+      TextHorizontalJustification "1"
+      TextVerticalJustification "1"
+      TextColor "0"
+      BackgroundColor "8454143"
+      BackgroundTransparent "0"
+      BorderVisible "1"
+   END DSRECORD
+END DSJOB

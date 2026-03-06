@@ -1,0 +1,415 @@
+{
+  "name": "CblTalnIdsCchgSnglCatGrpXfrm",
+  "properties": {
+    "parameters": {
+      "SrcSysCd": {
+        "type": "String",
+        "defaultValue": "COBALTTALON"
+      },
+      "SrcSysCdSk": {
+        "type": "String",
+        "defaultValue": "-1951782406"
+      },
+      "RunID": {
+        "type": "String",
+        "defaultValue": "100"
+      },
+      "RunIDTimeStamp": {
+        "type": "String",
+        "defaultValue": "2015-08-12-16.05.14.000000"
+      },
+      "CurrDate": {
+        "type": "String",
+        "defaultValue": "2015-08-12"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyFileToTempTbl",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "ParquetReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.some_random_name_TMP_CblTalnIdsCchgSnglCatGrpXfrm",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_parquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_adls_container}",
+              "param_directory": "'ds'",
+              "param_filename": "@concat('CCHG_SNGL_CAT_GRP.', pipeline().parameters.SrcSysCd, '.extr.', pipeline().parameters.RunID, '.ds')"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "some_random_name_TMP_CblTalnIdsCchgSnglCatGrpXfrm"
+            }
+          }
+        ]
+      },
+      {
+        "name": "TransformData",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "CopyFileToTempTbl",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.snap_TMP_CblTalnIdsCchgSnglCatGrpXfrm;SELECT LTRIM(RTRIM(CCHG_SNGL_CAT_GRP_CD)) AS CCHG_SNGL_CAT_GRP_CD, @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK INTO @{pipeline().globalParameters.gbl_param_ids_staging}.snap_TMP_CblTalnIdsCchgSnglCatGrpXfrm FROM @{pipeline().globalParameters.gbl_param_ids_staging}.some_random_name_TMP_CblTalnIdsCchgSnglCatGrpXfrm;DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.pkey_TMP_CblTalnIdsCchgSnglCatGrpXfrm;SELECT LTRIM(RTRIM(CCHG_SNGL_CAT_GRP_CD)) + ';' + @{pipeline().parameters.SrcSysCd} AS PRI_NAT_KEY_STRING, @{pipeline().parameters.RunIDTimeStamp} AS FIRST_RECYC_TS, 0 AS CCHG_SNGL_CAT_GRP_SK, LTRIM(RTRIM(CCHG_SNGL_CAT_GRP_CD)) AS CCHG_SNGL_CAT_GRP_CD, @{pipeline().parameters.SrcSysCd} AS SRC_SYS_CD, @{pipeline().parameters.SrcSysCdSk} AS SRC_SYS_CD_SK, 0 AS CRT_RUN_CYC_EXCTN_SK, 0 AS LAST_UPDT_RUN_CYC_EXCTN_SK, 'ICD9' AS ICD_VRSN_CD, LTRIM(RTRIM(CCHG_SNGL_CAT_GRP_DESC)) AS CCHG_SNGL_CAT_GRP_DESC, LTRIM(RTRIM(ICD9CM_MPPNG_DESC)) AS ICD_DIAG_CLM_MPPNG_DESC INTO @{pipeline().globalParameters.gbl_param_ids_staging}.pkey_TMP_CblTalnIdsCchgSnglCatGrpXfrm FROM @{pipeline().globalParameters.gbl_param_ids_staging}.some_random_name_TMP_CblTalnIdsCchgSnglCatGrpXfrm",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CopySnapToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "TransformData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "CCHG_SNGL_CAT_GRP_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD_SK",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "snap_TMP_CblTalnIdsCchgSnglCatGrpXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'load')",
+              "param_filename": "@concat('B_CCHG_SNGL_CAT_GRP.', pipeline().parameters.SrcSysCd, '.dat')",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CopyPkeyToFile",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "TransformData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".ds"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              },
+              "mappings": [
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 1
+                  },
+                  "sink": {
+                    "name": "PRI_NAT_KEY_STRING",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 2
+                  },
+                  "sink": {
+                    "name": "FIRST_RECYC_TS",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 3
+                  },
+                  "sink": {
+                    "name": "CCHG_SNGL_CAT_GRP_SK",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 4
+                  },
+                  "sink": {
+                    "name": "CCHG_SNGL_CAT_GRP_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 5
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 6
+                  },
+                  "sink": {
+                    "name": "SRC_SYS_CD_SK",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 7
+                  },
+                  "sink": {
+                    "name": "CRT_RUN_CYC_EXCTN_SK",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 8
+                  },
+                  "sink": {
+                    "name": "LAST_UPDT_RUN_CYC_EXCTN_SK",
+                    "type": "Int64",
+                    "physicalType": "Int64"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 9
+                  },
+                  "sink": {
+                    "name": "ICD_VRSN_CD",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 10
+                  },
+                  "sink": {
+                    "name": "CCHG_SNGL_CAT_GRP_DESC",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                },
+                {
+                  "source": {
+                    "physicalType": "String",
+                    "ordinal": 11
+                  },
+                  "sink": {
+                    "name": "ICD_DIAG_CLM_MPPNG_DESC",
+                    "type": "String",
+                    "physicalType": "String"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "pkey_TMP_CblTalnIdsCchgSnglCatGrpXfrm"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'ds')",
+              "param_filename": "@concat('CCHG_SNGL_CAT_GRP.', pipeline().parameters.SrcSysCd, '.xfrm.', pipeline().parameters.RunID, '.ds')",
+              "param_col_delimiter": "@null",
+              "param_row_delimiter": "@null",
+              "param_quote": "@null",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/CCHG/CchgSnglCatGrp"
+    }
+  },
+  "Description": "CALLED BY: CblTalnCchgExtrSeq\n\nPROCESSING:  Strip field function and Tranforamtion rules are applied on the data Extracted from inbound file\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                  DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                       DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam          2015-07-27           5460                              Initial Programming                                                                                IntegrateDev2            Bhoomi Dasari              8/30/2015\n\nAnnotations:\nCCHG_SNGL_CAT_GRP Transform job\nStrip Carriage Return, Line Feed, and Tab.\nTransformed Data will land into a Dataset for Primary Keying job.\n\nData is partitioned on Natural Key Columns."
+}

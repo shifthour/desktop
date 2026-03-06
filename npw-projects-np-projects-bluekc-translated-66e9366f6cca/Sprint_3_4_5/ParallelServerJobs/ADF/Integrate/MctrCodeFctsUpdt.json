@@ -1,0 +1,164 @@
+{
+  "name": "MctrCodeFctsUpdt",
+  "properties": {
+    "parameters": {
+      "RunID": {
+        "type": "string"
+      },
+      "TempTable": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_cdma_mctr_codes_to_stg",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false,
+            "tableOption": "autoCreate",
+            "preCopyScript": {
+              "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.step1_TMP_MctrCodeFctsUpdt",
+              "type": "Expression"
+            },
+            "disableMetricsCollection": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "MCTR_ENTITY",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "MCTR_TYPE",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "CDMA_DOMAIN",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_with_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_raw}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/landing')",
+              "param_filename": "cdma_mctr_codes.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "ws",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "step1_TMP_MctrCodeFctsUpdt"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Script_Transform_Cdma_mctr_codes",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Copy_cdma_mctr_codes_to_stg",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "WITH cte AS (SELECT SUBSTRING(MCTR_ENTITY,1,4) AS MCTR_ENTITY, SUBSTRING(MCTR_TYPE,1,4) AS MCTR_TYPE, SUBSTRING(CDMA_DOMAIN,1,50) AS CDMA_DOMAIN FROM @{pipeline().globalParameters.gbl_param_ids_staging}.step1_TMP_MctrCodeFctsUpdt); TRUNCATE TABLE tempdb..@{pipeline().parameters.TempTable}; INSERT INTO tempdb..@{pipeline().parameters.TempTable}(MCTR_ENTITY, MCTR_TYPE, CDMA_DOMAIN) SELECT MCTR_ENTITY, MCTR_TYPE, CDMA_DOMAIN FROM cte",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/CDMA"
+    }
+  },
+  "Description": "Job Name: MctrCodeFctsUpdt\n\nProcessing:  Read Facets code tables and compare to CDMA code sets.  Capture differences for emailing metadata analyst.\n\nMODIFICATIONS:\n\nDeveloper\tDate\t\tProject/Altiris #\t\tChange Description\t\t\t\t\tDevelopment Project\t\tReviewer\t\tReview Date\n=========================================================================================================================================================================================\nSaikiran Subbagari\t2018-10-11\tProduction Support\t\tOriginal Programming\t\t\t\tIntegrateDev2\t\tAbhiram Dasarathy\t2018-11-06\nSaikiran Subbagari\t2018-12-19\tProduction Support\t\tMade CDMA_DOMAIN as key field\t\t\tIntegrateDev2\t\tAbhiram Dasarathy\t2018-12-26\nPrabhu ES\t2022-04-11\tS2S                       \t\tMSSQL ODBC conn params added\t\t\tIntegrateDev5\t\tKen Bradmon\t2022-05-02\n\nAnnotations:\nCreate temp table in \\\"Before SQL\\\" statment\nLoad MCTR codes to temp. table for comparing CDMA codes in FctsCodeCompare1Extr"
+}

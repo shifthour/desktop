@@ -1,0 +1,97 @@
+{
+  "name": "IdsEdwClmSrcDtlFExtr",
+  "type": "Microsoft.DataFactory/factories/pipelines",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      },
+      "OPTUMRXRunCycle": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwClmSrcDtlFExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH DB2_IN AS (SELECT c.CLM_SK, c.CLM_ID, COALESCE(cd.TRGT_CD,'UNK') AS SRC_SYS_CD, c.CRT_RUN_CYC_EXCTN_SK, c.LAST_UPDT_RUN_CYC_EXCTN_SK, c.SRC_FILE_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CLM_SRC_DTL c JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG cd ON c.SRC_SYS_CD_SK = cd.CD_MPPNG_SK WHERE cd.TRGT_CD = 'OPTUMRX' AND c.LAST_UPDT_RUN_CYC_EXCTN_SK >= @{pipeline().parameters.OPTUMRXRunCycle}), XFM AS (SELECT CLM_SK, CLM_ID, SRC_SYS_CD, @{pipeline().parameters.EDWRunCycleDate} AS CRT_RUN_CYC_EXCTN_DT_SK, @{pipeline().parameters.EDWRunCycleDate} AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, SRC_FILE_ID FROM DB2_IN) SELECT CLM_SK, CLM_ID, SRC_SYS_CD, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, SRC_FILE_ID FROM XFM",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": false,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "CLM_SRC_DTL"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/load')",
+              "param_filename": "CLM_SRC_DTL_F.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Claims/EdwLoads/ClmSrcDtlF"
+    }
+  },
+  "Description": "COPYRIGHT 2023 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\nCALLED BY: IdsClaimsExtrSeq\n\nPROCESSING: Extract CLM_SRC_DTL from IDS\n\n\nMODIFICATIONS:\nDeveloper                                 Date               Project/Altiris #               Change Description                           Development Project        Code Reviewer               Date Reviewed\n----------------------------------           -------------------   -----------------------------------    ---------------------------------------------------------      ----------------------------------         ---------------------------------    -------------------------   \nHariKrishnaRao Yadav         2022-11-08        US 559701                            EnterpriseDevB                            Original Programming         Jeyaprasanna                  2023-01-14\n\nAnnotations:\nAdd Defaults and Null Handling\nThis is Source extract data from an IDS table and apply Code denormalization, create a load ready file.\n\nJob Name:\nIdsEdwClmSrcDtlFExtr\n\nTable:\nCLM_SRC_DTL_F\nRead from source table CLM_SRC_DTL from IDS\nThis is a load ready file conforms to the target table structure\n\nWrite CLM_SRC_DTL_F Data into a Sequential file for Load Job."
+}

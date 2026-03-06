@@ -1,0 +1,92 @@
+{
+  "name": "IdsEdwDntlCatPaymtDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycleDate": {
+        "type": "String"
+      },
+      "EDWRunCycle": {
+        "type": "Int"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsEdwDntlCatPaymtDExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "WITH cte_query AS (SELECT D.DNTL_CAT_PAYMT_SK, COALESCE(CD.TRGT_CD,'UNK') AS SRC_SYS_CD, D.DNTL_CAT_PAYMT_CMPNT_ID, D.DNTL_CAT_ID, D.DNTL_CAT_SK, D.DNTL_CAT_RULE_ID FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.DNTL_CAT_PAYMT D LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG CD ON D.SRC_SYS_CD_SK = CD.CD_MPPNG_SK), cte_transform AS (SELECT cte_query.DNTL_CAT_PAYMT_SK AS DNTL_CAT_PAYMT_SK, CASE WHEN dbo.trim_default(cte_query.SRC_SYS_CD) = '' THEN 'UNK' ELSE cte_query.SRC_SYS_CD END AS SRC_SYS_CD, cte_query.DNTL_CAT_PAYMT_CMPNT_ID, cte_query.DNTL_CAT_ID, '@{pipeline().parameters.EDWRunCycleDate}' AS CRT_RUN_CYC_EXCTN_DT_SK, '@{pipeline().parameters.EDWRunCycleDate}' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK, cte_query.DNTL_CAT_SK, cte_query.DNTL_CAT_RULE_ID, @{pipeline().parameters.EDWRunCycle} AS CRT_RUN_CYC_EXCTN_SK, @{pipeline().parameters.EDWRunCycle} AS LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_query) SELECT DNTL_CAT_PAYMT_SK, SRC_SYS_CD, DNTL_CAT_PAYMT_CMPNT_ID, DNTL_CAT_ID, CRT_RUN_CYC_EXCTN_DT_SK, LAST_UPDT_RUN_CYC_EXCTN_DT_SK, DNTL_CAT_SK, DNTL_CAT_RULE_ID, CRT_RUN_CYC_EXCTN_SK, LAST_UPDT_RUN_CYC_EXCTN_SK FROM cte_transform",
+              "type": "Expression"
+            },
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            },
+            "translator": {
+              "type": "TabularTranslator",
+              "typeConversion": true,
+              "typeConversionSettings": {
+                "allowDataTruncation": true,
+                "treatBooleanAsNumber": false
+              }
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "DNTL_CAT_PAYMT"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/Jobs/DataWarehouse/Product/EdwLoads/DntlCatPaymtD/load')",
+              "param_filename": "DNTL_CAT_PAYMT_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Product/EdwLoads/DntlCatPaymtD"
+    }
+  },
+  "Description": "COPYRIGHT 2010 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nCALLED BY:\n\nPROCESSING:\n\n\nMODIFICATIONS:\nDeveloper                          Date               Project/Altiris #               Change Description                             Development Project    Code Reviewer            Date Reviewed\n----------------------------------        -------------------   -----------------------------------    ---------------------------------------------------------   ----------------------------------   ---------------------------------    -------------------------   \nKimberly Doty                    04-29-2010     4044 Blue Renew v2      Original Programming                          EnterpriseCurDevl          Steph Goddard             05/19/2010\n\nSrikanth Mettpalli              05/22/2013        5114                           Original Programming                          EnterpriseWrhsDevl         Jag Yelavarthi              08/07/2013 \n                                                                                                       (Server to Parallel Conversion)\n\nAnnotations:\nWrite DNTL_CAT_PAYMT Data into a Sequential file for Load Job IdsEdwDntlCatPaymtDLoad.\nRead all the Data from IDS DNTL_CAT_PAYMT Table;\nAdd Defaults and Null Handling.\nJob Name: IdsEdwDntlCatPaymtDExtr"
+}

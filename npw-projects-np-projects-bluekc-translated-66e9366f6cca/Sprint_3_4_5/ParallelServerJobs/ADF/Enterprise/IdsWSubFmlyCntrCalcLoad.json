@@ -1,0 +1,181 @@
+{
+  "name": "IdsWSubFmlyCntrCalcLoad",
+  "properties": {
+    "activities": [
+      {
+        "name": "CP_W_Sub_Fmly_Cntr_Calc",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true,
+              "enablePartitionDiscovery": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "SqlMISink",
+            "preCopyScript": {
+              "value": "TRUNCATE TABLE @{pipeline().globalParameters.gbl_param_IDSOwner}.W_SUB_FMLY_CNTR_CALC",
+              "type": "Expression"
+            },
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            },
+            "mappings": [
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 1
+                },
+                "sink": {
+                  "name": "SUB_SK",
+                  "type": "Int32",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 2
+                },
+                "sink": {
+                  "name": "SUB_UNIQ_KEY",
+                  "type": "Int32",
+                  "physicalType": "INT"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 3
+                },
+                "sink": {
+                  "name": "SUB_FMLY_CNTR_DT_SK",
+                  "type": "String",
+                  "physicalType": "CHAR"
+                }
+              },
+              {
+                "source": {
+                  "physicalType": "String",
+                  "ordinal": 4
+                },
+                "sink": {
+                  "name": "MBR_ENR_CLS_PLN_PROD_CAT_CD",
+                  "type": "String",
+                  "physicalType": "VARCHAR"
+                }
+              }
+            ]
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().parameters.IDSFilePath,'/load')",
+              "param_filename": "W_SUB_FMLY_CNTR_CALC.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "W_SUB_FMLY_CNTR_CALC"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DB2StatsSubroutine",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "CP_W_Sub_Fmly_Cntr_Calc",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "notebookPath": {
+            "value": "@concat(pipeline().globalParameters.gbl_param_routine_notebook_path,'/sequencer_routines/DB2StatsSubroutine')",
+            "type": "Expression"
+          },
+          "baseParameters": {
+            "EnvProjectPath": {
+              "value": "@pipeline().globalParameters.gbl_param_environment",
+              "type": "Expression"
+            },
+            "FilePath": {
+              "value": "@concat('file ', pipeline().parameters.IDSFilePath, '/load')",
+              "type": "Expression"
+            },
+            "filename": {
+              "value": "W_SUB_FMLY_CNTR_CALC.dat",
+              "type": "Expression"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "shareddatabricks",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "parameters": {
+      "IDSFilePath": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "annotations": [],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Membership/EdwLoads/Driver"
+    }
+  },
+  "Description": "MODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nSrikanth Mettpalli      07/02/2013        5114                              Original Programming                                                                            EnterpriseWrhsDevl       Jag Yelavarthi           2013-07-20\n\nJag Yelavarthi          2015-10-21         TFS#10773         Added MBR_ENR_CLS_PLN_PROD_CAT_CD column into the work table      EnterpriseDev1       Kalyan Neelam            2015-10-26\n                                                                                       for separating the CNTR_CALC values for Medical and Dental\n\nAnnotations:\nJob Name: IdsWSubFmlyCntrCalcLoad\nRead Load File created in the IdsWSubFmlyCntrCalcExtr Job\nCopy Stage for buffer\nInsert into the W_SUB_FMLY_CNTR_CALC Table.\nLoad rejects are redirected into a Reject file"
+}

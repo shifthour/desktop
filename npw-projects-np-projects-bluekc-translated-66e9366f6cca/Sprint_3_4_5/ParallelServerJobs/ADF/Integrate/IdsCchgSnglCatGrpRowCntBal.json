@@ -1,0 +1,194 @@
+{
+  "name": "IdsCchgSnglCatGrpRowCntBal",
+  "properties": {
+    "activities": [
+      {
+        "name": "SCR_ProcessData",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_IN; WITH cte_in AS ( SELECT SRC.CCHG_SNGL_CAT_GRP_CD AS SRC_CCHG_SNGL_CAT_GRP_CD, SRC.SRC_SYS_CD_SK AS SRC_SRC_SYS_CD_SK, TRGT.CCHG_SNGL_CAT_GRP_CD AS TRGT_CCHG_SNGL_CAT_GRP_CD, TRGT.SRC_SYS_CD_SK AS TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.B_CCHG_SNGL_CAT_GRP AS SRC FULL OUTER JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CCHG_SNGL_CAT_GRP AS TRGT ON TRGT.CCHG_SNGL_CAT_GRP_CD = SRC.CCHG_SNGL_CAT_GRP_CD AND TRGT.SRC_SYS_CD_SK = SRC.SRC_SYS_CD_SK WHERE TRGT.LAST_UPDT_RUN_CYC_EXCTN_SK = @{pipeline().parameters.ExtrRunCycle} ) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_IN FROM cte_in;",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_Research; WITH cte_research AS ( SELECT SRC_CCHG_SNGL_CAT_GRP_CD, SRC_SRC_SYS_CD_SK, TRGT_CCHG_SNGL_CAT_GRP_CD, TRGT_SRC_SYS_CD_SK FROM @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_IN WHERE SRC_CCHG_SNGL_CAT_GRP_CD IS NULL OR SRC_SRC_SYS_CD_SK IS NULL OR TRGT_CCHG_SNGL_CAT_GRP_CD IS NULL OR TRGT_SRC_SYS_CD_SK IS NULL ) SELECT * INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_Research FROM cte_research;",
+                "type": "Expression"
+              }
+            },
+            {
+              "type": "Query",
+              "text": {
+                "value": "DROP TABLE IF EXISTS @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_Notify; IF (@{pipeline().parameters.ToleranceCd} = 'OUT') BEGIN SELECT 'ROW COUNT BALANCING FACETS - IDS CCHG_SNGL_CAT_GRP IS OUT OF TOLERANCE' AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_Notify; END ELSE BEGIN SELECT CAST(NULL AS VARCHAR(1)) AS NOTIFICATION INTO @{pipeline().globalParameters.gbl_param_ids_staging}.TMP_IdsCchgSnglCatGrpRowCntBal_Notify WHERE 1=0; END;",
+                "type": "Expression"
+              }
+            }
+          ]
+        },
+        "linkedServiceName": {
+          "referenceName": "ids",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "CP_Research",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "SCR_ProcessData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP_IdsCchgSnglCatGrpRowCntBal_Research"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/research')",
+              "param_filename": "@concat('IdsCchgSnglCatGrpResearch.dat.', pipeline().parameters.RunID)",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      },
+      {
+        "name": "CP_Notify",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "SCR_ProcessData",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".txt"
+            }
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_ids_staging}",
+              "param_table": "TMP_IdsCchgSnglCatGrpRowCntBal_Notify"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/balancing/notify')",
+              "param_filename": "IdsCchgBalancingNotification.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "\"",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "ToleranceCd": {
+        "type": "String"
+      },
+      "ExtrRunCycle": {
+        "type": "String"
+      },
+      "RunID": {
+        "type": "String"
+      }
+    },
+    "folder": {
+      "name": "Integrate/Jobs/DataWarehouse/MemberRisk/CCHG/CchgSnglCatGrp/Balancing"
+    }
+  },
+  "Description": "PROCESSING:  This job runs Balancing Full Outer Join SQL on CCHG_SNGL_CAT_GRP and B_CCHG_SNGL_CAT_GRP tables to find out if there are any fallouts.\n                                                                \n     \nMODIFICATIONS:\n                                                                                                                                                                                                                DATASTAGE               CODE                           DATE\nDEVELOPER             DATE                PROJECT                     DESCRIPTION                                                                                      ENVIRONMENT          REVIEWER                 REVIEW\n-----------------------------    ----------------------     ------------------------------        -----------------------------------------------------------------------------------------------------------  ------------------------------    ------------------------------       --------------------\nKalyan Neelam          2015-08-25           5460                               Initial Programming                                                                               IntegrateDev2            Bhoomi Dasari              8/30/2015\n\nAnnotations:\nThis job runs Balancing Full Outer Join SQL and finds out if there are any fallouts.\n\nTable name - CCHG_SNGL_CAT_GRP"
+}

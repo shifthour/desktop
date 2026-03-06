@@ -1,0 +1,90 @@
+{
+  "name": "IdsDmMbrshDmClsPlnExtr",
+  "properties": {
+    "parameters": {
+      "CurrRunCycle": {
+        "type": "Int"
+      }
+    },
+    "activities": [
+      {
+        "name": "Copy_IdsDmMbrshDmClsPlnExtr",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "queryTimeout": "02:00:00",
+            "partitionOption": "None",
+            "sqlReaderQuery": {
+              "value": "WITH cte_cls_pln AS ( SELECT CP.CLS_PLN_SK, COALESCE(SRCCD.TRGT_CD, 'UNK') AS SRC_SYS_CD, CP.CLS_PLN_ID, CP.CLS_PLN_METRO_RURAL_CD_SK, CP.BUY_UP_IN, CP.CLS_PLN_DESC, CP.PCMH_IN FROM @{pipeline().globalParameters.gbl_param_IDSOwner}.CLS_PLN AS CP LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG AS SRCCD ON CP.SRC_SYS_CD_SK = SRCCD.CD_MPPNG_SK WHERE CP.CLS_PLN_SK NOT IN (0, 1) ), cte_final AS ( SELECT cte_cls_pln.SRC_SYS_CD, cte_cls_pln.CLS_PLN_ID, cte_cls_pln.BUY_UP_IN AS CLS_PLN_BUY_UP_IN, cte_cls_pln.CLS_PLN_DESC, CASE WHEN ref.TRGT_CD IS NULL OR LTRIM(RTRIM(ref.TRGT_CD)) = '' THEN 'UNK' ELSE ref.TRGT_CD END AS CLS_PLN_METRO_RURAL_CD, CASE WHEN ref.TRGT_CD_NM IS NULL OR LTRIM(RTRIM(ref.TRGT_CD_NM)) = '' THEN 'UNK' ELSE ref.TRGT_CD_NM END AS CLS_PLN_METRO_RURAL_NM, cte_cls_pln.PCMH_IN AS CLS_PLN_PCMH_IN, @{pipeline().parameters.CurrRunCycle} AS LAST_UPDT_RUN_CYC_NO FROM cte_cls_pln LEFT JOIN @{pipeline().globalParameters.gbl_param_IDSOwner}.CD_MPPNG AS ref ON cte_cls_pln.CLS_PLN_METRO_RURAL_CD_SK = ref.CD_MPPNG_SK ) SELECT SRC_SYS_CD, CLS_PLN_ID, CLS_PLN_BUY_UP_IN, CLS_PLN_DESC, CLS_PLN_METRO_RURAL_CD, CLS_PLN_METRO_RURAL_NM, CLS_PLN_PCMH_IN, LAST_UPDT_RUN_CYC_NO FROM cte_final",
+              "type": "Expression"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "CLS_PLN"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment, '/', 'Jobs/WebDataMart/Member/MbrshDmClsPln/load')",
+              "param_filename": "MBRSH_DM_CLS_PLN.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Integrate/Jobs/WebDataMart/Member/MbrshDmClsPln"
+    }
+  },
+  "Description": "COPYRIGHT 2012 BLUE CROSS/BLUE SHIELD OF KANSAS CITY        \n                           \nPROCESSING:\n                    Extracts from IDS CLS_PLN and loads the DataMart table MBRSH_DM_CLS_PLN\n\nMODIFICATIONS:\nDeveloper                Date                 Project/Altiris #       Change Description                                                  Development Project      Code Reviewer          Date Reviewed       \n------------------              --------------------     ------------------------      -----------------------------------------------------------------------           --------------------------------       -------------------------------   ----------------------------       \nKalyan Neelam        2013-01-28     4963 VBB Phase III      Original Programming                                                IntegrateNewDevl         SAndrew                2013-02-05\n\nPooja Sunkara        2013-08-13        5114                           Converted from Server to Parallel                             IntegrateWrhsDevl      Peter Marshall           9/26/2013\n\nAnnotations:\nWrite CLS_PLN \nData into DM table MBRSH_DM_CLS_PLN\nRead all the Data from IDS  CLS_PLN\nAdd Defaults and Null Handling.\nJob Name:IdsDmMbrshDmClsPlnExtr"
+}

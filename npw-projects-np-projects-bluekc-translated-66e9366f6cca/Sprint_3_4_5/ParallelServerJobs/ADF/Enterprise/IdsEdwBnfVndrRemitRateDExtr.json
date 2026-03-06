@@ -1,0 +1,93 @@
+{
+  "name": "IdsEdwBnfVndrRemitRateDExtr",
+  "properties": {
+    "parameters": {
+      "EDWRunCycle": {
+        "type": "string"
+      },
+      "EDWRunCycleDate": {
+        "type": "string"
+      }
+    },
+    "activities": [
+      {
+        "name": "cpyIdsEdwBnfVndrRemitRateD",
+        "type": "Copy",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.12:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "@concat(\n'WITH cte_main AS (\n  SELECT \n    BNF_VNDR_REMIT_RATE_SK,\n    COALESCE(CD.TRGT_CD, ''UNK'') AS SRC_SYS_CD,\n    BNF_VNDR_ID,\n    BNF_SUM_DTL_TYP_CD,\n    EFF_DT_SK,\n    ',pipeline().parameters.EDWRunCycleDate,' AS CRT_RUN_CYC_EXCTN_DT_SK,\n    ',pipeline().parameters.EDWRunCycleDate,' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,\n    TERM_DT_SK,\n    BNF_VNDR_REMIT_RATE,\n    USER_ID,\n    LAST_UPDT_DT_SK,\n    ',pipeline().parameters.EDWRunCycle,' AS CRT_RUN_CYC_EXCTN_SK,\n    ',pipeline().parameters.EDWRunCycle,' AS LAST_UPDT_RUN_CYC_EXCTN_SK,\n    BNF_SUM_DTL_TYP_CD_SK\n  FROM ',pipeline().globalParameters.gbl_param_IDSOwner,'.BNF_VNDR_REMIT_RATE\n  LEFT JOIN ',pipeline().globalParameters.gbl_param_IDSOwner,'.CD_MPPNG CD\n    ON SRC_SYS_CD_SK = CD.CD_MPPNG_SK\n  WHERE BNF_VNDR_REMIT_RATE_SK <> 0 AND BNF_VNDR_REMIT_RATE_SK <> 1\n),\ncte_unk AS (\n  SELECT\n    0 AS BNF_VNDR_REMIT_RATE_SK,\n    ''UNK'' AS SRC_SYS_CD,\n    ''UNK'' AS BNF_VNDR_ID,\n    ''UNK'' AS BNF_SUM_DTL_TYP_CD,\n    ''1753-01-01'' AS EFF_DT_SK,\n    ''1753-01-01'' AS CRT_RUN_CYC_EXCTN_DT_SK,\n    ''1753-01-01'' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,\n    ''1753-01-01'' AS TERM_DT_SK,\n    0 AS BNF_VNDR_REMIT_RATE,\n    ''UNK'' AS USER_ID,\n    ''1753-01-01'' AS LAST_UPDT_DT_SK,\n    100 AS CRT_RUN_CYC_EXCTN_SK,\n    100 AS LAST_UPDT_RUN_CYC_EXCTN_SK,\n    0 AS BNF_SUM_DTL_TYP_CD_SK\n),\ncte_na AS (\n  SELECT\n    1 AS BNF_VNDR_REMIT_RATE_SK,\n    ''NA'' AS SRC_SYS_CD,\n    ''NA'' AS BNF_VNDR_ID,\n    ''NA'' AS BNF_SUM_DTL_TYP_CD,\n    ''1753-01-01'' AS EFF_DT_SK,\n    ''1753-01-01'' AS CRT_RUN_CYC_EXCTN_DT_SK,\n    ''1753-01-01'' AS LAST_UPDT_RUN_CYC_EXCTN_DT_SK,\n    ''1753-01-01'' AS TERM_DT_SK,\n    0 AS BNF_VNDR_REMIT_RATE,\n    ''NA'' AS USER_ID,\n    ''1753-01-01'' AS LAST_UPDT_DT_SK,\n    100 AS CRT_RUN_CYC_EXCTN_SK,\n    100 AS LAST_UPDT_RUN_CYC_EXCTN_SK,\n    1 AS BNF_SUM_DTL_TYP_CD_SK\n)\nSELECT * FROM cte_main\nUNION ALL\nSELECT * FROM cte_unk\nUNION ALL\nSELECT * FROM cte_na' )",
+              "type": "Expression"
+            },
+            "partitionOption": "None",
+            "queryTimeout": "02:00:00"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "AzureBlobStorageWriteSettings",
+              "copyBehavior": "FlattenHierarchy"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextWriteSettings",
+              "quoteAllText": true,
+              "fileExtension": ".dat"
+            }
+          },
+          "translator": {
+            "type": "TabularTranslator",
+            "typeConversion": true,
+            "typeConversionSettings": {
+              "allowDataTruncation": true,
+              "treatBooleanAsNumber": false
+            }
+          },
+          "linkedServiceName": {
+            "referenceName": "ids",
+            "type": "LinkedServiceReference"
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "ds_ids",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_schema": "@{pipeline().globalParameters.gbl_param_IDSOwner}",
+              "param_table": "BNF_VNDR_REMIT_RATE"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "ds_file_no_header",
+            "type": "DatasetReference",
+            "parameters": {
+              "param_container": "@{pipeline().globalParameters.gbl_param_container_integrate}",
+              "param_directory": "@concat(pipeline().globalParameters.gbl_param_environment,'/','load')",
+              "param_filename": "BNF_VNDR_REMIT_RATE_D.dat",
+              "param_col_delimiter": ",",
+              "param_row_delimiter": "@null",
+              "param_quote": "^",
+              "param_escape_character": "@null",
+              "param_null_value": "@null"
+            }
+          }
+        ]
+      }
+    ],
+    "folder": {
+      "name": "Enterprise/Jobs/DataWarehouse/Finance/EdwLoads/BnfVndrRemitRateD"
+    }
+  },
+  "Description": "COPYRIGHT 2006, 2007, 2008, 2009 BLUE CROSS/BLUE SHIELD OF KANSAS CITY \n\n\nDESCRIPTION:    Pulls data from IDS Facets table BNF_VNDR_REMIT_RATE  into EDW table BNF_VNDR_REMIT_RATE_D\n \n             \n\n\nMODIFICATIONS:\nDeveloper                             Date                  Project/Altiris #                                   Change Description                                                    Development Project     Code Reviewer            Date Reviewed\n----------------------------------        -------------------      -----------------------------------    ---------------------------------------------------------------------------------------------             ----------------------------------    ---------------------------------    -------------------------   \nBhoomi                               10/2/2009                 3500                         Originally Programmed                                                                        devlEDWnew             Steph Goddard             10/12/2009\n\nArchana Palivela                 08/27/2013             5114                          Originally Programmed  (In Parallel)                                                EnterpriseWhseDevl      Peter Marshall                11/21/2013\n\nAnnotations:\nJob name: IdsEdwPcaAdmDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file.\nWrite BNF_VNDR_REMIT_RATE Data into a Sequential file for Load Ready Job.\nRead data from source table \nBNF_VNDR_REMIT_RATE\nJob name: IdsEdwBnfVndrRemitRateDExtr\n\n\nJob Extract data from IDS table and apply Fkey and Code denormalization, create a load ready file."
+}
