@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getPhysioById } from "@/lib/data";
+import { Physiotherapist } from "@/lib/types";
+import { fetchPhysioById } from "@/lib/api-client";
 import StepIndicator from "@/components/StepIndicator";
 import SlotPicker from "@/components/SlotPicker";
 import Link from "next/link";
@@ -22,7 +23,15 @@ export default function BookingPage({ params }: { params: Promise<{ physioId: st
   const { physioId } = use(params);
   const searchParams = useSearchParams();
   const router = useRouter();
-  const physio = getPhysioById(physioId);
+  const [physio, setPhysio] = useState<Physiotherapist | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPhysioById(physioId)
+      .then(setPhysio)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [physioId]);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
@@ -36,6 +45,17 @@ export default function BookingPage({ params }: { params: Promise<{ physioId: st
     agreeTerms: false,
   });
   const [paymentMethod, setPaymentMethod] = useState("card");
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading booking details...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!physio) {
     return (

@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { physiotherapists, specializations } from "@/lib/data";
+import { useState, useEffect, useMemo } from "react";
+import { Physiotherapist } from "@/lib/types";
+import { fetchPhysios } from "@/lib/api-client";
+import { SpecializationItem, fetchSpecializations } from "@/lib/api-client";
 import ProviderCard from "@/components/ProviderCard";
 
 type VisitType = "clinic" | "home" | "online";
 type SortOption = "relevance" | "rating" | "price-low" | "price-high" | "experience";
 
 export default function SearchPage() {
+  const [allPhysios, setAllPhysios] = useState<Physiotherapist[]>([]);
+  const [specializations, setSpecializations] = useState<SpecializationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [selectedSpecs, setSelectedSpecs] = useState<string[]>([]);
   const [visitType, setVisitType] = useState<VisitType | "any">("any");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 200]);
@@ -17,8 +23,18 @@ export default function SearchPage() {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [searchLocation, setSearchLocation] = useState("London");
 
+  useEffect(() => {
+    Promise.all([fetchPhysios(), fetchSpecializations()])
+      .then(([physios, specs]) => {
+        setAllPhysios(physios);
+        setSpecializations(specs);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
   const filtered = useMemo(() => {
-    let result = physiotherapists.filter((p) => {
+    let result = allPhysios.filter((p) => {
       if (selectedSpecs.length > 0 && !selectedSpecs.some((s) => p.specializations.includes(s))) return false;
       if (visitType !== "any" && !p.visitTypes.includes(visitType)) return false;
       const minPrice = Math.min(...p.services.map((s) => s.price));
@@ -44,7 +60,7 @@ export default function SearchPage() {
     }
 
     return result;
-  }, [selectedSpecs, visitType, priceRange, minRating, gender, sortBy]);
+  }, [allPhysios, selectedSpecs, visitType, priceRange, minRating, gender, sortBy]);
 
   function toggleSpec(spec: string) {
     setSelectedSpecs((prev) =>
@@ -172,6 +188,17 @@ export default function SearchPage() {
       </button>
     </div>
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading physiotherapists...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-cream">

@@ -1,9 +1,9 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import { getPhysioBySlug, getReviewsByPhysioId } from "@/lib/data";
-import { notFound } from "next/navigation";
+import { Physiotherapist, Review } from "@/lib/types";
+import { fetchPhysioBySlug, fetchReviews } from "@/lib/api-client";
 import SlotPicker from "@/components/SlotPicker";
 import ReviewCard from "@/components/ReviewCard";
 
@@ -17,14 +17,49 @@ function getInitials(name: string) {
 
 export default function PhysioProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const physio = getPhysioBySlug(slug);
+  const [physio, setPhysio] = useState<Physiotherapist | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"about" | "services" | "reviews" | "location">("about");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
-  if (!physio) return notFound();
+  useEffect(() => {
+    fetchPhysioBySlug(slug)
+      .then(async (data) => {
+        if (data) {
+          setPhysio(data);
+          const rev = await fetchReviews(data.id);
+          setReviews(rev);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [slug]);
 
-  const reviews = getReviewsByPhysioId(physio.id);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!physio) {
+    return (
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4">😕</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Physiotherapist not found</h2>
+          <Link href="/search" className="btn-primary mt-4 inline-block">Browse All Physios</Link>
+        </div>
+      </div>
+    );
+  }
+
   const colorIndex = parseInt(physio.id) % avatarColors.length;
 
   const tabs = [

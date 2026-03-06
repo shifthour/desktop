@@ -15,13 +15,21 @@ export default function Navbar() {
             <Image src="/logo.png" alt="PhysioConnect" width={600} height={220} className="h-24 w-auto" priority />
           </Link>
 
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-6">
             <Link href="/search" className="text-gray-600 hover:text-primary transition-colors font-medium relative group">
               Find a Physio
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full rounded-full"></span>
             </Link>
             <a href="/#how-it-works" className="text-gray-600 hover:text-primary transition-colors font-medium relative group">
               How It Works
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full rounded-full"></span>
+            </a>
+            <a href="/#areas" className="text-gray-600 hover:text-primary transition-colors font-medium relative group">
+              Areas
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full rounded-full"></span>
+            </a>
+            <a href="/#pricing" className="text-gray-600 hover:text-primary transition-colors font-medium relative group">
+              Pricing
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full rounded-full"></span>
             </a>
             <a href="/#for-physios" className="text-gray-600 hover:text-primary transition-colors font-medium relative group">
@@ -56,6 +64,12 @@ export default function Navbar() {
             </Link>
             <a href="/#how-it-works" className="block py-3 px-3 text-navy font-medium rounded-xl hover:bg-primary-light transition-colors" onClick={() => setMobileOpen(false)}>
               How It Works
+            </a>
+            <a href="/#areas" className="block py-3 px-3 text-navy font-medium rounded-xl hover:bg-primary-light transition-colors" onClick={() => setMobileOpen(false)}>
+              Areas
+            </a>
+            <a href="/#pricing" className="block py-3 px-3 text-navy font-medium rounded-xl hover:bg-primary-light transition-colors" onClick={() => setMobileOpen(false)}>
+              Pricing
             </a>
             <a href="/#for-physios" className="block py-3 px-3 text-navy font-medium rounded-xl hover:bg-primary-light transition-colors" onClick={() => setMobileOpen(false)}>
               For Physios

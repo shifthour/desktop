@@ -149,7 +149,7 @@ export default function VideoHero() {
                 <source src={src} type="video/mp4" />
               </video>
               {/* Subtle vignette on each cell */}
-              <div className="absolute inset-0 bg-gradient-to-t from-navy/20 to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-navy/10 to-transparent pointer-events-none" />
             </div>
           ))}
         </div>
@@ -162,7 +162,7 @@ export default function VideoHero() {
         </div>
 
         {/* Bottom gradient fade into content section */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-cream to-transparent z-10" />
+        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-cream to-transparent z-10" />
 
         {/* Scroll indicator */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 animate-bounce">

@@ -15,8 +15,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <div className="mb-5">
-              <Image src="/logo.png" alt="PhysioConnect" width={400} height={145} className="h-20 w-auto brightness-0 invert" />
+            <div className="mb-5 inline-block bg-white rounded-2xl px-5 py-3">
+              <Image src="/logo.png" alt="PhysioConnect" width={500} height={180} className="h-20 w-auto" />
             </div>
             <p className="text-sm text-gray-400 leading-relaxed">
               Expert physiotherapy at your doorstep. HCPC-verified physiotherapists across the UK, available for home visits.

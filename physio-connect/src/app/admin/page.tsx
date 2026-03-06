@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { adminStats, sampleBookings, physiotherapists } from "@/lib/data";
+import { useState, useEffect } from "react";
+import { adminStats } from "@/lib/data";
+import { Physiotherapist, Booking } from "@/lib/types";
+import { fetchPhysios } from "@/lib/api-client";
 import Link from "next/link";
 
 type AdminTab = "dashboard" | "providers" | "bookings" | "slots";
@@ -24,6 +26,14 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [providerStatuses, setProviderStatuses] = useState<Record<string, string>>({});
   const [blockedSlots, setBlockedSlots] = useState<string[]>([]);
+  const [physiotherapists, setPhysiotherapists] = useState<Physiotherapist[]>([]);
+  const [sampleBookings] = useState<Booking[]>([]);
+
+  useEffect(() => {
+    fetchPhysios()
+      .then(setPhysiotherapists)
+      .catch(console.error);
+  }, []);
 
   const tabs = [
     { key: "dashboard" as const, label: "Dashboard", icon: "📊" },
@@ -358,8 +368,8 @@ export default function AdminPage() {
                 Dr. Ananya Sharma — {new Date().toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" })}
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                {physiotherapists[0].availability[0]?.slots.map((slot) => {
-                  const slotKey = `1-${physiotherapists[0].availability[0].date}-${slot.time}`;
+                {(physiotherapists[0]?.availability[0]?.slots || []).map((slot) => {
+                  const slotKey = `1-${physiotherapists[0]?.availability[0]?.date || ""}-${slot.time}`;
                   const isBlocked = blockedSlots.includes(slotKey);
                   return (
                     <button
