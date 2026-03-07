@@ -9,8 +9,11 @@ CREATE TABLE IF NOT EXISTS supporters (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     full_name TEXT NOT NULL,
     phone_number TEXT NOT NULL,
-    constituency TEXT NOT NULL,
-    bangalore_address TEXT NOT NULL,
+    district TEXT,
+    constituency TEXT,
+    bangalore_address TEXT,
+    profession TEXT,
+    volunteer TEXT DEFAULT 'Maybe',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -31,8 +34,18 @@ CREATE POLICY "Allow public reads"
     TO anon
     USING (true);
 
--- 5. Add index on phone_number to prevent duplicate lookups
+-- 5. Add indexes for performance
 CREATE INDEX idx_supporters_phone ON supporters (phone_number);
-
--- 6. Add index on constituency for filtering
 CREATE INDEX idx_supporters_constituency ON supporters (constituency);
+CREATE INDEX idx_supporters_district ON supporters (district);
+CREATE INDEX idx_supporters_bangalore_area ON supporters (bangalore_address);
+
+-- ============================================
+-- MIGRATION: If you already have the old table,
+-- run these ALTER statements instead:
+-- ============================================
+-- ALTER TABLE supporters ADD COLUMN IF NOT EXISTS district TEXT;
+-- ALTER TABLE supporters ADD COLUMN IF NOT EXISTS profession TEXT;
+-- ALTER TABLE supporters ADD COLUMN IF NOT EXISTS volunteer TEXT DEFAULT 'Maybe';
+-- CREATE INDEX IF NOT EXISTS idx_supporters_district ON supporters (district);
+-- CREATE INDEX IF NOT EXISTS idx_supporters_bangalore_area ON supporters (bangalore_address);
