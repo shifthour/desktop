@@ -438,6 +438,17 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [profilePhotoName, setProfilePhotoName] = useState<string>("");
 
+  // Resume upload
+  const [resumeName, setResumeName] = useState<string>("");
+
+  // Eligibility to work
+  const [eligibilityType, setEligibilityType] = useState<"" | "visa" | "uk_citizen">("");
+  const [visaShareCode, setVisaShareCode] = useState("");
+  const [passportPage1, setPassportPage1] = useState<string | null>(null);
+  const [passportPage1Name, setPassportPage1Name] = useState("");
+  const [passportPage2, setPassportPage2] = useState<string | null>(null);
+  const [passportPage2Name, setPassportPage2Name] = useState("");
+
   const [form, setForm] = useState({
     // Personal
     firstName: "",
@@ -474,6 +485,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     agreeTerms: false,
     agreePrivacy: false,
     agreeDBS: false,
+    agreeRightToWork: false,
   });
 
   const [formSubmitted, setFormSubmitted] = useState(false);
@@ -540,14 +552,44 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     setProfilePhotoName("");
   };
 
+  const handleResumeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResumeName(file.name);
+  };
+
+  const handlePassportUpload = (page: 1 | 2) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (page === 1) {
+        setPassportPage1(reader.result as string);
+        setPassportPage1Name(file.name);
+      } else {
+        setPassportPage2(reader.result as string);
+        setPassportPage2Name(file.name);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Eligibility validation
+  const isEligibilityValid =
+    eligibilityType === "visa" ? !!visaShareCode :
+    eligibilityType === "uk_citizen" ? !!passportPage1 :
+    false;
+
   const isFormValid =
     profilePhoto &&
+    resumeName &&
     form.firstName &&
     form.lastName &&
     form.email &&
     form.phone &&
     form.hcpcNumber &&
     form.professionalBody &&
+    form.membershipNumber &&
     form.yearsExperience &&
     form.addressLine1 &&
     form.city &&
@@ -555,9 +597,11 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     form.serviceRadius &&
     form.specialisations.length > 0 &&
     form.availability.length > 0 &&
+    isEligibilityValid &&
     form.agreeTerms &&
     form.agreePrivacy &&
-    form.agreeDBS;
+    form.agreeDBS &&
+    form.agreeRightToWork;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -729,6 +773,41 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
               <InputField label="Phone Number" required type="tel" value={form.phone} onChange={(v) => updateField("phone", v)} placeholder="07700 900000" />
               <InputField label="Date of Birth" required type="date" value={form.dateOfBirth} onChange={(v) => updateField("dateOfBirth", v)} />
             </div>
+
+            {/* Resume Upload */}
+            <div className="mt-8">
+              <label className="block text-sm font-medium text-navy mb-3">
+                Upload Resume / CV <span className="text-coral">*</span>
+                <span className="text-gray-400 font-normal ml-2 text-xs">PDF, DOC or DOCX. Max 10MB.</span>
+              </label>
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={handleResumeUpload}
+                  className="sr-only"
+                />
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-5 text-center hover:border-primary/50 hover:bg-primary-50/30 transition-all duration-200">
+                  <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-navy">
+                    {resumeName ? "Change file" : "Upload your CV / Resume"}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Click to browse or drag and drop</p>
+                </div>
+              </label>
+              {resumeName && (
+                <p className="mt-2 text-xs text-primary font-medium flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  {resumeName}
+                </p>
+              )}
+            </div>
           </FormSection>
 
           {/* ── Section: Professional Details ─────────────────── */}
@@ -748,7 +827,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
                   <option value="Other">Other</option>
                 </select>
               </div>
-              <InputField label="Membership Number" value={form.membershipNumber} onChange={(v) => updateField("membershipNumber", v)} placeholder="Optional" />
+              <InputField label="Membership Number" required value={form.membershipNumber} onChange={(v) => updateField("membershipNumber", v)} placeholder="e.g. 123456" />
               <div>
                 <label className="block text-sm font-medium text-navy mb-1.5">
                   Years of UK Experience <span className="text-coral">*</span>
@@ -860,8 +939,139 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
             </div>
           </FormSection>
 
+          {/* ── Section: Right to Work / Eligibility ─────────── */}
+          <FormSection number="06" title="Right to Work" description="Prove your eligibility to work in the United Kingdom">
+            <div>
+              <label className="block text-sm font-medium text-navy mb-1.5">
+                Eligibility to Work <span className="text-coral">*</span>
+              </label>
+              <select
+                value={eligibilityType}
+                onChange={(e) => {
+                  setEligibilityType(e.target.value as "" | "visa" | "uk_citizen");
+                  setVisaShareCode("");
+                  setPassportPage1(null);
+                  setPassportPage1Name("");
+                  setPassportPage2(null);
+                  setPassportPage2Name("");
+                }}
+                className="input-field"
+              >
+                <option value="">Select your eligibility type...</option>
+                <option value="visa">Visa</option>
+                <option value="uk_citizen">UK Citizen</option>
+              </select>
+            </div>
+
+            {/* Conditional: Visa → Share Code */}
+            {eligibilityType === "visa" && (
+              <div className="mt-5 animate-slide-up">
+                <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 mb-4">
+                  <p className="text-sm text-primary-dark flex items-center gap-2">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Please provide your share code from the UK Home Office right to work check.
+                  </p>
+                </div>
+                <InputField
+                  label="Share Code"
+                  required
+                  value={visaShareCode}
+                  onChange={(v) => setVisaShareCode(v)}
+                  placeholder="e.g. S7X 29H GP3"
+                />
+                <p className="mt-1.5 text-xs text-gray-400">
+                  You can get your share code at{" "}
+                  <span className="text-primary font-medium">gov.uk/prove-right-to-work</span>
+                </p>
+              </div>
+            )}
+
+            {/* Conditional: UK Citizen → Passport Upload (2 pages) */}
+            {eligibilityType === "uk_citizen" && (
+              <div className="mt-5 animate-slide-up">
+                <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 mb-4">
+                  <p className="text-sm text-primary-dark flex items-center gap-2">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Please upload the particulars pages of your UK passport (up to 2 pages).
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {/* Passport Page 1 */}
+                  <div>
+                    <label className="block text-sm font-medium text-navy mb-2">
+                      Passport Page 1 <span className="text-coral">*</span>
+                    </label>
+                    <label className="block cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handlePassportUpload(1)}
+                        className="sr-only"
+                      />
+                      <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-all duration-200 ${passportPage1 ? "border-primary/40 bg-primary-50/30" : "border-gray-200 hover:border-primary/50 hover:bg-primary-50/30"}`}>
+                        {passportPage1 ? (
+                          <div className="flex items-center gap-2 justify-center">
+                            <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                            <span className="text-sm text-primary font-medium truncate">{passportPage1Name}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <svg className="w-8 h-8 text-gray-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                            <p className="text-xs text-gray-500">Upload page 1</p>
+                          </>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Passport Page 2 */}
+                  <div>
+                    <label className="block text-sm font-medium text-navy mb-2">
+                      Passport Page 2 <span className="text-gray-400 font-normal text-xs">(optional)</span>
+                    </label>
+                    <label className="block cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handlePassportUpload(2)}
+                        className="sr-only"
+                      />
+                      <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-all duration-200 ${passportPage2 ? "border-primary/40 bg-primary-50/30" : "border-gray-200 hover:border-primary/50 hover:bg-primary-50/30"}`}>
+                        {passportPage2 ? (
+                          <div className="flex items-center gap-2 justify-center">
+                            <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                            <span className="text-sm text-primary font-medium truncate">{passportPage2Name}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <svg className="w-8 h-8 text-gray-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                            <p className="text-xs text-gray-500">Upload page 2</p>
+                          </>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-gray-400">Accepted formats: JPG, PNG, WebP or PDF. Max 5MB per file.</p>
+              </div>
+            )}
+          </FormSection>
+
           {/* ── Section: Agreements ───────────────────────────── */}
-          <FormSection number="06" title="Agreements &amp; Consent" description="Please review and agree to the following">
+          <FormSection number="07" title="Agreements &amp; Consent" description="Please review and agree to the following">
             <div className="space-y-4">
               <CheckboxField
                 checked={form.agreeTerms}
@@ -877,6 +1087,11 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
                 checked={form.agreeDBS}
                 onChange={(v) => updateField("agreeDBS", v)}
                 label={<>I understand that a DBS (Disclosure and Barring Service) check will be required and I consent to this process <span className="text-coral">*</span></>}
+              />
+              <CheckboxField
+                checked={form.agreeRightToWork}
+                onChange={(v) => updateField("agreeRightToWork", v)}
+                label={<>I understand and agree that my data will be used to check the right to work <span className="text-coral">*</span></>}
               />
             </div>
           </FormSection>

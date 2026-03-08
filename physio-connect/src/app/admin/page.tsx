@@ -273,6 +273,7 @@ export default function AdminPage() {
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-2 font-semibold text-gray-600">Provider</th>
                       <th className="text-left py-2 font-semibold text-gray-600">Specialization</th>
+                      <th className="text-left py-2 font-semibold text-gray-600">Area / Postcode</th>
                       <th className="text-left py-2 font-semibold text-gray-600">Rating</th>
                       <th className="text-left py-2 font-semibold text-gray-600">Sessions</th>
                       <th className="text-left py-2 font-semibold text-gray-600">Status</th>
@@ -287,6 +288,10 @@ export default function AdminPage() {
                           </Link>
                         </td>
                         <td className="py-3 text-gray-600">{p.specializations[0]}</td>
+                        <td className="py-3 text-gray-600">
+                          <div className="font-medium">{p.location.area}</div>
+                          <div className="text-xs text-gray-400">{p.location.city}</div>
+                        </td>
                         <td className="py-3 text-gray-600">★ {p.rating}</td>
                         <td className="py-3 text-gray-600">{p.totalSessions}</td>
                         <td className="py-3">

@@ -22,20 +22,6 @@ const londonAreas = [
   { area: "Greenwich", physioCount: 1 },
 ];
 
-const conditions = [
-  { name: "Sports Injury", icon: "🏃" },
-  { name: "Back Pain", icon: "🔙" },
-  { name: "Knee Rehab", icon: "🦵" },
-  { name: "Neck Pain", icon: "🤕" },
-  { name: "Post-Surgery Recovery", icon: "🏥" },
-  { name: "Neurological Rehab", icon: "🧠" },
-  { name: "Orthopedic", icon: "🦴" },
-  { name: "Paediatric", icon: "👶" },
-  { name: "Geriatric", icon: "🧓" },
-  { name: "Cardiopulmonary", icon: "❤️" },
-  { name: "Women's Health", icon: "🌸" },
-  { name: "Shoulder Pain", icon: "💪" },
-];
 
 export default function VideoHero() {
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
@@ -43,29 +29,20 @@ export default function VideoHero() {
   const gainRef = useRef<GainNode | null>(null);
 
   /* ── Search state ── */
-  const [conditionQuery, setConditionQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("London");
-  const [showConditionDropdown, setShowConditionDropdown] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
-  const conditionRef = useRef<HTMLDivElement>(null);
   const locationRef = useRef<HTMLDivElement>(null);
 
-  const filteredConditions = conditions.filter((c) =>
-    c.name.toLowerCase().includes(conditionQuery.toLowerCase())
-  );
   const filteredAreas = londonAreas.filter((a) =>
     a.area.toLowerCase().includes(locationQuery.toLowerCase()) ||
     "london".includes(locationQuery.toLowerCase())
   );
 
-  const searchHref = `/search${conditionQuery || locationQuery !== "London" ? "?" : ""}${conditionQuery ? `q=${encodeURIComponent(conditionQuery)}` : ""}${conditionQuery && locationQuery !== "London" ? "&" : ""}${locationQuery !== "London" ? `area=${encodeURIComponent(locationQuery)}` : ""}`;
+  const searchHref = `/search${locationQuery !== "London" ? `?area=${encodeURIComponent(locationQuery)}` : ""}`;
 
   /* Close dropdowns on outside click */
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (conditionRef.current && !conditionRef.current.contains(e.target as Node)) {
-        setShowConditionDropdown(false);
-      }
       if (locationRef.current && !locationRef.current.contains(e.target as Node)) {
         setShowLocationDropdown(false);
       }
@@ -201,37 +178,6 @@ export default function VideoHero() {
 
           {/* Search Bar */}
           <div className="mt-10 max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-2 sm:p-3 flex flex-col sm:flex-row gap-2 border border-gray-100/80">
-            {/* Condition Input */}
-            <div className="flex-1 relative" ref={conditionRef}>
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input
-                type="text"
-                placeholder="What do you need help with?"
-                value={conditionQuery}
-                onChange={(e) => { setConditionQuery(e.target.value); setShowConditionDropdown(true); }}
-                onFocus={() => setShowConditionDropdown(true)}
-                className="w-full pl-10 pr-4 py-3.5 border-0 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all text-gray-700"
-              />
-              {showConditionDropdown && filteredConditions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 max-h-64 overflow-y-auto">
-                  <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-50">
-                    Specialisations & Conditions
-                  </div>
-                  {filteredConditions.map((c) => (
-                    <button
-                      key={c.name}
-                      type="button"
-                      className="w-full text-left px-3 py-2.5 hover:bg-primary-light/50 transition-colors flex items-center gap-3 text-sm"
-                      onClick={() => { setConditionQuery(c.name); setShowConditionDropdown(false); }}
-                    >
-                      <span className="text-lg">{c.icon}</span>
-                      <span className="text-gray-700 font-medium">{c.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* Location Input */}
             <div className="flex-1 relative" ref={locationRef}>
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-coral z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
