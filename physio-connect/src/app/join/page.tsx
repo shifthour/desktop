@@ -441,13 +441,29 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
   // Resume upload
   const [resumeName, setResumeName] = useState<string>("");
 
+  // Mandatory ID proof upload
+  const [idProofName, setIdProofName] = useState<string>("");
+  const [idProofPreview, setIdProofPreview] = useState<string | null>(null);
+
   // Eligibility to work
   const [eligibilityType, setEligibilityType] = useState<"" | "visa" | "uk_citizen">("");
-  const [visaShareCode, setVisaShareCode] = useState("");
+  const [visaDocName, setVisaDocName] = useState<string>("");
+  const [visaDocPreview, setVisaDocPreview] = useState<string | null>(null);
   const [passportPage1, setPassportPage1] = useState<string | null>(null);
   const [passportPage1Name, setPassportPage1Name] = useState("");
   const [passportPage2, setPassportPage2] = useState<string | null>(null);
   const [passportPage2Name, setPassportPage2Name] = useState("");
+
+  // Weekly schedule: each day maps to an array of selected time slots
+  const [weeklySchedule, setWeeklySchedule] = useState<Record<string, string[]>>({
+    Monday: [],
+    Tuesday: [],
+    Wednesday: [],
+    Thursday: [],
+    Friday: [],
+    Saturday: [],
+    Sunday: [],
+  });
 
   const [form, setForm] = useState({
     // Personal
@@ -464,17 +480,9 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     yearsExperience: "",
     specialisations: [] as string[],
 
-    // Address
-    addressLine1: "",
-    addressLine2: "",
-    city: "",
-    postcode: "",
-
     // Work Preferences
     serviceRadius: "",
-    availability: [] as string[],
     homeVisit: false,
-    clinicBased: false,
     online: false,
 
     // About
@@ -505,13 +513,33 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     "Chronic Pain",
   ];
 
-  const availabilityOptions = [
-    "Weekday Mornings",
-    "Weekday Afternoons",
-    "Weekday Evenings",
-    "Saturday",
-    "Sunday",
+  const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const timeSlots = [
+    "08:00 – 10:00",
+    "10:00 – 12:00",
+    "12:00 – 14:00",
+    "14:00 – 16:00",
+    "16:00 – 18:00",
+    "18:00 – 20:00",
   ];
+
+  const toggleTimeSlot = (day: string, slot: string) => {
+    setWeeklySchedule((prev) => ({
+      ...prev,
+      [day]: prev[day].includes(slot)
+        ? prev[day].filter((s) => s !== slot)
+        : [...prev[day], slot],
+    }));
+  };
+
+  const toggleAllDay = (day: string) => {
+    setWeeklySchedule((prev) => ({
+      ...prev,
+      [day]: prev[day].length === timeSlots.length ? [] : [...timeSlots],
+    }));
+  };
+
+  const hasAnySchedule = Object.values(weeklySchedule).some((slots) => slots.length > 0);
 
   const toggleSpecialisation = (spec: string) => {
     setForm((prev) => ({
@@ -519,15 +547,6 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
       specialisations: prev.specialisations.includes(spec)
         ? prev.specialisations.filter((s) => s !== spec)
         : [...prev.specialisations, spec],
-    }));
-  };
-
-  const toggleAvailability = (avail: string) => {
-    setForm((prev) => ({
-      ...prev,
-      availability: prev.availability.includes(avail)
-        ? prev.availability.filter((a) => a !== avail)
-        : [...prev.availability, avail],
     }));
   };
 
@@ -558,6 +577,32 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     setResumeName(file.name);
   };
 
+  const handleIdProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIdProofName(file.name);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => setIdProofPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setIdProofPreview(null);
+    }
+  };
+
+  const handleVisaDocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVisaDocName(file.name);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => setVisaDocPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setVisaDocPreview(null);
+    }
+  };
+
   const handlePassportUpload = (page: 1 | 2) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -576,13 +621,14 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
 
   // Eligibility validation
   const isEligibilityValid =
-    eligibilityType === "visa" ? !!visaShareCode :
+    eligibilityType === "visa" ? !!visaDocName :
     eligibilityType === "uk_citizen" ? !!passportPage1 :
     false;
 
   const isFormValid =
     profilePhoto &&
     resumeName &&
+    idProofName &&
     form.firstName &&
     form.lastName &&
     form.email &&
@@ -591,12 +637,9 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     form.professionalBody &&
     form.membershipNumber &&
     form.yearsExperience &&
-    form.addressLine1 &&
-    form.city &&
-    form.postcode &&
     form.serviceRadius &&
     form.specialisations.length > 0 &&
-    form.availability.length > 0 &&
+    hasAnySchedule &&
     isEligibilityValid &&
     form.agreeTerms &&
     form.agreePrivacy &&
@@ -808,6 +851,53 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
                 </p>
               )}
             </div>
+
+            {/* ID Proof Upload */}
+            <div className="mt-8">
+              <label className="block text-sm font-medium text-navy mb-3">
+                Government-Issued Photo ID <span className="text-coral">*</span>
+                <span className="text-gray-400 font-normal ml-2 text-xs">Passport, Driving Licence, or National ID Card</span>
+              </label>
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={handleIdProofUpload}
+                  className="sr-only"
+                />
+                <div className={`border-2 border-dashed rounded-xl p-5 text-center transition-all duration-200 ${idProofName ? "border-primary/40 bg-primary-50/30" : "border-gray-200 hover:border-primary/50 hover:bg-primary-50/30"}`}>
+                  {idProofName ? (
+                    <div className="flex flex-col items-center gap-2">
+                      {idProofPreview && (
+                        <div className="w-20 h-14 rounded-lg overflow-hidden border border-primary/20 mb-1">
+                          <img src={idProofPreview} alt="ID preview" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        <span className="text-sm text-primary font-medium">{idProofName}</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Click to replace</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium text-navy">Upload your photo ID</p>
+                      <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP or PDF. Max 5MB.</p>
+                    </>
+                  )}
+                </div>
+              </label>
+              <p className="mt-2 text-xs text-gray-400">
+                This is used to verify your identity. Accepted: valid passport, UK driving licence, or national identity card.
+              </p>
+            </div>
           </FormSection>
 
           {/* ── Section: Professional Details ─────────────────── */}
@@ -864,22 +954,8 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
             </div>
           </FormSection>
 
-          {/* ── Section: Practice Address ─────────────────────── */}
-          <FormSection number="03" title="Practice Address" description="Where you're based (used for patient matching)">
-            <div className="grid sm:grid-cols-2 gap-5">
-              <div className="sm:col-span-2">
-                <InputField label="Address Line 1" required value={form.addressLine1} onChange={(v) => updateField("addressLine1", v)} placeholder="e.g. 42 Harley Street" />
-              </div>
-              <div className="sm:col-span-2">
-                <InputField label="Address Line 2" value={form.addressLine2} onChange={(v) => updateField("addressLine2", v)} placeholder="Optional" />
-              </div>
-              <InputField label="City" required value={form.city} onChange={(v) => updateField("city", v)} placeholder="e.g. London" />
-              <InputField label="Postcode" required value={form.postcode} onChange={(v) => updateField("postcode", v)} placeholder="e.g. W1G 9PA" />
-            </div>
-          </FormSection>
-
           {/* ── Section: Work Preferences ─────────────────────── */}
-          <FormSection number="04" title="Work Preferences" description="How and when you'd like to work">
+          <FormSection number="03" title="Work Preferences" description="How and when you'd like to work">
             <div className="grid sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-sm font-medium text-navy mb-1.5">Service Radius <span className="text-coral">*</span></label>
@@ -901,7 +977,6 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
               <div className="flex flex-wrap gap-3">
                 {[
                   { key: "homeVisit", label: "🏠 Home Visits", field: "homeVisit" as const },
-                  { key: "clinicBased", label: "🏥 Clinic-Based", field: "clinicBased" as const },
                   { key: "online", label: "💻 Online Sessions", field: "online" as const },
                 ].map((item) => (
                   <button key={item.key} type="button" onClick={() => updateField(item.field, !form[item.field])}
@@ -913,25 +988,135 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
               </div>
             </div>
 
-            <div className="mt-5">
-              <label className="block text-sm font-medium text-navy mb-2.5">
-                Availability <span className="text-coral">*</span>
-                <span className="text-gray-400 font-normal ml-2 text-xs">Select all that apply</span>
+            {/* Weekly Availability Schedule */}
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-navy mb-1">
+                Weekly Availability <span className="text-coral">*</span>
               </label>
-              <div className="flex flex-wrap gap-2.5">
-                {availabilityOptions.map((avail) => (
-                  <button key={avail} type="button" onClick={() => toggleAvailability(avail)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium border-2 transition-all duration-200 ${form.availability.includes(avail) ? "border-primary bg-primary text-white shadow-md" : "border-gray-200 bg-white text-gray-600 hover:border-primary/40 hover:text-primary"}`}
-                  >
-                    {avail}
-                  </button>
-                ))}
+              <p className="text-xs text-gray-400 mb-4">Click on time slots to set your preferred working hours for each day of the week.</p>
+
+              {/* Desktop: full grid */}
+              <div className="hidden md:block overflow-x-auto">
+                <div className="min-w-[700px]">
+                  {/* Header row */}
+                  <div className="grid grid-cols-[120px_repeat(6,1fr)] gap-1 mb-1">
+                    <div /> {/* empty corner */}
+                    {timeSlots.map((slot) => (
+                      <div key={slot} className="text-center text-[11px] font-medium text-gray-500 py-1.5">
+                        {slot}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Day rows */}
+                  {weekDays.map((day) => {
+                    const allSelected = weeklySchedule[day].length === timeSlots.length;
+                    return (
+                      <div key={day} className="grid grid-cols-[120px_repeat(6,1fr)] gap-1 mb-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleAllDay(day)}
+                          className={`text-left text-sm font-semibold py-2.5 px-3 rounded-lg transition-all duration-200 ${
+                            allSelected
+                              ? "bg-primary text-white"
+                              : weeklySchedule[day].length > 0
+                              ? "bg-primary-light text-primary-dark"
+                              : "text-navy hover:bg-gray-50"
+                          }`}
+                        >
+                          {day.slice(0, 3)}
+                          {weeklySchedule[day].length > 0 && (
+                            <span className={`ml-1.5 text-[10px] font-normal ${allSelected ? "text-white/70" : "text-primary/60"}`}>
+                              ({weeklySchedule[day].length})
+                            </span>
+                          )}
+                        </button>
+                        {timeSlots.map((slot) => {
+                          const isSelected = weeklySchedule[day].includes(slot);
+                          return (
+                            <button
+                              key={`${day}-${slot}`}
+                              type="button"
+                              onClick={() => toggleTimeSlot(day, slot)}
+                              className={`py-2.5 rounded-lg text-xs font-medium border transition-all duration-150 ${
+                                isSelected
+                                  ? "bg-primary border-primary text-white shadow-sm"
+                                  : "bg-gray-50 border-gray-200 text-gray-400 hover:border-primary/40 hover:bg-primary-50 hover:text-primary"
+                              }`}
+                            >
+                              {isSelected ? "✓" : "–"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Mobile: collapsible day sections */}
+              <div className="md:hidden space-y-2">
+                {weekDays.map((day) => {
+                  const daySlots = weeklySchedule[day];
+                  const allSelected = daySlots.length === timeSlots.length;
+                  return (
+                    <div key={day} className="border border-gray-200 rounded-xl overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleAllDay(day)}
+                        className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                          daySlots.length > 0 ? "bg-primary-light text-primary-dark" : "bg-gray-50 text-navy"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          {day}
+                          {daySlots.length > 0 && (
+                            <span className="text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5">
+                              {daySlots.length} slot{daySlots.length > 1 ? "s" : ""}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-xs text-gray-400">{allSelected ? "Clear all" : "Select all"}</span>
+                      </button>
+                      <div className="grid grid-cols-2 gap-1.5 p-3 bg-white">
+                        {timeSlots.map((slot) => {
+                          const isSelected = daySlots.includes(slot);
+                          return (
+                            <button
+                              key={`${day}-${slot}-mobile`}
+                              type="button"
+                              onClick={() => toggleTimeSlot(day, slot)}
+                              className={`py-2 px-3 rounded-lg text-xs font-medium border transition-all duration-150 ${
+                                isSelected
+                                  ? "bg-primary border-primary text-white"
+                                  : "bg-gray-50 border-gray-200 text-gray-500 hover:border-primary/40"
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Summary */}
+              {hasAnySchedule && (
+                <div className="mt-3 p-3 bg-primary-50 rounded-xl">
+                  <p className="text-xs font-medium text-primary-dark">
+                    📅 {Object.entries(weeklySchedule).filter(([, slots]) => slots.length > 0).length} day{Object.entries(weeklySchedule).filter(([, slots]) => slots.length > 0).length > 1 ? "s" : ""} selected
+                    {" · "}
+                    {Object.values(weeklySchedule).reduce((sum, slots) => sum + slots.length, 0)} total time slot{Object.values(weeklySchedule).reduce((sum, slots) => sum + slots.length, 0) > 1 ? "s" : ""}
+                  </p>
+                </div>
+              )}
             </div>
           </FormSection>
 
           {/* ── Section: About You ────────────────────────────── */}
-          <FormSection number="05" title="About You" description="Tell patients why they should choose you">
+          <FormSection number="04" title="About You" description="Tell patients why they should choose you">
             <div>
               <label className="block text-sm font-medium text-navy mb-1.5">Professional Bio</label>
               <textarea value={form.bio} onChange={(e) => updateField("bio", e.target.value)} rows={5} className="input-field resize-none" placeholder="Write a short bio about your experience, approach to treatment, and what patients can expect. This will be visible on your public profile..." />
@@ -940,7 +1125,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
           </FormSection>
 
           {/* ── Section: Right to Work / Eligibility ─────────── */}
-          <FormSection number="06" title="Right to Work" description="Prove your eligibility to work in the United Kingdom">
+          <FormSection number="05" title="Right to Work" description="Prove your eligibility to work in the United Kingdom">
             <div>
               <label className="block text-sm font-medium text-navy mb-1.5">
                 Eligibility to Work <span className="text-coral">*</span>
@@ -949,7 +1134,8 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
                 value={eligibilityType}
                 onChange={(e) => {
                   setEligibilityType(e.target.value as "" | "visa" | "uk_citizen");
-                  setVisaShareCode("");
+                  setVisaDocName("");
+                  setVisaDocPreview(null);
                   setPassportPage1(null);
                   setPassportPage1Name("");
                   setPassportPage2(null);
@@ -963,7 +1149,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
               </select>
             </div>
 
-            {/* Conditional: Visa → Share Code */}
+            {/* Conditional: Visa → Document Upload */}
             {eligibilityType === "visa" && (
               <div className="mt-5 animate-slide-up">
                 <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 mb-4">
@@ -971,20 +1157,40 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
                     <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Please provide your share code from the UK Home Office right to work check.
+                    Please upload a copy of your valid UK visa document.
                   </p>
                 </div>
-                <InputField
-                  label="Share Code"
-                  required
-                  value={visaShareCode}
-                  onChange={(v) => setVisaShareCode(v)}
-                  placeholder="e.g. S7X 29H GP3"
-                />
-                <p className="mt-1.5 text-xs text-gray-400">
-                  You can get your share code at{" "}
-                  <span className="text-primary font-medium">gov.uk/prove-right-to-work</span>
-                </p>
+                <label className="block text-sm font-medium text-navy mb-2">
+                  Visa Document <span className="text-coral">*</span>
+                </label>
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={handleVisaDocUpload}
+                    className="sr-only"
+                  />
+                  <div className={`border-2 border-dashed rounded-xl p-5 text-center transition-all duration-200 ${visaDocName ? "border-primary/40 bg-primary-50/30" : "border-gray-200 hover:border-primary/50 hover:bg-primary-50/30"}`}>
+                    {visaDocName ? (
+                      <div className="flex items-center gap-2 justify-center">
+                        <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        <span className="text-sm text-primary font-medium truncate">{visaDocName}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center mx-auto mb-3">
+                          <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                          </svg>
+                        </div>
+                        <p className="text-sm font-medium text-navy">Upload your visa document</p>
+                        <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP or PDF. Max 5MB.</p>
+                      </>
+                    )}
+                  </div>
+                </label>
               </div>
             )}
 
@@ -1071,7 +1277,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
           </FormSection>
 
           {/* ── Section: Agreements ───────────────────────────── */}
-          <FormSection number="07" title="Agreements &amp; Consent" description="Please review and agree to the following">
+          <FormSection number="06" title="Agreements &amp; Consent" description="Please review and agree to the following">
             <div className="space-y-4">
               <CheckboxField
                 checked={form.agreeTerms}
