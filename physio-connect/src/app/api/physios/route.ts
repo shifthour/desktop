@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { transformPhysio, physioIncludes } from "@/lib/transforms";
+import { supabase } from "@/lib/supabase";
+import { transformPhysio, PHYSIO_SELECT } from "@/lib/transforms";
 import { physiotherapists as staticPhysios } from "@/lib/data";
 
 export async function GET(request: NextRequest) {
@@ -13,40 +13,38 @@ export async function GET(request: NextRequest) {
     const gender = searchParams.get("gender");
     const area = searchParams.get("area");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
+    let query = supabase
+      .from("physioconnect_physiotherapists")
+      .select(PHYSIO_SELECT)
+      .order("rating", { ascending: false });
 
-    if (specialization) {
-      where.specializations = {
-        some: { specialization: { name: specialization } },
-      };
-    }
-    if (visitType) {
-      where.visitTypes = {
-        some: { visitType },
-      };
-    }
     if (minRating) {
-      where.rating = { gte: parseFloat(minRating) };
+      query = query.gte("rating", parseFloat(minRating));
     }
     if (gender && gender !== "any") {
-      where.gender = gender;
+      query = query.eq("gender", gender);
     }
     if (area) {
-      where.locationArea = area;
+      query = query.eq("locationArea", area);
     }
 
-    const physios = await prisma.physiotherapist.findMany({
-      where,
-      include: physioIncludes,
-      orderBy: { rating: "desc" },
-    });
+    const { data: physios, error } = await query;
+    if (error) throw error;
 
-    const result = physios.map((p, i) => transformPhysio(p, i));
+    let result = (physios || []).map((p, i) => transformPhysio(p, i));
+
+    // Filter by specialization (nested relation — done client-side)
+    if (specialization) {
+      result = result.filter((p) => p.specializations.includes(specialization));
+    }
+    // Filter by visitType (nested relation — done client-side)
+    if (visitType) {
+      result = result.filter((p) => p.visitTypes.includes(visitType as "clinic" | "home" | "online"));
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     console.error("DB unavailable, falling back to static data:", error);
-    // Fallback to static data when database is unavailable
     return NextResponse.json(staticPhysios);
   }
 }

@@ -5,8 +5,8 @@ import {
   physiotherapists as staticPhysios,
   specializations as staticSpecs,
 } from "@/lib/data";
-import { prisma } from "@/lib/prisma";
-import { transformPhysio, physioIncludes } from "@/lib/transforms";
+import { supabase } from "@/lib/supabase";
+import { transformPhysio, PHYSIO_SELECT } from "@/lib/transforms";
 import ProviderCard from "@/components/ProviderCard";
 import VideoHero from "@/components/VideoHero";
 
@@ -17,21 +17,26 @@ export default async function HomePage() {
   let specializations;
 
   try {
-    // Fetch top-rated physios directly from DB (Server Component)
-    const dbPhysios = await prisma.physiotherapist.findMany({
-      include: physioIncludes,
-      orderBy: { rating: "desc" },
-      take: 4,
-    });
-    topRated = dbPhysios.map((p, i) => transformPhysio(p, i));
+    // Fetch top-rated physios from Supabase (Server Component)
+    const { data: dbPhysios, error: physioError } = await supabase
+      .from("physioconnect_physiotherapists")
+      .select(PHYSIO_SELECT)
+      .order("rating", { ascending: false })
+      .limit(4);
 
-    // Fetch specializations from DB
-    specializations = await prisma.specialization.findMany({
-      orderBy: { name: "asc" },
-    });
+    if (physioError) throw physioError;
+    topRated = (dbPhysios || []).map((p, i) => transformPhysio(p, i));
+
+    // Fetch specializations from Supabase
+    const { data: specs, error: specError } = await supabase
+      .from("physioconnect_specializations")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (specError) throw specError;
+    specializations = specs || staticSpecs;
   } catch (error) {
     console.error("DB unavailable, falling back to static data:", error);
-    // Fallback to static data when database is unavailable
     topRated = staticPhysios.slice(0, 4);
     specializations = staticSpecs;
   }

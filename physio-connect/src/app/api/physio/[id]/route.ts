@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { transformPhysio, physioIncludes } from "@/lib/transforms";
+import { supabase } from "@/lib/supabase";
+import { transformPhysio, PHYSIO_SELECT } from "@/lib/transforms";
 import { getPhysioById } from "@/lib/data";
 
 export async function GET(
@@ -10,13 +10,13 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const physio = await prisma.physiotherapist.findUnique({
-      where: { id },
-      include: physioIncludes,
-    });
+    const { data: physio, error } = await supabase
+      .from("physioconnect_physiotherapists")
+      .select(PHYSIO_SELECT)
+      .eq("id", id)
+      .single();
 
-    if (!physio) {
-      // Try static data fallback
+    if (error || !physio) {
       const staticPhysio = getPhysioById(id);
       if (staticPhysio) return NextResponse.json(staticPhysio);
       return NextResponse.json({ error: "Not found" }, { status: 404 });

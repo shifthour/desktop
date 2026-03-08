@@ -437,22 +437,32 @@ export default function JoinPage() {
 function RegistrationForm({ onBack }: { onBack: () => void }) {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [profilePhotoName, setProfilePhotoName] = useState<string>("");
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
 
   // Resume upload
   const [resumeName, setResumeName] = useState<string>("");
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
   // Mandatory ID proof upload
   const [idProofName, setIdProofName] = useState<string>("");
   const [idProofPreview, setIdProofPreview] = useState<string | null>(null);
+  const [idProofFile, setIdProofFile] = useState<File | null>(null);
 
   // Eligibility to work
   const [eligibilityType, setEligibilityType] = useState<"" | "visa" | "uk_citizen">("");
   const [visaDocName, setVisaDocName] = useState<string>("");
   const [visaDocPreview, setVisaDocPreview] = useState<string | null>(null);
+  const [visaDocFile, setVisaDocFile] = useState<File | null>(null);
   const [passportPage1, setPassportPage1] = useState<string | null>(null);
   const [passportPage1Name, setPassportPage1Name] = useState("");
+  const [passportPage1File, setPassportPage1File] = useState<File | null>(null);
   const [passportPage2, setPassportPage2] = useState<string | null>(null);
   const [passportPage2Name, setPassportPage2Name] = useState("");
+  const [passportPage2File, setPassportPage2File] = useState<File | null>(null);
+
+  // Submission state
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // Weekly schedule: each day maps to an array of selected time slots
   const [weeklySchedule, setWeeklySchedule] = useState<Record<string, string[]>>({
@@ -559,6 +569,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     if (!file) return;
     if (!file.type.startsWith("image/")) return;
     setProfilePhotoName(file.name);
+    setProfilePhotoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => {
       setProfilePhoto(reader.result as string);
@@ -569,18 +580,21 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
   const removePhoto = () => {
     setProfilePhoto(null);
     setProfilePhotoName("");
+    setProfilePhotoFile(null);
   };
 
   const handleResumeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setResumeName(file.name);
+    setResumeFile(file);
   };
 
   const handleIdProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIdProofName(file.name);
+    setIdProofFile(file);
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => setIdProofPreview(reader.result as string);
@@ -594,6 +608,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setVisaDocName(file.name);
+    setVisaDocFile(file);
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => setVisaDocPreview(reader.result as string);
@@ -606,6 +621,8 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
   const handlePassportUpload = (page: 1 | 2) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (page === 1) setPassportPage1File(file);
+    else setPassportPage2File(file);
     const reader = new FileReader();
     reader.onloadend = () => {
       if (page === 1) {
@@ -646,11 +663,88 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     form.agreeDBS &&
     form.agreeRightToWork;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Helper to upload a file to Supabase Storage
+  const uploadFile = async (file: File, applicationId: string, fileType: string): Promise<string | null> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("applicationId", applicationId);
+    fd.append("fileType", fileType);
+    const res = await fetch("/api/applications/upload", { method: "POST", body: fd });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.path || null;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
-    setFormSubmitted(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (!isFormValid || submitting) return;
+
+    setSubmitting(true);
+    setSubmitError("");
+
+    try {
+      // Generate a temporary application ID for file storage paths
+      const tempId = `app_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+      // Upload files in parallel
+      const uploads = await Promise.all([
+        profilePhotoFile ? uploadFile(profilePhotoFile, tempId, "profile-photo") : null,
+        resumeFile ? uploadFile(resumeFile, tempId, "resume") : null,
+        idProofFile ? uploadFile(idProofFile, tempId, "id-proof") : null,
+        visaDocFile ? uploadFile(visaDocFile, tempId, "visa-doc") : null,
+        passportPage1File ? uploadFile(passportPage1File, tempId, "passport-page1") : null,
+        passportPage2File ? uploadFile(passportPage2File, tempId, "passport-page2") : null,
+      ]);
+
+      const [profilePhotoUrl, resumeUrl, idProofUrl, visaDocUrl, passportPage1Url, passportPage2Url] = uploads;
+
+      // Submit application data
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          phone: form.phone,
+          dateOfBirth: form.dateOfBirth,
+          profilePhotoUrl,
+          resumeUrl,
+          idProofUrl,
+          hcpcNumber: form.hcpcNumber,
+          professionalBody: form.professionalBody,
+          membershipNumber: form.membershipNumber,
+          yearsExperience: form.yearsExperience,
+          qualifications: form.qualifications,
+          specialisations: form.specialisations,
+          serviceRadius: form.serviceRadius,
+          homeVisit: form.homeVisit,
+          online: form.online,
+          weeklySchedule,
+          bio: form.bio,
+          eligibilityType,
+          visaDocUrl,
+          passportPage1Url,
+          passportPage2Url,
+          agreeTerms: form.agreeTerms,
+          agreePrivacy: form.agreePrivacy,
+          agreeDBS: form.agreeDBS,
+          agreeRightToWork: form.agreeRightToWork,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Submission failed");
+      }
+
+      setFormSubmitted(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   /* ── Success State ──────────────────────────────────────────── */
@@ -1303,19 +1397,41 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
           </FormSection>
         </div>
 
+        {/* Submit Error */}
+        {submitError && (
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-center gap-2">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            {submitError}
+          </div>
+        )}
+
         {/* Submit */}
         <div className="mt-12 flex flex-col items-center pb-8">
-          <button type="submit" disabled={!isFormValid}
-            className={`relative px-12 py-4 rounded-full font-semibold text-lg transition-all duration-300 shadow-lg ${isFormValid ? "bg-gradient-to-r from-coral to-coral-dark text-white hover:shadow-xl hover:-translate-y-0.5 cursor-pointer" : "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"}`}
+          <button type="submit" disabled={!isFormValid || submitting}
+            className={`relative px-12 py-4 rounded-full font-semibold text-lg transition-all duration-300 shadow-lg ${isFormValid && !submitting ? "bg-gradient-to-r from-coral to-coral-dark text-white hover:shadow-xl hover:-translate-y-0.5 cursor-pointer" : "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"}`}
           >
-            <span className="flex items-center gap-2">
-              Submit Application
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-              </svg>
-            </span>
+            {submitting ? (
+              <span className="flex items-center gap-2">
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Submitting...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                Submit Application
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                </svg>
+              </span>
+            )}
           </button>
-          <p className="mt-3 text-sm text-gray-400">Your application will be reviewed within 2-3 working days</p>
+          <p className="mt-3 text-sm text-gray-400">
+            {submitting ? "Uploading files and submitting your application..." : "Your application will be reviewed within 2-3 working days"}
+          </p>
         </div>
       </form>
     </div>

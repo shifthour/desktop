@@ -32,7 +32,6 @@ function getNextDays(count: number): string[] {
 
 function generateAvailability(physioIndex: number) {
   const nextDays = getNextDays(14);
-  // Use varying booked patterns based on physio index for variety
   return nextDays.map((d, i) => {
     const pattern = (physioIndex + i) % 4;
     const booked =
@@ -47,8 +46,19 @@ function generateAvailability(physioIndex: number) {
   });
 }
 
+/** Supabase select query for fetching a full physiotherapist with relations */
+export const PHYSIO_SELECT = `
+  *,
+  specializations:physioconnect_physio_specializations(
+    specialization:physioconnect_specializations(name)
+  ),
+  qualifications:physioconnect_qualifications(text, sortOrder),
+  visitTypes:physioconnect_physio_visit_types(visitType),
+  services:physioconnect_services(id, name, duration, price, description, sortOrder)
+`;
+
 /**
- * Transform a Prisma physiotherapist record (with includes) to the
+ * Transform a Supabase physiotherapist record (with joins) to the
  * frontend Physiotherapist interface.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,12 +69,15 @@ export function transformPhysio(dbPhysio: any, index: number = 0): Physiotherapi
     name: dbPhysio.name,
     photo: dbPhysio.photo,
     gender: dbPhysio.gender,
-    specializations: dbPhysio.specializations.map(
+    specializations: (dbPhysio.specializations || []).map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (ps: any) => ps.specialization.name
     ),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    qualifications: dbPhysio.qualifications.map((q: any) => q.text),
+    qualifications: (dbPhysio.qualifications || [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((q: any) => q.text),
     experience: dbPhysio.experience,
     bio: dbPhysio.bio,
     rating: dbPhysio.rating,
@@ -77,25 +90,20 @@ export function transformPhysio(dbPhysio: any, index: number = 0): Physiotherapi
       lng: dbPhysio.locationLng,
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    visitTypes: dbPhysio.visitTypes.map((vt: any) => vt.visitType),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    services: dbPhysio.services.map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      duration: s.duration,
-      price: s.price,
-      description: s.description,
-    })),
+    visitTypes: (dbPhysio.visitTypes || []).map((vt: any) => vt.visitType),
+    services: (dbPhysio.services || [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        duration: s.duration,
+        price: s.price,
+        description: s.description,
+      })),
     availability: generateAvailability(index),
     verified: dbPhysio.verified,
     totalSessions: dbPhysio.totalSessions,
   };
 }
-
-/** Standard Prisma include for fetching a full physiotherapist */
-export const physioIncludes = {
-  specializations: { include: { specialization: true } },
-  qualifications: { orderBy: { sortOrder: "asc" as const } },
-  visitTypes: true,
-  services: { orderBy: { sortOrder: "asc" as const } },
-};

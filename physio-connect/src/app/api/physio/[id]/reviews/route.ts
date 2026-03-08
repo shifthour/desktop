@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { getReviewsByPhysioId } from "@/lib/data";
 
 export async function GET(
@@ -9,10 +9,13 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const reviews = await prisma.review.findMany({
-      where: { physioId: id },
-      orderBy: { date: "desc" },
-    });
+    const { data: reviews, error } = await supabase
+      .from("physioconnect_reviews")
+      .select("*")
+      .eq("physioId", id)
+      .order("date", { ascending: false });
+
+    if (error) throw error;
 
     return NextResponse.json(reviews);
   } catch (error) {
