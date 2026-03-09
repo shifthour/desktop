@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "PhysioConnect — Expert Physiotherapy at Your Door",
+  title: "On the Move Home Physio — Expert Physiotherapy at Your Door",
   description: "Find HCPC-verified physiotherapists near you. Book home visits, clinic appointments or online sessions across the UK.",
 };
 

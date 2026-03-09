@@ -46,13 +46,13 @@ export default function AdminLoginPage() {
         <div className="text-center mb-8">
           <Image
             src="/logo.png"
-            alt="PhysioConnect"
+            alt="On the Move Home Physio"
             width={180}
             height={60}
             className="mx-auto mb-4"
           />
           <h1 className="text-2xl font-bold text-navy">Admin Portal</h1>
-          <p className="text-gray-500 mt-1">Sign in to manage PhysioConnect</p>
+          <p className="text-gray-500 mt-1">Sign in to manage On the Move Home Physio</p>
         </div>
 
         {/* Login Card */}
@@ -113,7 +113,7 @@ export default function AdminLoginPage() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          PhysioConnect Admin · Authorized access only
+          On the Move Home Physio Admin · Authorized access only
         </p>
       </div>
     </div>

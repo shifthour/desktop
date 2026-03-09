@@ -265,7 +265,7 @@ export const specializations = [
 
 export const testimonials = [
   { name: "Claire M., Richmond", text: "After my knee surgery, Dr. Mitchell's rehab programme got me back running in 8 weeks. The home visit option was a lifesaver — brilliant service.", rating: 5 },
-  { name: "Andrew N., Islington", text: "Finding a neuro specialist was so easy on PhysioConnect. Dr. Thompson's expertise helped my father walk again after his stroke. Cannot recommend enough.", rating: 5 },
+  { name: "Andrew N., Islington", text: "Finding a neuro specialist was so easy on On the Move Home Physio. Dr. Thompson's expertise helped my father walk again after his stroke. Cannot recommend enough.", rating: 5 },
   { name: "Rachel P., Kensington", text: "My daughter's developmental therapy has shown amazing progress. Being able to book online and have the physio come to our home is incredibly convenient.", rating: 5 },
 ];
 

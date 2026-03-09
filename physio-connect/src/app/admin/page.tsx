@@ -95,7 +95,7 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <Image src="/logo.png" alt="PhysioConnect" width={140} height={40} />
+              <Image src="/logo.png" alt="On the Move Home Physio" width={140} height={40} />
               <span className="text-xs font-bold text-white bg-navy px-2 py-0.5 rounded-md">ADMIN</span>
             </div>
             <div className="flex items-center gap-4">
@@ -125,7 +125,7 @@ export default function AdminDashboard() {
         {/* Page Title */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Overview of your PhysioConnect platform</p>
+          <p className="text-sm text-gray-500 mt-1">Overview of your On the Move Home Physio platform</p>
         </div>
 
         {/* Stat Cards */}

@@ -194,7 +194,7 @@ export default function ApplicationDetailPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <Link href="/admin">
-                <Image src="/logo.png" alt="PhysioConnect" width={140} height={40} />
+                <Image src="/logo.png" alt="On the Move Home Physio" width={140} height={40} />
               </Link>
               <span className="text-xs font-bold text-white bg-navy px-2 py-0.5 rounded-md">ADMIN</span>
             </div>

@@ -226,7 +226,7 @@ export default function JoinPage() {
             <span className="text-primary-200 text-sm font-medium">Join Our Network</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight">
-            Join PhysioConnect as a <br />
+            Join On the Move Home Physio as a <br />
             <span className="text-primary-300">Registered Practitioner</span>
           </h1>
           <p className="mt-4 text-gray-400 text-lg max-w-2xl leading-relaxed">
@@ -390,7 +390,7 @@ export default function JoinPage() {
                 Unfortunately, you don&apos;t meet our eligibility criteria
               </h2>
               <p className="text-gray-500 leading-relaxed mb-6">
-                To join PhysioConnect, practitioners must answer &quot;Yes&quot; to all eligibility questions. This ensures the safety and quality of care for our patients.
+                To join On the Move Home Physio, practitioners must answer &quot;Yes&quot; to all eligibility questions. This ensures the safety and quality of care for our patients.
               </p>
 
               {/* Which question failed */}
@@ -416,7 +416,7 @@ export default function JoinPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row justify-center gap-3">
-                <a href="mailto:support@physioconnect.co.uk" className="btn-outline !text-sm">
+                <a href="mailto:support@onthemovehomephysio.co.uk" className="btn-outline !text-sm">
                   Contact Us for Help
                 </a>
                 <button onClick={handleStartOver} className="btn-coral !text-sm !bg-gray-100 !text-gray-700 !shadow-none hover:!bg-gray-200">
@@ -767,7 +767,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
             Application Submitted!
           </h1>
           <p className="text-gray-500 text-lg leading-relaxed mb-3">
-            Thank you for applying to join PhysioConnect, <strong className="text-navy">{form.firstName}</strong>.
+            Thank you for applying to join On the Move Home Physio, <strong className="text-navy">{form.firstName}</strong>.
           </p>
           <p className="text-gray-500 leading-relaxed mb-8">
             Our team will review your application within <strong className="text-navy">2-3 working days</strong>.
@@ -828,7 +828,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
             Complete Your Registration
           </h1>
           <p className="mt-3 text-gray-400 text-lg max-w-2xl">
-            Fill in your details below to apply as a PhysioConnect practitioner. Fields marked with <span className="text-coral">*</span> are required.
+            Fill in your details below to apply as a On the Move Home Physio practitioner. Fields marked with <span className="text-coral">*</span> are required.
           </p>
         </div>
       </div>
@@ -1408,7 +1408,7 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
               <CheckboxField
                 checked={form.agreeTerms}
                 onChange={(v) => updateField("agreeTerms", v)}
-                label={<>I agree to the PhysioConnect <span className="text-primary underline cursor-pointer">Terms of Service</span> and <span className="text-primary underline cursor-pointer">Practitioner Agreement</span> <span className="text-coral">*</span></>}
+                label={<>I agree to the On the Move Home Physio <span className="text-primary underline cursor-pointer">Terms of Service</span> and <span className="text-primary underline cursor-pointer">Practitioner Agreement</span> <span className="text-coral">*</span></>}
               />
               <CheckboxField
                 checked={form.agreePrivacy}

@@ -529,7 +529,7 @@ export default async function HomePage() {
                     Are You a Physiotherapist?
                   </h2>
                   <p className="mt-4 text-gray-300 text-lg leading-relaxed">
-                    Join our growing network of HCPC-registered physiotherapists. Set your own hours, manage your bookings, and grow your practice with PhysioConnect.
+                    Join our growing network of HCPC-registered physiotherapists. Set your own hours, manage your bookings, and grow your practice with On the Move Home Physio.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-4">
                     <Link href="/join" className="btn-coral !text-base">Join as a Physio</Link>
@@ -635,7 +635,7 @@ export default async function HomePage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="section-heading">Frequently Asked Questions</h2>
-            <p className="section-subheading">Everything you need to know about PhysioConnect</p>
+            <p className="section-subheading">Everything you need to know about On the Move Home Physio</p>
           </div>
 
           <div className="space-y-4">
@@ -646,7 +646,7 @@ export default async function HomePage() {
               },
               {
                 q: "Are all physiotherapists verified?",
-                a: "Yes. Every physiotherapist on PhysioConnect is HCPC-registered, holds an enhanced DBS check, and has verified professional indemnity insurance. We also review their qualifications and experience before they join the platform.",
+                a: "Yes. Every physiotherapist on On the Move Home Physio is HCPC-registered, holds an enhanced DBS check, and has verified professional indemnity insurance. We also review their qualifications and experience before they join the platform.",
               },
               {
                 q: "Is physiotherapy covered by private health insurance?",
@@ -701,7 +701,7 @@ export default async function HomePage() {
             Ready to Feel Better?
           </h2>
           <p className="text-gray-500 mb-8 text-lg leading-relaxed">
-            Join thousands of patients who found the right physiotherapist with PhysioConnect. Your recovery journey starts with one click.
+            Join thousands of patients who found the right physiotherapist with On the Move Home Physio. Your recovery journey starts with one click.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/search" className="btn-coral !text-lg !px-10">Find a Physiotherapist</Link>

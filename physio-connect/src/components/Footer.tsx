@@ -16,7 +16,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
             <div className="mb-5 inline-block bg-white rounded-2xl px-5 py-3">
-              <Image src="/logo.png" alt="PhysioConnect" width={500} height={180} className="h-20 w-auto" />
+              <Image src="/logo.png" alt="On the Move Home Physio" width={500} height={180} className="h-20 w-auto" />
             </div>
             <p className="text-sm text-gray-400 leading-relaxed">
               Expert physiotherapy at your doorstep. HCPC-verified physiotherapists across the UK, available for home visits.
@@ -84,7 +84,7 @@ export default function Footer() {
             ))}
           </div>
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-sm text-gray-500">&copy; 2026 PhysioConnect Ltd. All rights reserved. Registered in England & Wales.</p>
+            <p className="text-sm text-gray-500">&copy; 2026 On the Move Home Physio Ltd. All rights reserved. Registered in England & Wales.</p>
             <p className="text-xs text-gray-600">This platform facilitates booking only. It does not provide medical advice.</p>
           </div>
         </div>
