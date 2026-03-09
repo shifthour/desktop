@@ -12,7 +12,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-24">
           <Link href="/" className="flex items-center">
-            <Image src="/logo.png" alt="On the Move Home Physio" width={823} height={615} className="h-20 w-auto" priority />
+            <Image src="/logo.png" alt="On the Move Home Physio" width={1408} height={768} className="h-20 w-auto" priority />
           </Link>
 
           <div className="hidden md:flex items-center gap-6">
