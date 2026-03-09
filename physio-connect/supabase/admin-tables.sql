@@ -42,6 +42,8 @@ CREATE TABLE physioconnect_applications (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
 
   -- Personal
+  title text,
+  gender text,
   "firstName" text NOT NULL,
   "lastName" text NOT NULL,
   email text NOT NULL,

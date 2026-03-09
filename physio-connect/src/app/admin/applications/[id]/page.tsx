@@ -7,6 +7,8 @@ import Image from "next/image";
 
 interface ApplicationData {
   id: string;
+  title: string | null;
+  gender: string | null;
   firstName: string;
   lastName: string;
   email: string;
@@ -230,7 +232,7 @@ export default function ApplicationDetailPage() {
               )}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
-                  {application.firstName} {application.lastName}
+                  {application.title ? `${application.title} ` : ''}{application.firstName} {application.lastName}
                 </h1>
                 <p className="text-sm text-gray-500">
                   Applied {new Date(application.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
@@ -272,7 +274,9 @@ export default function ApplicationDetailPage() {
             {/* Personal Information */}
             <DetailSection title="Personal Information">
               <div className="grid sm:grid-cols-2 gap-4">
-                <DetailField label="Full Name" value={`${application.firstName} ${application.lastName}`} />
+                <DetailField label="Title" value={application.title || "Not provided"} />
+                <DetailField label="Gender" value={application.gender || "Not provided"} />
+                <DetailField label="Full Name" value={`${application.title ? application.title + ' ' : ''}${application.firstName} ${application.lastName}`} />
                 <DetailField label="Email" value={application.email} />
                 <DetailField label="Phone" value={application.phone} />
                 <DetailField label="Date of Birth" value={application.dateOfBirth || "Not provided"} />

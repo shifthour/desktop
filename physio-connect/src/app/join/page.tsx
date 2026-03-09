@@ -477,11 +477,13 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
 
   const [form, setForm] = useState({
     // Personal
+    title: "",
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
     dateOfBirth: "",
+    gender: "",
 
     // Professional
     hcpcNumber: "",
@@ -646,6 +648,8 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
     profilePhoto &&
     resumeName &&
     idProofName &&
+    form.title &&
+    form.gender &&
     form.firstName &&
     form.lastName &&
     form.email &&
@@ -703,6 +707,8 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          title: form.title,
+          gender: form.gender,
           firstName: form.firstName,
           lastName: form.lastName,
           email: form.email,
@@ -904,6 +910,32 @@ function RegistrationForm({ onBack }: { onBack: () => void }) {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-sm font-medium text-navy mb-1.5">
+                  Title <span className="text-coral">*</span>
+                </label>
+                <select value={form.title} onChange={(e) => updateField("title", e.target.value)} className="input-field">
+                  <option value="">Select title...</option>
+                  <option value="Mr">Mr</option>
+                  <option value="Mrs">Mrs</option>
+                  <option value="Ms">Ms</option>
+                  <option value="Miss">Miss</option>
+                  <option value="Dr">Dr</option>
+                  <option value="Prof">Prof</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-navy mb-1.5">
+                  Gender <span className="text-coral">*</span>
+                </label>
+                <select value={form.gender} onChange={(e) => updateField("gender", e.target.value)} className="input-field">
+                  <option value="">Select gender...</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
               <InputField label="First Name" required value={form.firstName} onChange={(v) => updateField("firstName", v)} placeholder="e.g. Sarah" />
               <InputField label="Last Name" required value={form.lastName} onChange={(v) => updateField("lastName", v)} placeholder="e.g. Thompson" />
               <InputField label="Email Address" required type="email" value={form.email} onChange={(v) => updateField("email", v)} placeholder="sarah@example.co.uk" />

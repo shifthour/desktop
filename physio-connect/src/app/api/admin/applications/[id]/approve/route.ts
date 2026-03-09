@@ -30,8 +30,9 @@ export async function POST(
     }
 
     // 2. Generate a slug from name
-    const fullName = `${app.firstName} ${app.lastName}`;
-    const slug = fullName
+    const fullName = app.title ? `${app.title} ${app.firstName} ${app.lastName}` : `${app.firstName} ${app.lastName}`;
+    const slugBase = `${app.firstName} ${app.lastName}`;
+    const slug = slugBase
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, "")
       .replace(/\s+/g, "-");
@@ -70,7 +71,7 @@ export async function POST(
         slug: finalSlug,
         name: fullName,
         photo: photoUrl,
-        gender: "other",
+        gender: app.gender || "other",
         experience,
         bio: app.bio || `Qualified physiotherapist with ${app.yearsExperience} years of UK experience.`,
         rating: 0,
